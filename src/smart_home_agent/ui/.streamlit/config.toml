@@ -1,0 +1,57 @@
+# HomePilot theme: white, ink and warm greys, with one red accent for action and attention.
+# Script-level config (next to streamlit_app.py), so it applies whatever the working directory is.
+# Only [theme] is defined, which locks the app to light mode on purpose.
+
+[theme]
+base = "light"
+primaryColor = "#D2001E"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F3F0"
+textColor = "#1B1B1B"
+borderColor = "#DCDCD7"
+linkColor = "#B8001A"
+linkUnderline = false
+codeTextColor = "#1B1B1B"
+codeBackgroundColor = "#F3F3F0"
+showWidgetBorder = true
+showSidebarBorder = false
+
+redColor = "#D2001E"
+redBackgroundColor = "#FBE9EB"
+redTextColor = "#A30017"
+greenColor = "#2E7D4F"
+greenBackgroundColor = "#E8F2EC"
+greenTextColor = "#1F5E3A"
+orangeColor = "#C26A00"
+orangeBackgroundColor = "#FBF0E3"
+orangeTextColor = "#8A4B00"
+grayColor = "#6B6B66"
+grayBackgroundColor = "#EDEDE9"
+grayTextColor = "#55554F"
+blueColor = "#2F5D8A"
+blueBackgroundColor = "#E8EEF4"
+
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "'Barlow Semi Condensed':https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+baseFontSize = 15
+baseFontWeight = 400
+codeFontSize = "0.8125rem"
+headingFontSizes = ["2.25rem", "1.625rem", "1.25rem", "1.0625rem", "0.9375rem", "0.8125rem"]
+headingFontWeights = [700, 700, 600, 600, 600, 600]
+
+baseRadius = "2px"
+buttonRadius = "2px"
+
+dataframeBorderColor = "#DCDCD7"
+dataframeHeaderBackgroundColor = "#F3F3F0"
+
+[theme.sidebar]
+backgroundColor = "#1F1F1F"
+secondaryBackgroundColor = "#2B2B2B"
+textColor = "#EDEDEA"
+borderColor = "#3A3A3A"
+primaryColor = "#D2001E"
+codeBackgroundColor = "#2B2B2B"
+codeTextColor = "#EDEDEA"
+linkColor = "#FF6B7D"

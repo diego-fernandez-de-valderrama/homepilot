@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from smart_home_agent.agent.state import SessionState
+from smart_home_agent.guardrail.callbacks import GuardrailReport
 
 _INTENTS = {
     "recommend_products": "recommendation",
@@ -83,3 +84,4 @@ class AgentReply(BaseModel):
     detected_language: str | None  # heuristic language of the user message ("en" | "de" | None)
     trace: TurnTrace
     state: SessionState
+    guardrail: GuardrailReport | None = None  # what the input/output guardrail decided this turn

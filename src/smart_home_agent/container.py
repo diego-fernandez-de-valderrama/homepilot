@@ -8,6 +8,7 @@ from catalog_ingestion.retrieval.embeddings import GeminiEmbedder
 from catalog_ingestion.storage.qdrant.collection import create_client
 
 from smart_home_agent.config import AgentSettings, Settings
+from smart_home_agent.guardrail.classifier import GuardrailThresholds, SemanticGuardrail, gemini_embed
 from smart_home_agent.repositories.postgres import CatalogRepository, create_readonly_sessions
 from smart_home_agent.repositories.qdrant import QdrantIndex, SemanticIndex
 from smart_home_agent.services.comparison import ComparisonService
@@ -46,12 +47,27 @@ class Container:
     services: Services
     catalog: CatalogRepository
     index: QdrantIndex
+    guardrail: SemanticGuardrail | None = None  # None when AGENT_GUARDRAIL_ENABLED=false
+
+
+def guardrail_thresholds(settings: AgentSettings) -> GuardrailThresholds:
+    return GuardrailThresholds(
+        smart_home=settings.guardrail_threshold_smart_home,
+        electrical=settings.guardrail_threshold_electrical,
+        off_topic=settings.guardrail_threshold_off_topic,
+        prompt_injection=settings.guardrail_threshold_prompt_injection,
+        margin=settings.guardrail_margin,
+        off_topic_margin=settings.guardrail_off_topic_margin,
+        off_topic_min_words=settings.guardrail_off_topic_min_words,
+        block_off_topic=settings.guardrail_input_off_topic,
+    )
 
 
 def build_container(settings: Settings) -> Container:
     _, sessions = create_readonly_sessions(settings.postgres)
     catalog = CatalogRepository(sessions)
-    embedder = GeminiEmbedder(GeminiClient(settings.gemini), settings.gemini)
+    gemini = GeminiClient(settings.gemini)
+    embedder = GeminiEmbedder(gemini, settings.gemini)
     index = QdrantIndex(create_client(settings.qdrant), settings.qdrant.collection, embedder)
     indexed_model = index.indexed_embedding_model()
     if indexed_model and indexed_model != index.query_embedding_model:
@@ -61,4 +77,10 @@ def build_container(settings: Settings) -> Container:
             indexed_model,
             index.query_embedding_model,
         )
-    return Container(services=Services.create(catalog, index, settings.agent), catalog=catalog, index=index)
+    guardrail = None
+    if settings.agent.guardrail_enabled:
+        # Prototype embeddings are computed once here (startup) and cached in memory.
+        guardrail = SemanticGuardrail.create(gemini_embed(gemini), guardrail_thresholds(settings.agent))
+    return Container(
+        services=Services.create(catalog, index, settings.agent), catalog=catalog, index=index, guardrail=guardrail
+    )

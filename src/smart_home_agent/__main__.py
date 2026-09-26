@@ -3,6 +3,7 @@
 uv run python -m smart_home_agent check
 uv run python -m smart_home_agent smoke
 uv run python -m smart_home_agent chat
+uv run python -m smart_home_agent guardrail-eval [--sweep] [--record]
 """
 
 import argparse
@@ -23,6 +24,8 @@ def check() -> int:
     print(f"Indexed embedding model    : {container.index.indexed_embedding_model()}")
     print(f"Query embedding model      : {container.index.query_embedding_model}")
     print(f"Agent model                : {settings.agent.model}")
+    print(f"Input guardrail            : {'on' if container.guardrail else 'off'}")
+    print(f"Output check               : {'on' if settings.agent.guardrail_output_check else 'off'}")
     return 0
 
 
@@ -49,7 +52,7 @@ def chat() -> int:
 
     settings = get_settings()
     container = build_container(settings)
-    service = AgentService(build_agent(container.services, settings), settings.agent.app_name)
+    service = AgentService(build_agent(container.services, settings, container.guardrail), settings.agent.app_name)
     session_id = str(uuid.uuid4())
     print("HomePilot (Ctrl-D to quit)")
     for line in sys.stdin:
@@ -57,15 +60,29 @@ def chat() -> int:
             continue
         reply = service.chat(session_id, line.strip())
         tools = ", ".join(c.name for c in reply.trace.tool_calls) or "none"
-        print(f"\n{reply.text}\n  [tools: {tools}]\n")
+        guardrail = reply.guardrail
+        verdict = guardrail.input.category if guardrail and guardrail.input else "n/a"
+        replaced = f", reply: {guardrail.response_type}" if guardrail and guardrail.response_type else ""
+        print(f"\n{reply.text}\n  [tools: {tools}] [guardrail: {verdict}{replaced}]\n")
     return 0
+
+
+def guardrail_eval(sweep: bool, record: bool) -> int:
+    """Embeds prototypes and evaluation cases (a few batched embedding calls, no chat model)."""
+    from smart_home_agent.guardrail.eval import run
+
+    return run(get_settings(), do_sweep=sweep, record=record)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="smart_home_agent")
-    parser.add_argument("command", choices=["check", "smoke", "chat"])
-    command = parser.parse_args().command
-    return {"check": check, "smoke": smoke, "chat": chat}[command]()
+    parser.add_argument("command", choices=["check", "smoke", "chat", "guardrail-eval"])
+    parser.add_argument("--sweep", action="store_true", help="guardrail-eval: print score separation per category")
+    parser.add_argument("--record", action="store_true", help="guardrail-eval: rewrite the offline test fixture")
+    args = parser.parse_args()
+    if args.command == "guardrail-eval":
+        return guardrail_eval(args.sweep, args.record)
+    return {"check": check, "smoke": smoke, "chat": chat}[args.command]()
 
 
 if __name__ == "__main__":

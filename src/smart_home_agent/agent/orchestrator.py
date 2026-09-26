@@ -13,11 +13,14 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from smart_home_agent.agent.language import detect_language
-from smart_home_agent.agent.prompts import build_instruction
-from smart_home_agent.agent.state import TURN_LANGUAGE_KEY, SessionState, read_state
+from smart_home_agent.agent.prompts import BASE_INSTRUCTION, build_instruction
+from smart_home_agent.agent.state import GUARDRAIL_KEY, TURN_LANGUAGE_KEY, SessionState, read_state
 from smart_home_agent.agent.trace import AgentReply, TurnTrace
 from smart_home_agent.config import Settings
 from smart_home_agent.container import Services
+from smart_home_agent.guardrail.callbacks import GuardrailReport, make_input_callback, make_output_callback
+from smart_home_agent.guardrail.classifier import SemanticGuardrail
+from smart_home_agent.guardrail.output_check import OutputValidator
 from smart_home_agent.tools import build_tools
 
 logger = logging.getLogger(__name__)
@@ -26,17 +29,44 @@ AGENT_NAME = "homepilot"
 DEFAULT_USER = "customer"
 
 
-def build_agent(services: Services, settings: Settings) -> LlmAgent:
-    """Builds the agent without any network call (the Gemini client is created lazily)."""
-    api_key = settings.gemini.api_key.get_secret_value() if settings.gemini.api_key else None
-    model = Gemini(model=settings.agent.model, client_kwargs={"api_key": api_key} if api_key else None)
+# Verbatim instruction lines long enough that quoting them in an answer can only be a prompt leak.
+_MIN_LEAK_LINE = 60
+
+
+def _leak_markers(tools: list[Any]) -> list[str]:
+    lines = [line.strip(" -") for line in BASE_INSTRUCTION.splitlines()]
+    return [tool.__name__ for tool in tools] + [line for line in lines if len(line) >= _MIN_LEAK_LINE]
+
+
+def build_agent(
+    services: Services, settings: Settings, guardrail: SemanticGuardrail | None = None, model: Any = None
+) -> LlmAgent:
+    """Builds the agent without any network call (the Gemini client is created lazily).
+
+    The guardrail wraps the unchanged agent through ADK callbacks: the semantic input check runs
+    before the model (only when a `guardrail` is given and AGENT_GUARDRAIL_ENABLED is true) and the
+    deterministic output check after it (AGENT_GUARDRAIL_OUTPUT_CHECK). `model` replaces the Gemini
+    model (tests only).
+    """
+    if model is None:
+        api_key = settings.gemini.api_key.get_secret_value() if settings.gemini.api_key else None
+        model = Gemini(model=settings.agent.model, client_kwargs={"api_key": api_key} if api_key else None)
+    tools = build_tools(services)
+    input_guardrail = guardrail if settings.agent.guardrail_enabled else None
+    validator = (
+        OutputValidator(services.catalog, input_guardrail, _leak_markers(tools))
+        if settings.agent.guardrail_output_check
+        else None
+    )
     return LlmAgent(
         name=AGENT_NAME,
         description="Smart home product advisor backed by the HomePilot catalog.",
         model=model,
         instruction=build_instruction,
-        tools=build_tools(services),
+        tools=tools,
         generate_content_config=types.GenerateContentConfig(temperature=settings.agent.temperature),
+        before_agent_callback=make_input_callback(input_guardrail) if input_guardrail else None,
+        after_model_callback=make_output_callback(validator) if validator else None,
     )
 
 
@@ -72,7 +102,7 @@ class AgentService:
             user_id=user_id,
             session_id=session_id,
             new_message=message,
-            state_delta={TURN_LANGUAGE_KEY: language},
+            state_delta={TURN_LANGUAGE_KEY: language, GUARDRAIL_KEY: None},
         )
         async for event in events:
             for call in event.get_function_calls():
@@ -83,11 +113,15 @@ class AgentService:
                 answer.extend(part.text for part in event.content.parts if part.text and not part.thought)
             if event.error_message:
                 logger.warning("agent error event: %s", event.error_message)
+        session = await self._sessions.get_session(app_name=self._app_name, user_id=user_id, session_id=session_id)
+        state = session.state if session else {}
+        report = state.get(GUARDRAIL_KEY)
         return AgentReply(
             text="".join(answer).strip(),
             detected_language=language,
             trace=trace,
-            state=await self.state_async(session_id, user_id),
+            state=read_state(state),
+            guardrail=GuardrailReport.model_validate(report) if report else None,
         )
 
     async def state_async(self, session_id: str, user_id: str = DEFAULT_USER) -> SessionState:

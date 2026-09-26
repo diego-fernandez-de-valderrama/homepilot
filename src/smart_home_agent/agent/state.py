@@ -8,6 +8,10 @@ from pydantic import BaseModel, Field
 STATE_KEY = "homepilot"
 # Detected language of the latest user message ("en" | "de" | None), set by the orchestrator each turn.
 TURN_LANGUAGE_KEY = "homepilot_turn_language"
+# Guardrail report of the current turn (reset by the orchestrator each turn, written by the guardrail callbacks).
+GUARDRAIL_KEY = "homepilot_guardrail"
+# Last deterministic guardrail reply of the session, so the next one picks a different variant.
+GUARDRAIL_LAST_REPLY_KEY = "homepilot_guardrail_last_reply"
 
 
 class SessionState(BaseModel):

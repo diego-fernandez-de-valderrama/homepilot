@@ -1,0 +1,152 @@
+"""ADK callbacks that put the guardrail around the existing agent (no second agent).
+
+- `before_agent_callback` (input): runs once per turn, before the first model call. Returning a
+  Content makes ADK end the invocation with that content as the agent's reply, so the model is never
+  called for a blocked message.
+- `after_model_callback` (output): checks the final text answer and replaces it with a fallback when a
+  critical check fails.
+
+Deterministic replies use role "model" and are authored by the agent itself, so ADK keeps them in
+the history as the model's own previous turns (not as "[agent] said" context). The next model call
+sees exactly what the user saw, and a rejected answer never enters the history.
+"""
+
+import asyncio
+import logging
+import random
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+from google.adk.agents.callback_context import CallbackContext
+from google.adk.models import LlmResponse
+from google.genai import types
+from pydantic import BaseModel, Field
+
+from smart_home_agent.agent.language import detect_language
+from smart_home_agent.agent.state import GUARDRAIL_KEY, GUARDRAIL_LAST_REPLY_KEY, TURN_LANGUAGE_KEY, read_state
+from smart_home_agent.guardrail.categories import GuardrailDecision
+from smart_home_agent.guardrail.classifier import SemanticGuardrail
+from smart_home_agent.guardrail.output_check import OutputValidator, Violation
+from smart_home_agent.guardrail.responses import ResponseType, pick_response
+
+logger = logging.getLogger(__name__)
+
+
+class GuardrailReport(BaseModel):
+    """What the guardrail did in one turn (developer panel and logs only)."""
+
+    input: GuardrailDecision | None = None
+    input_error: str | None = None  # embedding failed: the message was allowed (fail-open)
+    output_violations: list[Violation] = Field(default_factory=list)
+    response_type: ResponseType | None = None  # set when a deterministic reply was returned
+
+
+def _text(content: types.Content | None) -> str:
+    if not content or not content.parts:
+        return ""
+    return "".join(part.text for part in content.parts if part.text and not part.thought).strip()
+
+
+def _language(context: CallbackContext, user_text: str) -> str | None:
+    return context.state.get(TURN_LANGUAGE_KEY) or read_state(context.state).language or detect_language(user_text)
+
+
+def _report(context: CallbackContext) -> GuardrailReport:
+    return GuardrailReport.model_validate(context.state.get(GUARDRAIL_KEY) or {})
+
+
+def _save(context: CallbackContext, report: GuardrailReport) -> None:
+    context.state[GUARDRAIL_KEY] = report.model_dump(mode="json")
+
+
+def _deterministic_reply(context: CallbackContext, kind: ResponseType, rng: random.Random | None) -> str:
+    user_text = _text(context.user_content)
+    reply = pick_response(kind, _language(context, user_text), context.state.get(GUARDRAIL_LAST_REPLY_KEY), rng)
+    context.state[GUARDRAIL_LAST_REPLY_KEY] = reply
+    return reply
+
+
+def make_input_callback(
+    guardrail: SemanticGuardrail, rng: random.Random | None = None
+) -> Callable[[CallbackContext], Awaitable[types.Content | None]]:
+    async def semantic_input_guardrail(callback_context: CallbackContext) -> types.Content | None:
+        text = _text(callback_context.user_content)
+        if not text:
+            return None
+        report = GuardrailReport()
+        try:
+            # The embedding client is synchronous; keep the shared agent event loop free.
+            report.input = await asyncio.to_thread(guardrail.classify, text)
+        except Exception as exc:
+            # Fail open: the prompt-level guardrails of the agent still apply.
+            logger.warning("guardrail: input classification failed, message allowed: %s", exc)
+            report.input_error = f"{type(exc).__name__}: {exc}"
+        decision = report.input
+        if decision is not None:
+            logger.info(
+                "guardrail: %s (top=%s score=%.3f margin=%.3f)",
+                decision.category,
+                decision.top_category,
+                decision.score,
+                decision.margin,
+            )
+        if decision is None or not decision.blocked:
+            _save(callback_context, report)
+            return None
+        report.response_type = ResponseType(decision.category.value)
+        _save(callback_context, report)
+        reply = _deterministic_reply(callback_context, report.response_type, rng)
+        return types.Content(role="model", parts=[types.Part(text=reply)])
+
+    return semantic_input_guardrail
+
+
+def _tool_responses(context: CallbackContext) -> list[dict[str, Any]]:
+    """Function responses recorded in the session during the current invocation (this turn)."""
+    return [
+        dict(response.response or {})
+        for event in context.session.events
+        if event.invocation_id == context.invocation_id
+        for response in event.get_function_responses()
+    ]
+
+
+# Which deterministic reply replaces an answer, by the most severe violation it contains.
+_FALLBACKS = (
+    ("electrical", ResponseType.ELECTRICAL),
+    ("prompt_leak", ResponseType.PROMPT_INJECTION),
+    ("off_topic", ResponseType.OFF_TOPIC),
+)
+
+
+def _fallback_type(violations: list[Violation]) -> ResponseType:
+    kinds = {v.kind for v in violations}
+    return next((response for kind, response in _FALLBACKS if kind in kinds), ResponseType.OUTPUT_FALLBACK)
+
+
+def make_output_callback(
+    validator: OutputValidator, rng: random.Random | None = None
+) -> Callable[[CallbackContext, LlmResponse], Awaitable[LlmResponse | None]]:
+    async def output_validation(callback_context: CallbackContext, llm_response: LlmResponse) -> LlmResponse | None:
+        content = llm_response.content
+        if llm_response.partial or not content or not content.parts:
+            return None
+        if any(part.function_call for part in content.parts):
+            return None  # intermediate step: only the final text answer is validated
+        text = _text(content)
+        if not text:
+            return None
+        session = read_state(callback_context.state)
+        known = [*session.selected_products, *session.comparison_products, *session.candidate_products]
+        violations = await asyncio.to_thread(validator.validate, text, _tool_responses(callback_context), known)
+        if not violations:
+            return None
+        logger.warning("guardrail: answer replaced, %s", "; ".join(f"{v.kind}: {v.detail}" for v in violations))
+        report = _report(callback_context)
+        report.output_violations = violations
+        report.response_type = _fallback_type(violations)
+        _save(callback_context, report)
+        reply = _deterministic_reply(callback_context, report.response_type, rng)
+        return LlmResponse(content=types.Content(role="model", parts=[types.Part(text=reply)]))
+
+    return output_validation

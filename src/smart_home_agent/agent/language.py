@@ -66,6 +66,14 @@ _GERMAN = frozenset(
         "funktioniert",
         "kompatibel",
         "vergleiche",
+        "mir",
+        "mich",
+        "dein",
+        "deine",
+        "deinen",
+        "zeige",
+        "zeig",
+        "gib",
     ]
 )
 _ENGLISH = frozenset(
@@ -116,6 +124,10 @@ _ENGLISH = frozenset(
         "compare",
         "something",
         "anything",
+        "your",
+        "show",
+        "give",
+        "tell",
     ]
 )
 MIN_EVIDENCE = 2
