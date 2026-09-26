@@ -95,10 +95,11 @@ def test_inline_item_is_a_chip_with_a_hover_card_from_catalog_data():
     assert item_chip_html(None, "30000009") == "30000009"
 
 
-def test_chip_hover_card_uses_the_placeholder_for_a_gone_image():
+def test_chip_hover_card_leaves_out_a_gone_image():
     plug = product("30000009").model_copy(update={"image_url": "https://cdn.example/gone.webp"})
     chip = item_chip_html(plug, plug.id, missing_images=frozenset({"https://cdn.example/gone.webp"}))
-    assert "gone.webp" not in chip and "No image" in chip
+    assert "gone.webp" not in chip and "hp-item__image" not in chip
+    assert 'class="hp-item__card hp-item__card--no-image"' in chip
 
 
 def test_answer_markdown_escapes_model_html_and_drops_echoed_titles():
@@ -157,12 +158,13 @@ def test_render_answer_turns_tags_into_components():
     assert "Unresolved: 39999999" in markdown
 
 
-def test_cards_show_a_placeholder_for_images_known_to_be_gone():
+def test_cards_leave_out_images_known_to_be_gone():
     url = "https://media.cdn.example/m/1/prod.webp"
     plug = product("30000009").model_copy(update={"image_url": url})
-    assert f'src="{url}"' in product_cards_html([plug])
+    shown = product_cards_html([plug])
+    assert f'src="{url}"' in shown and "hp-card--no-image" not in shown
     card = product_cards_html([plug], frozenset({url}))
-    assert url not in card and "No image" in card
+    assert url not in card and "hp-card__image" not in card and 'class="hp-card hp-card--no-image"' in card
 
 
 def test_inline_item_for_a_product_already_in_a_block_does_not_repeat_the_price():

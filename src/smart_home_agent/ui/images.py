@@ -1,6 +1,6 @@
 """Which product image URLs are gone (about 4% of the catalog's CDN links return 404 in the source data).
 
-`st.html` strips JavaScript, so a broken <img> cannot swap in a placeholder in the browser; the UI asks here
+`st.html` strips JavaScript, so a broken <img> cannot remove itself in the browser; the UI asks here
 first. Only a definite 404/410 counts as gone: timeouts and network errors keep the image (the browser may
 still load it). Results are cached, so re-rendering the history makes no request.
 """

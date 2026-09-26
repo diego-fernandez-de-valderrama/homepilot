@@ -40,4 +40,4 @@ def test_real_catalog_images_render_or_fall_back(catalog: CatalogRepository, onl
     assert by_id[GONE_ID].image_url in missing
     assert by_id[WORKING_ID].image_url not in missing
     assert f'src="{by_id[WORKING_ID].image_url}"' in html
-    assert "No image" in html
+    assert "hp-card--no-image" in html

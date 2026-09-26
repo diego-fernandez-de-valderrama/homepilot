@@ -210,10 +210,12 @@ def _markdown_literal(value: str) -> str:
 
 
 def _image_html(product: Product, missing_images: frozenset[str], css_class: str) -> str:
+    """The product image, or "" when there is none (or it is known to be gone): the card then uses its
+    text-only layout instead of showing a placeholder."""
     image_url = safe_url(product.image_url)
     if image_url and image_url not in missing_images:
         return f'<img class="{css_class}" src="{html.escape(image_url)}" alt="" loading="lazy">'
-    return f'<span class="{css_class} {css_class}--empty"><span>No image</span></span>'
+    return ""
 
 
 def _version_html(product: ProductSummary, block: str, escape: Callable[[str], str] = html.escape) -> str:
@@ -242,9 +244,11 @@ def item_chip_html(
         else ""
     )
     version = _version_html(product, "hp-item", _markdown_literal)
+    image = _image_html(product, missing_images, "hp-item__image")
+    card_class = "hp-item__card" if image else "hp-item__card hp-item__card--no-image"
     card = (
-        '<span class="hp-item__card" role="tooltip">'
-        f"{_image_html(product, missing_images, 'hp-item__image')}{brand}"
+        f'<span class="{card_class}" role="tooltip">'
+        f"{image}{brand}"
         f'<span class="hp-item__title">{_markdown_literal(product.title)}</span>{version}'
         f'<span class="hp-item__card-price">{_markdown_literal(price)}</span>{link}</span>'
     )
@@ -293,8 +297,9 @@ def _product_card(product: Product, missing_images: frozenset[str]) -> str:
         if source_url
         else ""
     )
+    card_class = "hp-card" if image else "hp-card hp-card--no-image"
     return (
-        '<article class="hp-card">'
+        f'<article class="{card_class}">'
         f"{image}{brand}"
         f'<span class="hp-card__title">{html.escape(product.title)}</span>{_version_html(product, "hp-card")}'
         f'<span class="hp-card__price">{html.escape(format_price(product.price))}{was}</span>'
@@ -303,7 +308,8 @@ def _product_card(product: Product, missing_images: frozenset[str]) -> str:
 
 
 def product_cards_html(products: list[Product], missing_images: frozenset[str] = frozenset()) -> str:
-    """`missing_images`: image URLs known to be gone; those cards show a placeholder instead of a blank box."""
+    """`missing_images`: image URLs known to be gone; those cards leave the image out
+    (text-only layout) instead of showing a blank box."""
     return f'<div class="hp-cards">{"".join(_product_card(p, missing_images) for p in products)}</div>'
 
 

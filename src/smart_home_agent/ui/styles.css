@@ -798,19 +798,13 @@
   margin-bottom: var(--hp-s2);
 }
 
-.hp-card__image--empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed var(--hp-grey-2);
+/* Text-only card (no image available): an accent rule on top instead of the image, and a larger title. */
+.hp-card--no-image {
+  border-top: 2px solid var(--hp-ink);
 }
 
-.hp-card__image--empty span {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--hp-grey-3);
+.hp-card--no-image .hp-card__title {
+  font-size: 1rem;
 }
 
 .hp-card__brand {
@@ -971,19 +965,9 @@
   margin: 0 0 var(--hp-s2) 0 !important;
 }
 
-.hp-item__image--empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed var(--hp-grey-2);
-}
-
-.hp-item__image--empty span {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--hp-grey-3);
+/* Text-only hover card (no image available): narrower, since there is no image to size it. */
+.hp-item__card--no-image {
+  width: 220px;
 }
 
 .hp-item__brand {

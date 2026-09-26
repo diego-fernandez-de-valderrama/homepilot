@@ -54,7 +54,7 @@ def _with_image(product_id: str, url: str | None):
     return product(product_id, title=f"Plug {product_id}").model_copy(update={"image_url": url})
 
 
-def test_working_images_are_shown_and_gone_ones_get_a_placeholder(cdn):
+def test_working_images_are_shown_and_gone_ones_are_left_out(cdn):
     working = [_with_image("30000001", f"{cdn}/ok/a.webp"), _with_image("30000002", f"{cdn}/ok/b.webp")]
     gone = _with_image("30000003", f"{cdn}/m/695676-2/prod_large_square.webp")
     no_url = _with_image("30000004", None)
@@ -67,7 +67,7 @@ def test_working_images_are_shown_and_gone_ones_get_a_placeholder(cdn):
     for p in working:
         assert f'<img class="hp-card__image" src="{p.image_url}"' in html
     assert gone.image_url not in html
-    assert html.count("No image") == 2  # the 404 URL and the product without any URL
+    assert html.count("hp-card--no-image") == 2  # the 404 URL and the product without any URL
 
 
 def test_server_errors_and_unreachable_hosts_keep_the_image(cdn):
