@@ -9,7 +9,7 @@ from catalog_ingestion.storage.qdrant.collection import create_client
 
 from smart_home_agent.config import AgentSettings, Settings
 from smart_home_agent.guardrail.classifier import GuardrailThresholds, SemanticGuardrail, gemini_embed
-from smart_home_agent.repositories.postgres import CatalogRepository, create_readonly_sessions
+from smart_home_agent.repositories.postgres import CatalogReader, CatalogRepository, create_readonly_sessions
 from smart_home_agent.repositories.qdrant import QdrantIndex, SemanticIndex
 from smart_home_agent.services.accessories import AccessoryService
 from smart_home_agent.services.comparison import ComparisonService
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class Services:
-    catalog: CatalogRepository
+    catalog: CatalogReader
     retrieval: RetrievalService
     compatibility: CompatibilityService
     recommendation: RecommendationService
@@ -33,7 +33,7 @@ class Services:
     rich_content: RichContentService
 
     @classmethod
-    def create(cls, catalog: CatalogRepository, index: SemanticIndex, settings: AgentSettings) -> "Services":
+    def create(cls, catalog: CatalogReader, index: SemanticIndex, settings: AgentSettings) -> "Services":
         retrieval = RetrievalService(catalog, index)
         return cls(
             catalog=catalog,

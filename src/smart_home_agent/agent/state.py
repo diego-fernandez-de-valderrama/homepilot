@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from typing import Any, Protocol
 
+from google.adk.sessions.state import State
 from pydantic import BaseModel, Field
 
 from smart_home_agent.models.recommendation import UpsellSuggestion
@@ -42,7 +43,7 @@ class StateHolder(Protocol):
     def state(self) -> Any: ...
 
 
-def read_state(state: Mapping[str, Any]) -> SessionState:
+def read_state(state: Mapping[str, Any] | State) -> SessionState:
     return SessionState.model_validate(state.get(STATE_KEY) or {})
 
 

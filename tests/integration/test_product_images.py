@@ -34,7 +34,7 @@ def test_real_catalog_images_render_or_fall_back(catalog: CatalogRepository, onl
     assert {p.id for p in products} == {WORKING_ID, GONE_ID}
     by_id = {p.id: p for p in products}
 
-    missing = images.missing_images.__wrapped__(card_image_urls(products))
+    missing = images.find_missing_images(card_image_urls(products))
     html = product_cards_html(products, missing)
 
     assert by_id[GONE_ID].image_url in missing

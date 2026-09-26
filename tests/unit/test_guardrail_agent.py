@@ -7,6 +7,7 @@ the production one; only the network call is replaced by a lookup.
 import random
 from collections.abc import AsyncGenerator, Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
 from catalog_ingestion.core.settings import GeminiSettings, PostgresSettings, QdrantSettings
@@ -51,9 +52,9 @@ def call_response(name: str, **args: object) -> LlmResponse:
     return LlmResponse(content=types.Content(role="model", parts=[types.Part(function_call=call)]))
 
 
-def settings(**agent: object) -> Settings:
+def settings(**agent: Any) -> Settings:
     return Settings(
-        agent=AgentSettings(model="gemini-test", **agent),  # type: ignore[arg-type]
+        agent=AgentSettings(model="gemini-test", **agent),
         gemini=GeminiSettings(api_key=SecretStr("test-key")),
         postgres=PostgresSettings(),
         qdrant=QdrantSettings(),
@@ -130,7 +131,8 @@ def test_off_topic_is_not_blocked_at_input_by_default(guardrail):
     llm = ScriptedLlm()
     reply = service(llm, guardrail).chat("s1", "Give me a pasta recipe.")
     assert len(llm.requests) == 1  # the agent's prompt redirects it; the output check guards the answer
-    assert reply.guardrail is not None and reply.guardrail.input.category is Category.OFF_TOPIC
+    assert reply.guardrail is not None and reply.guardrail.input is not None
+    assert reply.guardrail.input.category is Category.OFF_TOPIC
     assert reply.guardrail.response_type is None
 
 
@@ -148,6 +150,7 @@ def test_off_topic_answer_is_replaced_by_the_output_check(guardrail):
     llm = ScriptedLlm(script=[text_response(off_topic_answer)])
     reply = service(llm, guardrail).chat("s1", "Give me a pasta recipe.")
     assert reply.text in pool(ResponseType.OFF_TOPIC, "en")
+    assert reply.guardrail is not None
     assert [v.kind for v in reply.guardrail.output_violations] == ["off_topic"]
 
 
@@ -186,9 +189,12 @@ def test_deterministic_reply_is_the_models_own_turn_in_history(guardrail):
     assert len(llm.requests) == 1
     contents = llm.requests[0].contents
     assert [c.role for c in contents[-3:]] == ["user", "model", "user"]
-    assert contents[-3].parts[0].text == "How do I wire this thermostat?"
-    assert contents[-2].parts[0].text == blocked.text  # verbatim, no "[homepilot] said" wrapper
-    assert contents[-1].parts[0].text == "OK. Which thermostat works with Google Home?"
+    texts = [c.parts[0].text if c.parts else None for c in contents[-3:]]
+    assert texts == [
+        "How do I wire this thermostat?",
+        blocked.text,  # verbatim, no "[homepilot] said" wrapper
+        "OK. Which thermostat works with Google Home?",
+    ]
 
 
 def test_consecutive_blocks_use_different_variants(guardrail):
@@ -242,6 +248,7 @@ def test_output_check_rejects_unsupported_compatibility_claim_and_keeps_it_out_o
     agent = service(llm, guardrail)
     reply = agent.chat("s1", "Tell me more about the Acme thermostat")
     assert reply.text in pool(ResponseType.OUTPUT_FALLBACK, "en")
+    assert reply.guardrail is not None
     assert [v.kind for v in reply.guardrail.output_violations] == ["unsupported_compatibility"]
 
     agent.chat("s1", "Which thermostat works with Google Home?")

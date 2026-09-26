@@ -1,5 +1,7 @@
 """Qdrant queries without Gemini: an indexed point's own vector is used as the query."""
 
+from collections.abc import Sequence
+
 import pytest
 
 from smart_home_agent.repositories.qdrant import QdrantIndex
@@ -10,6 +12,9 @@ pytestmark = pytest.mark.integration
 class _NoEmbedder:
     model_id = "unused"
     dimension = 0
+
+    def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
+        raise AssertionError("not used in this test")
 
     def embed_query(self, text: str) -> list[float]:
         raise AssertionError("not used in this test")

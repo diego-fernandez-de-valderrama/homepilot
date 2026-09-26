@@ -54,7 +54,7 @@ class AccessoryService:
         if not keywords:
             return None
         matches = [p for p in self._hub_products() if _is_bare_hub(p, keywords)]
-        return min(matches, key=lambda p: (p.price or 0.0, p.id), default=None)
+        return min(matches, key=lambda p: (p.price or 0.0, p.id)) if matches else None
 
     def for_product(self, product: Product, requirements: Sequence[RequirementCheck]) -> list[AccessorySuggestion]:
         """Hub suggestions for the required hubs of `product` that are `missing` or `unverified`."""

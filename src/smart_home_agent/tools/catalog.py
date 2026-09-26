@@ -1,8 +1,10 @@
+from typing import cast
+
 from google.adk.tools import ToolContext
 
 from smart_home_agent.agent import state
 from smart_home_agent.container import Services
-from smart_home_agent.models.search import ProductFilter
+from smart_home_agent.models.search import ProductFilter, SortOrder
 from smart_home_agent.services import vocabulary
 from smart_home_agent.tools._common import ToolResult, ok, resolve_category, tool_errors
 
@@ -70,7 +72,7 @@ def make_filter_products(services: Services):
             brands=brands or [],
             supports=[t.canonical for t in vocabulary.resolve_terms(supports)],
             product_type_contains=product_type_contains or None,
-            sort=sort,
+            sort=cast(SortOrder, sort),  # validated by Pydantic; the tool parameter stays a plain str
             limit=max(1, min(limit, 50)),
         )
         total, products = services.catalog.filter_products(criteria)

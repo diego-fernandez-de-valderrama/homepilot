@@ -43,7 +43,7 @@ def tool_errors[**P](func: Callable[P, ToolResult]) -> Callable[P, ToolResult]:
         except ValueError as exc:
             return {"status": "invalid_input", "message": str(exc)}
         except Exception as exc:
-            logger.exception("tool %s failed", func.__name__)
+            logger.exception("tool %s failed", getattr(func, "__name__", func))
             return {"status": "error", "message": f"The catalog could not be queried ({type(exc).__name__})."}
 
     return wrapper

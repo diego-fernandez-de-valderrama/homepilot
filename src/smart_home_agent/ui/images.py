@@ -28,10 +28,12 @@ def _is_gone(url: str) -> bool:
         return False
 
 
-@st.cache_data(ttl=timedelta(days=1), show_spinner=False)
-def missing_images(urls: tuple[str, ...]) -> frozenset[str]:
+def find_missing_images(urls: tuple[str, ...]) -> frozenset[str]:
     if not urls:
         return frozenset()
     with ThreadPoolExecutor(max_workers=min(_MAX_WORKERS, len(urls))) as pool:
         gone = pool.map(_is_gone, urls)
     return frozenset(url for url, is_gone in zip(urls, gone, strict=True) if is_gone)
+
+
+missing_images = st.cache_data(ttl=timedelta(days=1), show_spinner=False)(find_missing_images)

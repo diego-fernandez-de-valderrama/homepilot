@@ -14,7 +14,7 @@ from catalog_ingestion.schemas.catalog_product import CatalogProductSchema
 from catalog_ingestion.storage.postgres.engine import create_db_engine, create_session_factory
 from catalog_ingestion.storage.postgres.models import CompatibilityRecord, ProductRecord, RequirementRecord
 from catalog_ingestion.vocabulary.requirements import term_by_canonical
-from sqlalchemy import ColumnElement, Engine, Select, and_, exists, func, or_, select
+from sqlalchemy import ColumnElement, ColumnExpressionArgument, Engine, Select, and_, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from smart_home_agent.models.evidence import Evidence, FieldProvenance
@@ -26,6 +26,8 @@ class CatalogReader(Protocol):
     """What the services need from the structured catalog."""
 
     def get_products(self, product_ids: Sequence[str]) -> list[Product]: ...
+
+    def get_product(self, product_id: str) -> Product | None: ...
 
     def filter_products(self, criteria: ProductFilter) -> tuple[int, list[Product]]: ...
 
@@ -133,8 +135,8 @@ def supported_condition(canonical: str) -> ColumnElement[bool]:
     return and_(supported, ~unsupported)
 
 
-def _conditions(criteria: ProductFilter) -> list[ColumnElement[bool]]:
-    conditions: list[ColumnElement[bool]] = [ProductRecord.active]
+def _conditions(criteria: ProductFilter) -> list[ColumnExpressionArgument[bool]]:
+    conditions: list[ColumnExpressionArgument[bool]] = [ProductRecord.active]
     if criteria.category:
         conditions.append(ProductRecord.category == criteria.category)
     if criteria.min_price is not None:
@@ -157,7 +159,7 @@ def _conditions(criteria: ProductFilter) -> list[ColumnElement[bool]]:
     return conditions
 
 
-def _ordered(statement: Select[tuple[ProductRecord]], criteria: ProductFilter) -> Select[tuple[ProductRecord]]:
+def _ordered(statement: Select[ProductRecord], criteria: ProductFilter) -> Select[ProductRecord]:
     match criteria.sort:
         case "price_asc":
             return statement.order_by(ProductRecord.price_value.asc().nulls_last(), ProductRecord.id)
@@ -167,7 +169,7 @@ def _ordered(statement: Select[tuple[ProductRecord]], criteria: ProductFilter) -
             return statement.order_by(ProductRecord.completeness_score.desc(), ProductRecord.id)
 
 
-def _with_children(statement: Select[tuple[ProductRecord]]) -> Select[tuple[ProductRecord]]:
+def _with_children(statement: Select[ProductRecord]) -> Select[ProductRecord]:
     return statement.options(selectinload(ProductRecord.compatibility), selectinload(ProductRecord.requirements))
 
 

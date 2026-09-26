@@ -1,3 +1,5 @@
+from typing import Any
+
 from catalog_ingestion.domain.enums import FactStatus
 
 from smart_home_agent.models.recommendation import RecommendationRequest
@@ -19,8 +21,8 @@ PLUG = product("plug", category="smart_plug", product_type="Smart plug", price=2
 ALL = [CONFIRMED_CHEAP, CONFIRMED_PREMIUM, OVER_BUDGET, ASSISTANT_ONLY, NEGATIVE, PLUG]
 
 
-def _recommend(**overrides):
-    fields = {
+def _recommend(**overrides: Any):
+    fields: dict[str, Any] = {
         "need": "radiator thermostat",
         "category": "heating_control",
         "max_price": 150,

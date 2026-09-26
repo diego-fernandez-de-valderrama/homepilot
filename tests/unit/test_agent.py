@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 
+from google.adk.models import BaseLlm
 from pydantic import SecretStr
 
 from smart_home_agent.agent.language import detect_language
@@ -26,6 +27,7 @@ def _settings() -> Settings:
 
 def test_agent_builds_offline_with_all_tools():
     agent = build_agent(services_for([product("1")]), _settings())
+    assert isinstance(agent.model, BaseLlm)
     assert agent.model.model == "gemini-test"
     assert len(agent.tools) == 8
     AgentService(agent, "test-app")  # runner + in-memory sessions, no network

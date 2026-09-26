@@ -136,7 +136,7 @@ class FakeIndex:
 
 def services_for(products: Sequence[Product], scores: dict[str, float] | None = None, **settings: Any) -> Services:
     index = FakeIndex(scores if scores is not None else {p.id: 0.8 for p in products})
-    return Services.create(FakeCatalog(products), index, AgentSettings(**settings))  # type: ignore[arg-type]
+    return Services.create(FakeCatalog(products), index, AgentSettings(**settings))
 
 
 class FakeToolContext:

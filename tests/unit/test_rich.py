@@ -69,7 +69,13 @@ def test_resolve_without_tags_makes_no_catalog_call():
         def get_products(self, product_ids):
             raise AssertionError("no catalog call expected")
 
-    assert RichContentService(NoCatalog()).resolve("Hello! How can I help?") is None  # type: ignore[arg-type]
+        def get_product(self, product_id):
+            raise AssertionError("no catalog call expected")
+
+        def filter_products(self, criteria):
+            raise AssertionError("no catalog call expected")
+
+    assert RichContentService(NoCatalog()).resolve("Hello! How can I help?") is None
 
 
 def test_resolve_against_setup_keeps_unknown_unknown():
@@ -101,8 +107,10 @@ def test_resolve_without_setup_shows_the_products_own_facts():
 
 def test_upgrade_only_for_the_recommenders_upsell():
     reversed_pair = f'<upgrade from="{PRO.id}" to="{BASIC.id}"/>'
-    assert resolver().resolve(reversed_pair, last_upsell=UPSELL).upgrades == {}  # type: ignore[union-attr]
-    assert resolver().resolve(ANSWER).upgrades == {}  # type: ignore[union-attr]  # no upsell in the session
+    reversed_content = resolver().resolve(reversed_pair, last_upsell=UPSELL)
+    assert reversed_content is not None and reversed_content.upgrades == {}
+    content = resolver().resolve(ANSWER)
+    assert content is not None and content.upgrades == {}  # no upsell in the session
 
 
 def test_unknown_ids_get_no_data():

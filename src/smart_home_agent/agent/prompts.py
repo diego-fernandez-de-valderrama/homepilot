@@ -1,8 +1,6 @@
 """System instruction of the HomePilot agent (guardrails live here, at prompt level)."""
 
-from google.adk.agents.readonly_context import ReadonlyContext
-
-from smart_home_agent.agent.state import TURN_LANGUAGE_KEY, read_state
+from smart_home_agent.agent.state import TURN_LANGUAGE_KEY, StateHolder, read_state
 from smart_home_agent.services.vocabulary import vocabulary_overview
 
 BASE_INSTRUCTION = """\
@@ -99,7 +97,7 @@ Rules:
 _LANGUAGE_NAMES = {"en": "English", "de": "German"}
 
 
-def build_instruction(context: ReadonlyContext) -> str:
+def build_instruction(context: StateHolder) -> str:
     """Instruction provider: static rules + canonical vocabulary + what we know about this session."""
     session = read_state(context.state)
     known = session.model_dump(

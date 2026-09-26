@@ -10,8 +10,9 @@ OTHER_TYPE = product(
 )
 
 
-def _ranked(products, scores=None):
-    scores = scores or {p.id: 0.8 for p in products}
+def _ranked(products, scores: dict[str, float | None] | None = None):
+    if not scores:
+        scores = {p.id: 0.8 for p in products}
     return ranking.rank(ranking.build_candidates(products, scores, "radiator thermostat"))
 
 

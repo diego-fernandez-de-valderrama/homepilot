@@ -60,7 +60,7 @@ def test_working_images_are_shown_and_gone_ones_get_a_placeholder(cdn):
     no_url = _with_image("30000004", None)
     products = [*working, gone, no_url]
 
-    missing = images.missing_images.__wrapped__(card_image_urls(products))  # uncached call
+    missing = images.find_missing_images(card_image_urls(products))
     html = product_cards_html(products, missing)
 
     assert missing == frozenset({gone.image_url})
@@ -73,4 +73,4 @@ def test_working_images_are_shown_and_gone_ones_get_a_placeholder(cdn):
 def test_server_errors_and_unreachable_hosts_keep_the_image(cdn):
     unreachable = "http://127.0.0.1:9/nothing-listens-here.webp"
     urls = (f"{cdn}/slow/c.webp", unreachable)
-    assert images.missing_images.__wrapped__(urls) == frozenset()
+    assert images.find_missing_images(urls) == frozenset()

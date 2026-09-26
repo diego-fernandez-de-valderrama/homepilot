@@ -14,7 +14,7 @@ PRODUCTS = [
 
 @pytest.fixture
 def tools():
-    return {tool.__name__: tool for tool in build_tools(services_for(PRODUCTS))}
+    return {FunctionTool(tool).name: tool for tool in build_tools(services_for(PRODUCTS))}
 
 
 def test_every_tool_has_a_valid_adk_declaration(tools):
@@ -30,6 +30,7 @@ def test_every_tool_has_a_valid_adk_declaration(tools):
     }
     for tool in tools.values():
         declaration = FunctionTool(tool)._get_declaration()
+        assert declaration is not None
         properties = (declaration.parameters_json_schema or {}).get("properties", {})
         assert declaration.description
         assert "tool_context" not in properties  # injected by ADK, not visible to the model
@@ -57,7 +58,7 @@ def test_recommended_accessories_are_known_to_the_session():
     thermostat = product(
         "bosch", price=70.0, facts=[fact("google_home")], requirements=[requirement("bosch_smart_home_controller")]
     )
-    recommend = {t.__name__: t for t in build_tools(services_for([thermostat, hub]))}["recommend_products"]
+    recommend = {FunctionTool(t).name: t for t in build_tools(services_for([thermostat, hub]))}["recommend_products"]
     context = FakeToolContext()
     result = recommend("thermostat", context, category="heating_control", must_support=["Google Home"])
     assert [a["product_id"] for a in result["accessories"]] == ["hub"]
