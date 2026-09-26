@@ -28,8 +28,21 @@
 
 /* ---------- Page frame ---------- */
 
+/* Streamlit's header is a fixed, full-width layer above everything. Once the conversation scrolls, the pinned
+   masthead sits under it, so its empty area must let clicks through to the masthead buttons; its own
+   controls (sidebar toggle, app menu) stay clickable. */
 [data-testid="stHeader"] {
   background: transparent;
+}
+
+[data-testid="stHeader"],
+[data-testid="stHeader"] * {
+  pointer-events: none;
+}
+
+[data-testid="stHeader"] :is(button, a),
+[data-testid="stHeader"] :is(button, a) * {
+  pointer-events: auto;
 }
 
 /* The running indicator would sit over the pinned masthead; each turn shows its own progress line. */
