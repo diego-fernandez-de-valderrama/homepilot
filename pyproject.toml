@@ -1,0 +1,47 @@
+[project]
+name = "catalog-ingestion"
+version = "0.1.0"
+description = "Catalog ingestion, enrichment and indexing for the HomePilot smart home agent"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.0",
+    "beautifulsoup4>=4.15.0",
+    "google-genai>=2.25.0",
+    "httpx>=0.28.1",
+    "psycopg[binary]>=3.3.6",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "qdrant-client>=1.19.1",
+    "rich>=15.0.0",
+    "sqlalchemy>=2.1.1",
+    "tenacity>=9.1.4",
+    "typer>=0.27.2",
+]
+
+[project.scripts]
+catalog-ingestion = "catalog_ingestion.cli.app:main"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+    "ty>=0.0.84",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes are intentional
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs running PostgreSQL (auto-skipped when unreachable)"]
+filterwarnings = ["ignore:Payload indexes have no effect in the local Qdrant:UserWarning"]
