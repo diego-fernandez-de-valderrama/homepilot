@@ -23,7 +23,6 @@ Gemini understands the request, picks tools and writes the answer. **It is never
 13. [Tests](#tests)
 14. [Example conversations](#example-conversations)
 15. [Troubleshooting](#troubleshooting)
-16. [Next iteration](#next-iteration)
 
 ---
 
@@ -504,7 +503,8 @@ uv sync
 uv run python -m smart_home_agent init-memory   # customer memory database (create + migrate, idempotent)
 uv run python -m smart_home_agent check    # PostgreSQL/Qdrant counts, embedding model, memory revision
 uv run python -m smart_home_agent smoke    # recommendation pipeline only (1 embedding call, no chat model)
-uv run python -m smart_home_agent upsell-eval   # upselling KPI over 25 fixed requests (no chat model)
+uv run python -m smart_home_agent upsell-eval   # upselling KPI over 29 fixed requests (no chat model)
+uv run python -m smart_home_agent conversation-eval   # regression conversations through the live agent (chat model)
 uv run streamlit run src/smart_home_agent/ui/streamlit_app.py
 ```
 
@@ -535,7 +535,8 @@ uv run deptry .                # every imported package is declared, none is unu
 | Compatibility | supported / unsupported / unknown; missing data is neither unsupported nor supported; contradicting evidence; Siri ≠ HomeKit; Google Assistant ≠ Google Home; hub requirements; professional installation. |
 | Filtering | Price, category, brand, protocols, invalid ranges. |
 | Comparison | Structured rows, "not listed", unknown vs unsupported, capability differences, input validation. |
-| Ranking and recommendation | Compatibility gate before upselling; the budget is never exceeded; no upsell without strictly more capabilities or across product types; structured matches found even when semantic search misses them. |
+| Ranking and recommendation | Compatibility gate before upselling; the budget is never exceeded; no upsell that loses a capability, has no verifiable advantage or crosses product types; owned-hub fit in the ranking; structured matches found even when semantic search misses them. |
+| Conversation evaluation | The checks and the runner of `conversation-eval` on scripted replies: resolved criteria from both search tools, wrong concepts, blocks, language, follow-ups, cart confirmation, memory, known issues vs regressions. |
 | Tools | ADK declarations, input/output contracts, error statuses, session state. |
 | Agent | Offline build, instruction content, language detection, trace. |
 | Vocabulary and evidence | Term resolution and provenance lookup. |
@@ -550,6 +551,35 @@ uv run deptry .                # every imported package is declared, none is unu
 - Google Assistant products are unknown for Google Home, never unsupported;
 - sessions are really read-only;
 - Qdrant search and by-id scoring (using a stored vector, so no Gemini call is needed).
+
+### Conversation regression evaluation
+
+The unit tests never call the chat model, so they cannot notice when a prompt change makes the agent behave differently. `conversation-eval` does: it runs 17 fixed EN/DE conversations (`conversation_eval.py`, 26 turns, about 80 seconds) through the real agent, guardrail and tools, and checks every turn with deterministic rules on what the agent *did*, never on its wording:
+
+| Conversation(s) | What must hold |
+|---|---|
+| `recommend_en`, `recommend_de` | The request resolves to the right ecosystem, budget and category; products are shown; the reply follows the customer's language. |
+| `siri_is_not_homekit`, `assistant_is_not_google_home` | Concepts never cross in the ids the tools actually used. |
+| `ambiguous_apple` | "Apple" is clarified, never guessed. |
+| `budget_carries_over`, `compare_follow_up`, `compatibility_follow_up` | Follow-ups keep the budget and use the products of the previous answer. |
+| `wiring_en`, `wiring_de`, `prompt_injection` | Blocked by the input guardrail, with no tool call. |
+| `off_topic`, `conversation_control` | Off-topic gets no catalog tools; conversation control is never blocked and switches the language. |
+| `cart_needs_confirmation`, `cart_rejected` | Nothing changes before the customer decides; afterwards the cart holds exactly what was confirmed. |
+| `memory_across_conversations`, `memory_not_about_others` | The customer's own facts are stored and known in the next conversation; facts about others are not stored. |
+
+Every turn must also produce an answer that the output check did not have to replace. Checks read the tools' own echo of what they ran (`request` of `recommend_products`, `criteria` of `filter_products`), so either search tool passes. A failing turn is reported with its tool calls and arguments and any pending cart change.
+
+```bash
+uv run python -m smart_home_agent conversation-eval                      # all conversations, exit 1 on a regression
+uv run python -m smart_home_agent conversation-eval --case wiring_de     # one conversation (repeatable flag)
+uv run python -m smart_home_agent conversation-eval --repeat 3           # separates FLAKY from FAIL
+```
+
+The chat model is not deterministic, so run it before and after every prompt or tool change, and repeat a failing case before treating it as a regression. Each run uses its own customer id (`eval-...`), and the command deletes those customers' stored facts afterwards.
+
+A conversation can carry a `known_issue`: it is reported as KNOWN and does not fail the command; when it starts passing it is reported as FIXED, and the marker should be removed. One is known today: for "a thermostat that works with Apple" the model passes "Apple Home" itself (3/3 runs), so the vocabulary's ambiguity check never sees the bare "Apple". The fix belongs in the prompt and needs live measurement (see the note on `AGENT_THINKING_BUDGET`).
+
+The custom runner is used instead of ADK's `AgentEvaluator`: that one compares exact tool arguments and response text (ROUGE or an LLM judge), which is brittle for a bilingual agent whose tools accept free text, and it cannot answer the cart confirmation turns.
 
 ---
 
@@ -605,16 +635,3 @@ Agent: Bosch Smart Home Heizkörper-Thermostat II (55.00 EUR, radiator thermosta
 | Log `model returned no content ... retry 1 of 3` / `agent error event: The model returned no content (finish_reason=STOP with empty parts)` | Gemini 2.5 ended a call with no output at all. The main trigger was its dynamic thinking: keep `AGENT_THINKING_BUDGET=0` (the default); with `-1` (dynamic) about half of the harder live prompts came back empty. Remaining cases are retried silently: each retry adds a one-line note to its copy of the request (an identical retry gets the same empty answer), never to the conversation, and tools are not run again. Only after all retries does the customer see the friendly notice. |
 | Answers in the wrong language | Very short or mixed messages give no language hint; the model then follows the conversation. Ask explicitly ("answer in English"). |
 | `UserWarning: [EXPERIMENTAL] ... JSON_SCHEMA_FOR_FUNC_DECL` | Emitted by ADK 2.x when building tool schemas. It is filtered in `smart_home_agent/agent/__init__.py`; if you still see it, the code imported ADK tools without importing `smart_home_agent.agent` first. Harmless. |
-
----
-
-## Next iteration
-
-- **Extract a shared package.** Split `homepilot-catalog-core` (ORM, vocabulary, enums, schemas, embedder) out of catalog-ingestion. The agent would then not install ingestion-only dependencies (typer, bs4, ...).
-- **Container image.** Add one for the agent (it needs the shared package first) and a compose service joining the `homepilot-catalog` network.
-- **Evaluation set.** Build EN/DE conversations with expected tool calls and compatibility outcomes, using ADK evaluation, as regression tests for the prompt.
-- **Streaming responses** in Streamlit and a tool-call timeline (`st.status(type="step")`).
-- **Better ranking signals.** Price tiers per category and margin data, if the business provides them. They must stay behind the compatibility gate.
-- **Category-aware product-type taxonomy.** The LLM `product_type` is free text, which limits type matching and upsell eligibility.
-- **Guardrail calibration on real traffic.** Log guardrail decisions (without message text, or with consent) and grow the prototypes and the evaluation set from the UNCERTAIN cases.
-- **Persistent sessions** (ADK `DatabaseSessionService`) once user profiles are in scope.

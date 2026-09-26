@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.sql import func
 
@@ -120,3 +120,11 @@ class ProfileRepository:
             for record in added:
                 session.refresh(record)
             return [to_fact(r) for r in added], [to_fact(r) for r in retracted]
+
+    def delete_customers(self, user_ids: Sequence[str]) -> int:
+        """Removes every fact of these customers (evaluation cleanup; customers only ever retract)."""
+        if not user_ids:
+            return 0
+        with self._sessions.begin() as session:
+            query = delete(CustomerFactRecord).where(CustomerFactRecord.user_id.in_(user_ids))
+            return len(session.scalars(query.returning(CustomerFactRecord.id)).all())
