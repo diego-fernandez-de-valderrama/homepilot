@@ -1,0 +1,51 @@
+[project]
+name = "smart-home-agent"
+version = "0.1.0"
+description = "Conversational smart home shopping agent (Google ADK + Gemini) on top of the HomePilot catalog"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "catalog-ingestion",
+    "google-adk>=2.10.0",
+    "google-genai>=2.25.0",
+    "psycopg[binary]>=3.3.6",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "qdrant-client>=1.19.1",
+    "sqlalchemy>=2.1.1",
+    "streamlit>=1.64.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes are intentional
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs running PostgreSQL/Qdrant (auto-skipped when unreachable)"]
+filterwarnings = ["ignore:.*EXPERIMENTAL.*JSON_SCHEMA_FOR_FUNC_DECL:UserWarning"]
+
+[tool.uv.sources]
+catalog-ingestion = { path = "../catalog-ingestion", editable = true }
+
+[dependency-groups]
+dev = [
+    "deptry>=0.25.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+]
+
+[tool.deptry]
+known_first_party = ["smart_home_agent", "tests"]
+
+[tool.deptry.per_rule_ignores]
+# psycopg is never imported: SQLAlchemy loads it at runtime for the `postgresql+psycopg` URL.
+DEP002 = ["psycopg"]
