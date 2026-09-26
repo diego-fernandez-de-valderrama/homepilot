@@ -1,11 +1,11 @@
-# HomePilot Catalog Ingestion (phase 1)
+# HomePilot Catalog Ingestion
 
 This service ingests `products.zip`, normalizes, enriches and validates every product, and records where each fact came from. It persists the result in two stores:
 
 - **PostgreSQL**: the structured source of truth, used for exact filtering, comparison and deterministic compatibility checks.
 - **Qdrant**: semantic retrieval ("find me a thermostat that works with HomeKit").
 
-This is phase 1 of the HomePilot Smart Home Conversational Agent (Google ADK + Gemini). The agent, UI, recommendation, comparison and guardrail logic belong to later phases and build on this catalog.
+It is the data layer of the HomePilot Smart Home Conversational Agent (Google ADK + Gemini). The agent, UI, recommendation, comparison and guardrail logic live in [`../smart-home-agent`](../smart-home-agent) and build on this catalog.
 
 ---
 
@@ -24,7 +24,7 @@ This is phase 1 of the HomePilot Smart Home Conversational Agent (Google ADK + G
 11. [How persistence works / how to reset](#how-persistence-works--how-to-reset)
 12. [Tests](#tests)
 13. [Configuration](#configuration)
-14. [Notes for phase 2](#notes-for-phase-2)
+14. [Notes for the agent](#notes-for-the-agent)
 
 ---
 
@@ -262,7 +262,7 @@ uv run alembic upgrade head                                       # 4. apply (or
 
 Other useful commands: `uv run alembic current`, `uv run alembic history`, `uv run alembic check` (fails if the models have changes that are not in a migration), `uv run alembic downgrade -1`. The Alembic CLI reads the database settings from the same `POSTGRES_*` variables / `.env` as the application.
 
-Example queries for phase 2:
+Example queries for the agent:
 
 ```sql
 -- Thermostats that support Apple Home, with their hub requirements
@@ -459,7 +459,7 @@ All configuration comes from environment variables or `.env` (see `.env.example`
 
 ---
 
-## Notes for phase 2
+## Notes for the agent
 
 - `catalog_ingestion.domain` (dataclasses), `catalog_ingestion.vocabulary` (canonical ids and labels) and `catalog_ingestion.schemas.catalog_product` (the JSON contract) are importable without any ingestion dependencies.
 - A deterministic compatibility check is a query over `product_compatibility` (`status = 'supported'`) and `product_requirements` (`alternatives`). Treat a missing row as **unknown**, never as incompatible or compatible.
