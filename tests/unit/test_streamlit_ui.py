@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+import streamlit as st
 from catalog_ingestion.domain.enums import FactStatus
 from streamlit.testing.v1 import AppTest
 
@@ -281,3 +283,191 @@ def test_deciding_a_change_keeps_every_element_in_place():
     assert [b.label for b in open_app.button] == ["Add to cart", "Cancel"]
     assert list(decided_app.button) == []
     assert _slot_keys(open_app) == _slot_keys(decided_app)
+
+
+@pytest.fixture
+def memory_off(monkeypatch):
+    """Picker tests without the real memory database: no stored customers, only this session's."""
+    monkeypatch.setenv("AGENT_MEMORY_ENABLED", "false")
+    st.cache_resource.clear()
+    st.cache_data.clear()
+    yield
+    st.cache_resource.clear()
+    st.cache_data.clear()
+
+
+def picker_app() -> AppTest:
+    return AppTest.from_file(str(APP), default_timeout=15).run()
+
+
+def new_customer(app: AppTest, customer_id: str) -> None:
+    app.selectbox(key="hp-customer-pick").set_value(streamlit_app.NEW_CUSTOMER).run()
+    app.text_input(key="hp-customer-new").set_value(customer_id).run()
+
+
+def test_new_customer_is_created_selected_and_starts_a_new_conversation(memory_off):
+    app = picker_app()
+    picker = app.selectbox(key="hp-customer-pick")
+    assert picker.value == "customer" and picker.options == ["customer", "+ New customer…"]
+    assert any("not available" in c.value for c in app.caption)
+    first_session = app.session_state["session_id"]
+    app.session_state["messages"] = [{"role": "user", "content": "I use HomeKit"}]
+    new_customer(app, "  anna ")
+    assert not app.exception
+    assert app.session_state["customer_id"] == "anna"
+    assert app.selectbox(key="hp-customer-pick").value == "anna"
+    assert app.session_state["session_id"] != first_session and app.session_state["messages"] == []
+    assert not app.text_input  # the id field closes once the customer is created
+
+
+def test_picking_an_earlier_customer_switches_back(memory_off):
+    app = picker_app()
+    new_customer(app, "anna")
+    session = app.session_state["session_id"]
+    assert app.selectbox(key="hp-customer-pick").options == ["customer", "anna", "+ New customer…"]
+    app.selectbox(key="hp-customer-pick").set_value("customer").run()
+    assert not app.exception
+    assert app.session_state["customer_id"] == "customer"
+    assert app.session_state["session_id"] != session
+
+
+def test_new_conversation_keeps_the_customer(memory_off):
+    app = picker_app()
+    new_customer(app, "anna")
+    session = app.session_state["session_id"]
+    next(b for b in app.button if b.label == "New conversation").click().run()
+    assert not app.exception
+    assert app.session_state["customer_id"] == "anna"
+    assert app.selectbox(key="hp-customer-pick").value == "anna"
+    assert app.session_state["session_id"] != session
+
+
+def test_picker_lists_stored_customers_most_recent_first_with_fact_counts():
+    from datetime import UTC, datetime
+
+    from smart_home_agent.models.profile import CustomerSummary
+
+    stored = [
+        CustomerSummary(user_id="ben", active_facts=1, total_facts=1, last_activity=datetime(2026, 9, 26, tzinfo=UTC)),
+        CustomerSummary(user_id="anna", active_facts=3, total_facts=4, last_activity=datetime(2026, 9, 25, tzinfo=UTC)),
+        CustomerSummary(user_id="old", active_facts=0, total_facts=2, last_activity=datetime(2026, 9, 1, tzinfo=UTC)),
+    ]
+    options = streamlit_app.customer_options(stored, "customer", ["anna", "clara"])
+    assert options == ["ben", "anna", "old", "clara", "customer", streamlit_app.NEW_CUSTOMER]
+    assert [streamlit_app.customer_label(o) for o in options] == [
+        "ben",
+        "anna",
+        "old",
+        "clara",
+        "customer",
+        "+ New customer…",
+    ]
+    assert streamlit_app.customer_options(None, "customer", []) == ["customer", streamlit_app.NEW_CUSTOMER]
+    # The fact count is shown under the picker, never in the option labels.
+    assert streamlit_app.stored_facts_caption("anna", stored) == "3 facts stored for this customer."
+    assert streamlit_app.stored_facts_caption("ben", stored) == "1 fact stored for this customer."
+    assert streamlit_app.stored_facts_caption("old", stored) == "Nothing stored for this customer yet."
+    assert streamlit_app.stored_facts_caption("x", None).startswith("Stored customers are not available")
+
+
+class _State(dict):
+    """Stand-in for st.session_state (item and attribute access)."""
+
+    __getattr__ = dict.__getitem__
+    __setattr__ = dict.__setitem__
+
+
+def test_a_stale_value_from_the_browser_never_becomes_a_customer(monkeypatch):
+    """Regression: labels used to carry the fact count ("anna · 1 fact"). Streamlit's browser side keeps a
+    selectbox value as its label, so after a new fact it sent the old label back; Streamlit passes an unknown
+    label through as a raw value, and the picker switched to a customer literally named "anna · 1 fact".
+    (AppTest cannot send a value outside the options, so the callback is called directly.)"""
+    state = _State(
+        {
+            "customer_id": "anna",
+            "known_customers": ["anna"],
+            "session_id": "s1",
+            "hp-customer-options": ["anna", "ben", streamlit_app.NEW_CUSTOMER],
+            "hp-customer-pick": "anna · 1 fact",
+        }
+    )
+    monkeypatch.setattr(streamlit_app.st, "session_state", state)
+    streamlit_app.pick_customer()
+    assert state["customer_id"] == "anna" and state["hp-customer-pick"] == "anna"
+    assert state["session_id"] == "s1" and state["known_customers"] == ["anna"]  # no switch, no new conversation
+
+    state["hp-customer-pick"] = "ben"  # a real option still switches
+    streamlit_app.pick_customer()
+    assert state["customer_id"] == "ben" and state["session_id"] != "s1"
+
+
+def test_stored_data_button_only_in_developer_mode():
+    app = AppTest.from_file(str(APP)).run()
+    assert "Stored data about me" not in [b.label for b in app.button]
+    app.toggle(key="hp-debug").set_value(True).run()
+    assert "Stored data about me" in [b.label for b in app.button]
+
+
+def _customer_memory_dialog() -> None:
+    from smart_home_agent.services.profile import ProfileService
+    from smart_home_agent.ui import streamlit_app as app
+    from tests.fakes import FakeProfileStore
+
+    service = ProfileService(FakeProfileStore())
+    service.remember("anna", "s1", "I use Alexa", "I use Alexa", ecosystems=["Alexa"])
+    service.remember("anna", "s2", "I sold my Hue Bridge", "I sold my Hue Bridge", owned_devices=["Hue Bridge"])
+    service.remember("anna", "s2", "I sold my Hue Bridge", "I sold my Hue Bridge", no_longer_owned=["Hue Bridge"])
+
+    class Agent:  # stands in for AgentService (no Gemini, no database)
+        def profile(self, user_id: str, include_retracted: bool = True):
+            return service.profile(user_id, include_retracted)
+
+    setattr(app, "get_agent_service", Agent)  # noqa: B010 (a plain assignment does not type-check)
+    app.show_customer_memory("anna")
+
+
+def test_customer_memory_dialog_lists_active_and_retracted_facts():
+    app = AppTest.from_function(_customer_memory_dialog).run()
+    assert not app.exception
+    assert any("`anna` · 1 active, 2 total facts" in m.value for m in app.markdown)
+    [table] = app.dataframe
+    rows = table.value.to_dict("records")
+    assert [(r["kind"], r["value"], r["active"]) for r in rows] == [
+        ("ecosystem", "amazon_alexa", True),
+        ("owned_device", "philips_hue_bridge", False),
+    ]
+    assert rows[1]["retracted because"] == "I sold my Hue Bridge"
+
+
+def test_failure_notice_is_friendly_and_localized():
+    from smart_home_agent.ui.components import failure_html
+
+    english = failure_html("en")
+    assert "Sorry, I couldn&#x27;t finish my answer." in english and 'role="alert"' in english
+    assert "Entschuldigung" in failure_html("de")
+    assert failure_html(None) == english
+    assert "Error" not in english and "finish_reason" not in english  # no technical details for customers
+
+
+def _failed_turn_in_history() -> None:
+    import streamlit as st
+
+    from smart_home_agent.agent.state import SessionState
+    from smart_home_agent.agent.trace import AgentReply, TurnTrace
+    from smart_home_agent.ui.streamlit_app import render_message
+
+    reply = AgentReply(
+        text="", detected_language="de", trace=TurnTrace(), state=SessionState(), error="The model returned no content"
+    )
+    message = {"role": "assistant", "content": "", "reply": reply, "failed": True, "language": "de"}
+    render_message(message, debug=bool(st.query_params.get("debug")))
+
+
+def test_failed_turn_shows_the_notice_and_the_detail_only_to_developers():
+    app = AppTest.from_function(_failed_turn_in_history).run()
+    assert not app.exception
+    assert any("Entschuldigung" in str(h.proto) for h in app.get("html"))
+    assert not any("no content" in c.value for c in app.caption)
+    app.query_params["debug"] = "1"
+    app.run()
+    assert any("Developer detail: The model returned no content" in c.value for c in app.caption)

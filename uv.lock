@@ -1807,6 +1807,7 @@ name = "smart-home-agent"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "alembic" },
     { name = "catalog-ingestion" },
     { name = "google-adk" },
     { name = "google-genai" },
@@ -1828,6 +1829,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "alembic", specifier = ">=1.20.0" },
     { name = "catalog-ingestion", editable = "../catalog-ingestion" },
     { name = "google-adk", specifier = ">=2.10.0" },
     { name = "google-genai", specifier = ">=2.25.0" },

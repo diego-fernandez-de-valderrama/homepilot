@@ -10,6 +10,7 @@ from smart_home_agent.tools.comparison import make_compare_products
 from smart_home_agent.tools.compatibility import make_check_compatibility
 from smart_home_agent.tools.evidence import make_get_evidence
 from smart_home_agent.tools.preferences import make_remember_preferences
+from smart_home_agent.tools.profile import make_remember_customer_facts
 from smart_home_agent.tools.recommend import make_recommend_products
 
 __all__ = ["CONFIRMED_TOOLS", "build_tools"]
@@ -29,5 +30,7 @@ def build_tools(services: Services) -> list[FunctionTool]:
         make_add_to_cart(services),
         make_remove_from_cart(services),
     ]
+    if services.profile is not None:
+        functions.append(make_remember_customer_facts(services.profile))
     # The customer confirms every cart change in the interface before ADK runs the tool.
     return [FunctionTool(f, require_confirmation=f.__name__ in CONFIRMED_TOOLS) for f in functions]

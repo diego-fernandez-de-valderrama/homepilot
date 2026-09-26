@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from smart_home_agent.agent.state import SessionState
 from smart_home_agent.guardrail.callbacks import GuardrailReport
 from smart_home_agent.models.cart import CartConfirmation
+from smart_home_agent.models.profile import CustomerProfile
 from smart_home_agent.models.rich import RichContent
 
 _INTENTS = {
@@ -18,11 +19,12 @@ _INTENTS = {
     "compare_products": "comparison",
     "get_evidence": "provenance",
     "remember_preferences": "preferences",
+    "remember_customer_facts": "customer memory",
     "view_cart": "cart",
     "add_to_cart": "cart",
     "remove_from_cart": "cart",
 }
-_BOOKKEEPING = frozenset({"remember_preferences", "view_cart"})
+_BOOKKEEPING = frozenset({"remember_preferences", "remember_customer_facts", "view_cart"})
 
 
 class ToolCallTrace(BaseModel):
@@ -98,3 +100,12 @@ class AgentReply(BaseModel):
     rich: RichContent | None = None  # catalog data for the presentation tags in `text` (None: no tags)
     # Cart changes waiting for the customer's decision in the interface (answered with AgentService.confirm).
     pending_confirmations: list[CartConfirmation] = Field(default_factory=list)
+    profile: CustomerProfile | None = None  # stored customer facts as of the end of the turn (None: no memory)
+    # Technical error of the turn (e.g. the model returned no content after all retries); for logs and the
+    # developer panel only. The interface shows a friendly message when the turn produced nothing to show.
+    error: str | None = None
+
+    @property
+    def failed(self) -> bool:
+        """Nothing to show: no answer text and no cart change waiting for the customer."""
+        return not self.text.strip() and not self.pending_confirmations

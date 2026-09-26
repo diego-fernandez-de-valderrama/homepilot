@@ -1,6 +1,14 @@
 """System instruction of the HomePilot agent (guardrails live here, at prompt level)."""
 
-from smart_home_agent.agent.state import CART_FIELDS, TURN_LANGUAGE_KEY, SessionState, StateHolder, read_state
+from smart_home_agent.agent.state import (
+    CART_FIELDS,
+    PROFILE_KEY,
+    TURN_LANGUAGE_KEY,
+    SessionState,
+    StateHolder,
+    read_state,
+)
+from smart_home_agent.models.profile import CustomerProfile
 from smart_home_agent.services.vocabulary import vocabulary_overview
 
 BASE_INSTRUCTION = """\
@@ -21,8 +29,9 @@ You help customers find, understand and compare smart home products from our cat
 - Details of one product: get_product. Side-by-side comparison: compare_products (never compare from memory).
 - "Does X work with Y?": check_compatibility.
 - "How do you know?" / "where does that come from?": get_evidence.
-- When the user tells you about their setup (ecosystem, voice assistant, protocols, budget, owned hubs,
-  language), call remember_preferences once, then continue with the request.
+- When the user tells you about the setup for the current request (ecosystem, voice assistant, protocols,
+  budget, owned hubs, language), call remember_preferences once (this conversation only), then continue
+  with the request.
 - If a tool returns status "needs_clarification", ask the user to choose between the options.
   If it returns "unrecognized", explain that the catalog has no such term and offer the closest known ones.
 
@@ -165,6 +174,34 @@ Rules:
 """
 
 
+# Only when the customer memory is enabled (the orchestrator then puts a profile snapshot into the state).
+MEMORY_INSTRUCTION = """\
+# Remembering the customer
+The customer has a personal memory that lasts across conversations (section "Known about this customer
+(profile)" below). Keep it accurate:
+- When the customer states a lasting fact about THEMSELF (their name, the ecosystems or voice assistants
+  they use, smart home hardware they own, lasting preferences, preferred language), call
+  remember_customer_facts with `evidence` = their exact words from the latest message, in addition to
+  remember_preferences when it matters for the current request. Do not mention the memory tool.
+- When they say they no longer own or use something (sold, broken, switched), pass it in
+  no_longer_owned / no_longer_used.
+- Never store:
+  - guesses or anything the customer did not say ("probably has an iPhone");
+  - products in the cart, recommended, added or bought in this conversation: they are not owned until the
+    customer says they own them;
+  - facts about other people: a friend, family member, colleague or gift recipient. When the customer shops
+    for someone else, keep that person's setup in remember_preferences only;
+  - temporary shopping context (budget, the product currently searched for).
+- If the result lists something under `not_stored`, do not retry it; continue with the request.
+
+# Using the profile
+- Greet the customer by name when you know it (not in every message).
+- When the purchase is for the customer themself, use the stored ecosystems and owned hardware as their
+  setup (pass them to the tools and say briefly that you assume it, e.g. "since you use HomeKit").
+- When they shop for someone else, ignore the profile for that purchase and ask about the recipient's setup.
+- If the customer contradicts the profile, the latest statement wins: update the memory.
+"""
+
 _LANGUAGE_NAMES = {"en": "English", "de": "German"}
 
 
@@ -177,7 +214,11 @@ def build_instruction(context: StateHolder) -> str:
         exclude_none=True,
         exclude_defaults=True,
     )
-    parts = [BASE_INSTRUCTION, "# Catalog vocabulary\n" + vocabulary_overview()]
+    parts = [BASE_INSTRUCTION]
+    memory = PROFILE_KEY in context.state  # the key exists (possibly None) only when the memory is enabled
+    if memory:
+        parts.append(MEMORY_INSTRUCTION)
+    parts.append("# Catalog vocabulary\n" + vocabulary_overview())
     turn_language = context.state.get(TURN_LANGUAGE_KEY)
     if turn_language in _LANGUAGE_NAMES:
         name = _LANGUAGE_NAMES[turn_language]
@@ -185,6 +226,8 @@ def build_instruction(context: StateHolder) -> str:
             f"# Reply language for this turn\nThe customer's latest message is in {name}. "
             f"Write your whole reply in {name} unless they explicitly asked for another language."
         )
+    if memory:
+        parts.append(_profile_section(context.state.get(PROFILE_KEY)))
     parts.append(
         "# Known about this customer (session)\n"
         + ("\n".join(f"- {key}: {value}" for key, value in known.items()) if known else "- nothing yet")
@@ -194,6 +237,14 @@ def build_instruction(context: StateHolder) -> str:
     if (cart_status := _cart_status(session)) is not None:
         parts.append(cart_status)
     return "\n\n".join(parts)
+
+
+def _profile_section(snapshot: dict | None) -> str:
+    """Stored facts with the customer's own words, so the model knows exactly what was said."""
+    lines = CustomerProfile.model_validate(snapshot).prompt_lines() if snapshot else []
+    return "# Known about this customer (profile, from earlier conversations)\n" + (
+        "\n".join(lines) if lines else "- nothing stored yet"
+    )
 
 
 def _cart_status(session: SessionState) -> str | None:

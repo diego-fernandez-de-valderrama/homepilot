@@ -41,6 +41,7 @@ _TOOL_LABELS = {
     "compare_products": "Comparing products",
     "get_evidence": "Looking up the sources",
     "remember_preferences": "Noting your preferences",
+    "remember_customer_facts": "Remembering what you told me",
     "view_cart": "Checking your cart",
     "add_to_cart": "Preparing the change to your cart",
     "remove_from_cart": "Preparing the change to your cart",
@@ -508,6 +509,25 @@ def cart_confirmation_html(
 def confirmation_lead_html(count: int) -> str:
     text = "Please confirm this change to your cart." if count == 1 else "Please confirm these changes to your cart."
     return f'<p class="hp-confirm-lead">{text}</p>'
+
+
+_FAILURE_TEXT = {
+    "en": ("Sorry, I couldn't finish my answer.", "Please send your message again in a moment."),
+    "de": (
+        "Entschuldigung, ich konnte meine Antwort nicht fertigstellen.",
+        "Bitte senden Sie Ihre Nachricht gleich noch einmal.",
+    ),
+}
+
+
+def failure_html(language: str | None) -> str:
+    """Shown instead of an answer when the turn failed (after the silent retries): no technical details."""
+    title, hint = _FAILURE_TEXT.get(language or "en", _FAILURE_TEXT["en"])
+    return (
+        '<div class="hp-failure" role="alert">'
+        f'<p class="hp-failure__title">{html.escape(title)}</p>'
+        f'<p class="hp-failure__hint">{html.escape(hint)}</p></div>'
+    )
 
 
 def decision_html(confirmed: int, cancelled: int) -> str:

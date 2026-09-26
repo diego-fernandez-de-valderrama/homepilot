@@ -1,15 +1,19 @@
 """In-memory stand-ins for the repositories and product builders (no database, Qdrant or Gemini)."""
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 from catalog_ingestion.domain.enums import Dimension, FactSource, FactStatus, Method, Necessity, RequirementKind
 from catalog_ingestion.vocabulary.compatibility import term_by_canonical
+from google.genai import types
 
 from smart_home_agent.config import AgentSettings
 from smart_home_agent.container import Services
 from smart_home_agent.models.evidence import Evidence, FieldProvenance
 from smart_home_agent.models.product import CompatibilityFact, Product, ProductRequirement, Spec
+from smart_home_agent.models.profile import CustomerFact, CustomerProfile, CustomerSummary, NewFact
 from smart_home_agent.models.search import ProductFilter, SearchCandidate
 from smart_home_agent.services.filtering import rejection_reason
 
@@ -134,11 +138,79 @@ class FakeIndex:
         return {pid: self.scores[pid] for pid in product_ids if pid in self.scores}
 
 
-def services_for(products: Sequence[Product], scores: dict[str, float] | None = None, **settings: Any) -> Services:
+class FakeProfileStore:
+    """Customer memory in a list, with the same semantics as ProfileRepository."""
+
+    def __init__(self) -> None:
+        self.facts: list[CustomerFact] = []
+        self.fail = False  # True: every call raises, like an unreachable database
+
+    def load(self, user_id: str, include_retracted: bool = False) -> CustomerProfile:
+        if self.fail:
+            raise ConnectionError("memory database down")
+        facts = [f for f in self.facts if f.user_id == user_id and (include_retracted or f.active)]
+        return CustomerProfile(user_id=user_id, facts=[f.model_copy() for f in facts])
+
+    def customers(self) -> list[CustomerSummary]:
+        if self.fail:
+            raise ConnectionError("memory database down")
+        users = dict.fromkeys(f.user_id for f in sorted(self.facts, key=lambda f: f.created_at, reverse=True))
+        summaries = []
+        for user in users:
+            facts = [f for f in self.facts if f.user_id == user]
+            last = max(max(f.created_at, f.retracted_at or f.created_at) for f in facts)
+            active = sum(f.active for f in facts)
+            summaries.append(
+                CustomerSummary(user_id=user, active_facts=active, total_facts=len(facts), last_activity=last)
+            )
+        return sorted(summaries, key=lambda s: s.last_activity, reverse=True)
+
+    def apply(
+        self,
+        user_id: str,
+        session_id: str | None,
+        evidence: str,
+        add: Sequence[NewFact],
+        retract_ids: Sequence[int],
+    ) -> tuple[list[CustomerFact], list[CustomerFact]]:
+        now = datetime.now(UTC)
+        retracted = []
+        for index, stored in enumerate(self.facts):
+            if stored.user_id == user_id and stored.id in retract_ids and stored.active:
+                self.facts[index] = stored.model_copy(
+                    update={"active": False, "retracted_at": now, "retracted_evidence": evidence}
+                )
+                retracted.append(self.facts[index])
+        added = [
+            CustomerFact(
+                id=len(self.facts) + i + 1,
+                user_id=user_id,
+                session_id=session_id,
+                evidence=evidence,
+                created_at=now,
+                **fact.model_dump(),
+            )
+            for i, fact in enumerate(add)
+        ]
+        self.facts += added
+        return added, retracted
+
+
+def services_for(
+    products: Sequence[Product],
+    scores: dict[str, float] | None = None,
+    profiles: FakeProfileStore | None = None,
+    **settings: Any,
+) -> Services:
     index = FakeIndex(scores if scores is not None else {p.id: 0.8 for p in products})
-    return Services.create(FakeCatalog(products), index, AgentSettings(**settings))
+    return Services.create(FakeCatalog(products), index, AgentSettings(**settings), profiles)
 
 
 class FakeToolContext:
-    def __init__(self, state: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, state: dict[str, Any] | None = None, message: str | None = None, user_id: str = "customer"
+    ) -> None:
         self.state: dict[str, Any] = state if state is not None else {}
+        self.user_id = user_id
+        self.session = SimpleNamespace(id="session-1")
+        self.user_content = types.Content(role="user", parts=[types.Part(text=message)]) if message else None

@@ -1542,6 +1542,30 @@
 }
 
 /* The customer's decision, in place of a typed message. */
+.hp-failure {
+  margin: var(--hp-s1) 0;
+  padding: var(--hp-s3) var(--hp-s4);
+  border: 1px solid var(--hp-rule);
+  border-left: 3px solid var(--hp-red);
+  border-radius: var(--hp-radius);
+  background: var(--hp-red-tint);
+}
+
+.hp-failure p {
+  margin: 0 !important;
+}
+
+.hp-failure__title {
+  font-weight: 600;
+  color: var(--hp-ink);
+}
+
+.hp-failure__hint {
+  margin-top: var(--hp-s1) !important;
+  font-size: 0.875rem;
+  color: var(--hp-graphite);
+}
+
 .hp-decision {
   font-size: 0.8125rem;
   font-weight: 600;

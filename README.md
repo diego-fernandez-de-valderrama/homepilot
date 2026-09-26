@@ -16,13 +16,14 @@ Gemini understands the request, picks tools and writes the answer. **It is never
 6. [Comparison and evidence](#comparison-and-evidence)
 7. [Models: SQLAlchemy / Pydantic / dataclasses](#models-sqlalchemy--pydantic--dataclasses)
 8. [Bilingual support, conversation state, guardrails](#bilingual-support-conversation-state-guardrails)
-9. [Semantic guardrail (input/output validation)](#semantic-guardrail-inputoutput-validation)
-10. [Configuration](#configuration)
-11. [How to run](#how-to-run)
-12. [Tests](#tests)
-13. [Example conversations](#example-conversations)
-14. [Troubleshooting](#troubleshooting)
-15. [Next iteration](#next-iteration)
+9. [Customer memory (per user, across conversations)](#customer-memory-per-user-across-conversations)
+10. [Semantic guardrail (input/output validation)](#semantic-guardrail-inputoutput-validation)
+11. [Configuration](#configuration)
+12. [How to run](#how-to-run)
+13. [Tests](#tests)
+14. [Example conversations](#example-conversations)
+15. [Troubleshooting](#troubleshooting)
+16. [Next iteration](#next-iteration)
 
 ---
 
@@ -262,7 +263,7 @@ The repository maps ORM → Pydantic (`to_product`). ORM objects never reach ser
 - `language`, `user_ecosystems`, `user_protocols`, `owned_devices`, `budget_max`, `requirements`;
 - `current_category`, `last_search`, `candidate_products`, `selected_products`, `comparison_products`.
 
-Tools update it automatically. `remember_preferences` stores what the user said about their home. `recommend_products` uses the stored ecosystems, protocols and budget as defaults and reports them in `applied_from_session`. The instruction includes the known state every turn. Nothing is persisted: there are no user profiles or accounts.
+Tools update it automatically. `remember_preferences` stores what the user said about their home. `recommend_products` uses the stored ecosystems, protocols and budget as defaults and reports them in `applied_from_session`. The instruction includes the known state every turn. The session itself is not persisted; lasting facts about the customer go to the [customer memory](#customer-memory-per-user-across-conversations).
 
 **Guardrails** are prompt-level (`agent/prompts.py`), and since the guardrail change they are backed by a
 deterministic layer around the agent (see [Semantic guardrail](#semantic-guardrail-inputoutput-validation)):
@@ -270,6 +271,26 @@ deterministic layer around the agent (see [Semantic guardrail](#semantic-guardra
 - Products with `requires_professional_installation` are flagged in the answer.
 - Off-topic questions are redirected to smart home topics.
 - Facts only from tools; no invented advantages.
+
+---
+
+## Customer memory (per user, across conversations)
+
+Customers are identified by a `user_id` (the **Customer** picker in the Streamlit sidebar, `chat --user ID` in the terminal; there is no login, it is for testing several customers). The picker lists every customer with stored facts (most recently active first, read from the memory database), plus the customers used in this browser session; **+ New customer…** asks for a new id (press Enter). The number of stored facts is shown under the picker, not in the option labels: Streamlit's browser side keeps a selectbox value as its label text, so a label that changes (e.g. a fact count) would come back as an unknown value and switch the customer. When a customer states a lasting fact about themself, the agent calls `remember_customer_facts` and the fact is stored for that `user_id`. Every later turn, in any conversation of the same customer, the instruction lists the stored facts under "Known about this customer (profile)". The profile is prompt context only: it never pre-fills `SessionState` or tool defaults; the model passes it on when the purchase is for the customer themself.
+
+**What is stored** (`models/profile.py`, `FactKind`): `name`, `language`, `ecosystem` (ecosystems and voice assistants, canonical ids), `owned_device` (canonical hub id when it maps safely, otherwise the customer's wording with `canonical = NULL`) and `preference` (free text). Each fact keeps the verbatim `evidence`, the conversation id and timestamps. "I sold my Hue Bridge" retracts the fact (`active = false`, `retracted_at`, `retracted_evidence`): it is kept for provenance but no longer shown to the model. A new name or language supersedes the old one.
+
+**Rules enforced in code** (`services/profile.py`), not only in the prompt:
+- `evidence` must be a verbatim quote of the customer's current message (case, spacing and typographic quotes are normalized). A cart confirmation has no text, so nothing can be stored from it. Products in the cart, recommendations and tool results therefore can never become "owned".
+- Quotes that talk about another person (friend, family, colleague, gift, "for him", "für meine Mutter", ...) are refused: facts about third parties are never stored. "I'm buying it for my friend, but I use Alexa myself" still stores Alexa with the quote "I use Alexa myself".
+- Ecosystems go through the shared vocabulary (ambiguous "Apple"/"Google" returns `needs_clarification`; a protocol such as Zigbee is not an ecosystem).
+- A refused update returns `invalid_input` and stores nothing.
+
+**Storage:** a separate database (`AGENT_MEMORY_DB`, default `homepilot_memory`) on the catalog's PostgreSQL server, same `POSTGRES_*` credentials. The catalog engine stays read-only; only the memory engine writes. The schema belongs to this project: SQLAlchemy models in `memory/models.py`, Alembic migrations in `memory/migrations/` (`alembic.ini` in this directory). `python -m smart_home_agent init-memory` creates the database if needed and migrates it (idempotent). After editing the models, run `uv run alembic revision --autogenerate -m "..."` and review the file.
+
+**Failure handling:** if the memory database cannot be read, the turn runs without the profile (a warning is logged). `AGENT_MEMORY_ENABLED=false` removes the tool and the memory instructions.
+
+**Developer view:** with the Developer panel toggle on, **Stored data about me** in the sidebar opens a dialog with everything stored for the current customer (active and retracted facts, evidence, conversation, timestamps) read live from PostgreSQL. The per-answer developer panel also shows the profile as of the end of that turn.
 
 ---
 
@@ -444,11 +465,15 @@ Copy `.env.example` to `.env` in this directory. `GEMINI_*`, `POSTGRES_*` and `Q
 | `QDRANT_URL`, `QDRANT_API_KEY`, `QDRANT_COLLECTION` | `http://localhost:6333`, none, `products` | The catalog-ingestion collection. |
 | `AGENT_MODEL` | `gemini-2.5-flash` | Chat/orchestration model (separate from `GEMINI_MODEL`, the enrichment model). |
 | `AGENT_TEMPERATURE` | `0.2` | |
+| `AGENT_THINKING_BUDGET` | `0` | Thinking tokens per call; `0` = off, `-1` = the model's dynamic default. `0` avoids the empty answers of the dynamic default and is faster. |
+| `AGENT_MODEL_RETRIES`, `AGENT_MODEL_RETRY_INITIAL_DELAY`, `AGENT_MODEL_RETRY_MAX_DELAY` | `3`, `1.0`, `8.0` | Silent retries of empty answers and transient HTTP errors (408/429/5xx), backoff 1s, 2s, 4s (capped). |
 | `AGENT_CANDIDATE_POOL` | `50` | Candidates per retrieval path before filtering. |
 | `AGENT_UPSELL_MIN_RELEVANCE` | `0.75` | An upsell must reach this share of the best match's relevance. |
 | `AGENT_GUARDRAIL_ENABLED` | `true` | Semantic input guardrail. `false` = no prototype embedding at startup, all messages go to the agent. |
 | `AGENT_GUARDRAIL_OUTPUT_CHECK` | `true` | Deterministic checks of the final answer. |
 | `AGENT_GUARDRAIL_THRESHOLD_*`, `AGENT_GUARDRAIL_MARGIN` | see [Thresholds](#thresholds) | `SMART_HOME`, `ELECTRICAL`, `OFF_TOPIC`, `PROMPT_INJECTION`. |
+| `AGENT_MEMORY_ENABLED` | `true` | Customer memory (tool, instructions, per-turn profile). |
+| `AGENT_MEMORY_DB` | `homepilot_memory` | Memory database on the `POSTGRES_*` server (created by `init-memory`). |
 
 The API key is passed to ADK explicitly (`Gemini(client_kwargs={"api_key": ...})`), so no `GOOGLE_API_KEY` export is needed.
 
@@ -474,7 +499,8 @@ uv run catalog-ingestion status
 cd ../smart-home-agent
 cp .env.example .env                 # same GEMINI/POSTGRES/QDRANT values as above
 uv sync
-uv run python -m smart_home_agent check    # PostgreSQL/Qdrant counts + embedding model check
+uv run python -m smart_home_agent init-memory   # customer memory database (create + migrate, idempotent)
+uv run python -m smart_home_agent check    # PostgreSQL/Qdrant counts, embedding model, memory revision
 uv run python -m smart_home_agent smoke    # recommendation pipeline only (1 embedding call, no chat model)
 uv run python -m smart_home_agent upsell-eval   # upselling KPI over 25 fixed requests (no chat model)
 uv run streamlit run src/smart_home_agent/ui/streamlit_app.py
@@ -482,9 +508,9 @@ uv run streamlit run src/smart_home_agent/ui/streamlit_app.py
 
 Run commands from the `smart-home-agent` directory so `.env` is found.
 
-- **Streamlit:** open http://localhost:8501. The sidebar has a **Developer panel** toggle, off by default. When on, it shows under each answer: language, intent, tools called, search queries, candidates, compatibility results, selected products, session state and the raw tool calls. **New conversation** resets the session.
+- **Streamlit:** open http://localhost:8501. The sidebar has a **Developer panel** toggle, off by default. When on, it shows under each answer: language, intent, tools called, search queries, candidates, compatibility results, selected products, session state, the customer profile and the raw tool calls, and a **Stored data about me** button appears in the sidebar. **New conversation** resets the session but keeps the customer (and their memory); picking another entry in the **Customer** picker (or **+ New customer…**) switches to that customer's memory and starts a new conversation.
 - **UI look:** the theme (colors, fonts, radius) lives in `src/smart_home_agent/ui/.streamlit/config.toml`, next to the script, so it applies from any working directory. It is light-only on purpose. `ui/styles.css` holds the conversation layout, the markdown typography (spec-sheet tables, notices) and the sidebar. `ui/components.py` builds the masthead, the example tiles and the "Your setup" panel, which only shows what the session state already holds.
-- **Terminal chat:** `uv run python -m smart_home_agent chat` (one message per line, Ctrl-D to quit).
+- **Terminal chat:** `uv run python -m smart_home_agent chat [--user ID]` (one message per line, Ctrl-D to quit).
 
 No extra Docker Compose file is needed: the agent runs locally with uv and connects to the `homepilot-catalog` containers on localhost.
 
@@ -573,7 +599,8 @@ Agent: Bosch Smart Home Heizkörper-Thermostat II (55.00 EUR, radiator thermosta
 | Integration tests skipped | Infrastructure is down or the catalog is empty: run catalog-ingestion `init` + `ingest`. |
 | Warning "Qdrant vectors were built with ... but queries use ..." | Align `GEMINI_EMBEDDING_MODEL` / `GEMINI_EMBEDDING_DIM` with catalog-ingestion, or run `catalog-ingestion reindex`. |
 | `404 model not found` from the chat model | Check `AGENT_MODEL` against the models available to your key. |
-| 429 / quota errors | Free-tier limits; wait, or set `GEMINI_EMBEDDING_REQUESTS_PER_MINUTE`. The UI shows the error and keeps the conversation. |
+| 429 / quota errors | Free-tier limits. Chat model calls are retried silently with exponential backoff (`AGENT_MODEL_RETRIES`); if they keep failing, the UI shows a friendly "please try again" notice (technical detail in the developer panel) and keeps the conversation. For embeddings, set `GEMINI_EMBEDDING_REQUESTS_PER_MINUTE`. |
+| Log `model returned no content ... retry 1 of 3` / `agent error event: The model returned no content (finish_reason=STOP with empty parts)` | Gemini 2.5 ended a call with no output at all. The main trigger was its dynamic thinking: keep `AGENT_THINKING_BUDGET=0` (the default); with `-1` (dynamic) about half of the harder live prompts came back empty. Remaining cases are retried silently: each retry adds a one-line note to its copy of the request (an identical retry gets the same empty answer), never to the conversation, and tools are not run again. Only after all retries does the customer see the friendly notice. |
 | Answers in the wrong language | Very short or mixed messages give no language hint; the model then follows the conversation. Ask explicitly ("answer in English"). |
 | `UserWarning: [EXPERIMENTAL] ... JSON_SCHEMA_FOR_FUNC_DECL` | Emitted by ADK 2.x when building tool schemas. It is filtered in `smart_home_agent/agent/__init__.py`; if you still see it, the code imported ADK tools without importing `smart_home_agent.agent` first. Harmless. |
 

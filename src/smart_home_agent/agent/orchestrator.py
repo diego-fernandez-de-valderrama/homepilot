@@ -10,15 +10,22 @@ from typing import Any
 from google.adk.agents import LlmAgent
 from google.adk.events import Event, EventActions
 from google.adk.flows.llm_flows.functions import REQUEST_CONFIRMATION_FUNCTION_CALL_NAME
-from google.adk.models import Gemini
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService, Session
 from google.adk.tools import FunctionTool
 from google.genai import types
 
 from smart_home_agent.agent.language import detect_language
-from smart_home_agent.agent.prompts import BASE_INSTRUCTION, build_instruction
-from smart_home_agent.agent.state import GUARDRAIL_KEY, STATE_KEY, TURN_LANGUAGE_KEY, SessionState, read_state
+from smart_home_agent.agent.model import ResilientGemini, http_retry_options
+from smart_home_agent.agent.prompts import BASE_INSTRUCTION, MEMORY_INSTRUCTION, build_instruction
+from smart_home_agent.agent.state import (
+    GUARDRAIL_KEY,
+    PROFILE_KEY,
+    STATE_KEY,
+    TURN_LANGUAGE_KEY,
+    SessionState,
+    read_state,
+)
 from smart_home_agent.agent.trace import AgentReply, TurnTrace
 from smart_home_agent.config import Settings
 from smart_home_agent.container import Services
@@ -26,8 +33,10 @@ from smart_home_agent.guardrail.callbacks import GuardrailReport, make_input_cal
 from smart_home_agent.guardrail.classifier import SemanticGuardrail
 from smart_home_agent.guardrail.output_check import OutputValidator
 from smart_home_agent.models.cart import CartConfirmation, CartView
+from smart_home_agent.models.profile import CustomerProfile
 from smart_home_agent.models.rich import RichContent
 from smart_home_agent.services.cart import CartService
+from smart_home_agent.services.profile import ProfileService
 from smart_home_agent.services.rich_content import RichContentService
 from smart_home_agent.tools import CONFIRMED_TOOLS, build_tools
 from smart_home_agent.tools.cart import make_cart_result_callback
@@ -43,7 +52,7 @@ _MIN_LEAK_LINE = 60
 
 
 def _leak_markers(tools: list[FunctionTool]) -> list[str]:
-    lines = [line.strip(" -") for line in BASE_INSTRUCTION.splitlines()]
+    lines = [line.strip(" -") for line in (BASE_INSTRUCTION + MEMORY_INSTRUCTION).splitlines()]
     return [tool.name for tool in tools] + [line for line in lines if len(line) >= _MIN_LEAK_LINE]
 
 
@@ -59,7 +68,17 @@ def build_agent(
     """
     if model is None:
         api_key = settings.gemini.api_key.get_secret_value() if settings.gemini.api_key else None
-        model = Gemini(model=settings.agent.model, client_kwargs={"api_key": api_key} if api_key else None)
+        options = settings.agent
+        model = ResilientGemini(
+            model=options.model,
+            client_kwargs={"api_key": api_key} if api_key else None,
+            retry_options=http_retry_options(
+                options.model_retries, options.model_retry_initial_delay, options.model_retry_max_delay
+            ),
+            empty_retries=options.model_retries,
+            retry_initial_delay=options.model_retry_initial_delay,
+            retry_max_delay=options.model_retry_max_delay,
+        )
     tools = build_tools(services)
     input_guardrail = guardrail if settings.agent.guardrail_enabled else None
     validator = (
@@ -73,7 +92,14 @@ def build_agent(
         model=model,
         instruction=build_instruction,
         tools=tools,
-        generate_content_config=types.GenerateContentConfig(temperature=settings.agent.temperature),
+        generate_content_config=types.GenerateContentConfig(
+            temperature=settings.agent.temperature,
+            thinking_config=(
+                types.ThinkingConfig(thinking_budget=settings.agent.thinking_budget)
+                if settings.agent.thinking_budget != -1
+                else None
+            ),
+        ),
         before_agent_callback=make_input_callback(input_guardrail) if input_guardrail else None,
         after_model_callback=make_output_callback(validator) if validator else None,
         after_tool_callback=make_cart_result_callback(services),
@@ -92,6 +118,9 @@ class AgentService:
     them in `pending_confirmations` and `confirm` answers them, which runs (or cancels) the tools and lets
     the model continue. The interface reads and edits the cart through `cart` / `set_cart_quantity`
     without any model call; an edit sets `cart_changed_by_user`, so the prompt tells the model to look again.
+
+    With `profiles`, the customer's stored facts (per `user_id`, across conversations) are loaded before every
+    turn into the state, where the instruction shows them. A memory failure never blocks the turn.
     """
 
     def __init__(
@@ -100,10 +129,12 @@ class AgentService:
         app_name: str,
         rich_content: RichContentService | None = None,
         cart: CartService | None = None,
+        profiles: ProfileService | None = None,
     ) -> None:
         self._app_name = app_name
         self._rich_content = rich_content
         self._cart = cart
+        self._profiles = profiles
         self._sessions = InMemorySessionService()
         self._runner = Runner(app_name=app_name, agent=agent, session_service=self._sessions, auto_create_session=True)
         self._loop = asyncio.new_event_loop()
@@ -185,9 +216,12 @@ class AgentService:
         language: str | None,
         on_tool_call: Callable[[str], None] | None,
     ) -> AgentReply:
+        if (profile := await self._profile_snapshot(user_id)) is not None:
+            state_delta = {**state_delta, PROFILE_KEY: profile}
         trace = TurnTrace()
         answer: list[str] = []
         requests: list[tuple[str, str, dict[str, Any]]] = []  # (request id, tool name, tool args)
+        errors: list[str] = []
         events = self._runner.run_async(
             user_id=user_id, session_id=session_id, new_message=message, state_delta=state_delta
         )
@@ -207,11 +241,13 @@ class AgentService:
                 answer.extend(part.text for part in event.content.parts if part.text and not part.thought)
             if event.error_message:
                 logger.warning("agent error event: %s", event.error_message)
+                errors.append(event.error_message)
         session = await self._sessions.get_session(app_name=self._app_name, user_id=user_id, session_id=session_id)
         state = session.state if session else {}
         report = state.get(GUARDRAIL_KEY)
         reply_text = "".join(answer).strip()
         session_state = read_state(state)
+        profile = state.get(PROFILE_KEY)
         return AgentReply(
             text=reply_text,
             detected_language=language,
@@ -220,6 +256,8 @@ class AgentService:
             guardrail=GuardrailReport.model_validate(report) if report else None,
             rich=await self._resolve_rich(reply_text, session_state),
             pending_confirmations=await self._describe(requests, session_state),
+            profile=CustomerProfile.model_validate(profile) if profile else None,
+            error="; ".join(errors) or None,
         )
 
     async def _describe(
@@ -242,6 +280,23 @@ class AgentService:
         except Exception:  # the answer is still shown, as plain text without the components
             logger.warning("rich content: resolving the answer's tags failed", exc_info=True)
             return None
+
+    async def _profile_snapshot(self, user_id: str) -> dict[str, Any] | None:
+        profiles = self._profiles
+        if profiles is None:
+            return None
+        try:
+            profile = await asyncio.to_thread(profiles.profile, user_id, True)  # retracted: "no longer ..."
+            return profile.model_dump(mode="json")
+        except Exception:  # fail open: the turn runs with the previous snapshot, if any
+            logger.warning("customer memory: loading the profile of %r failed", user_id, exc_info=True)
+            return None
+
+    def profile(self, user_id: str = DEFAULT_USER, include_retracted: bool = True) -> CustomerProfile | None:
+        """Everything stored about the customer, live from the memory database (None without memory)."""
+        if self._profiles is None:
+            return None
+        return self._profiles.profile(user_id, include_retracted)
 
     async def state_async(self, session_id: str, user_id: str = DEFAULT_USER) -> SessionState:
         session = await self._sessions.get_session(app_name=self._app_name, user_id=user_id, session_id=session_id)

@@ -5,6 +5,7 @@ description = "Conversational smart home shopping agent (Google ADK + Gemini) on
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.20.0",
     "catalog-ingestion",
     "google-adk>=2.10.0",
     "google-genai>=2.25.0",

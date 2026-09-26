@@ -1,8 +1,10 @@
-"""Command line helpers: `check` (infrastructure), `smoke` (recommendation pipeline) and `chat` (terminal chat).
+"""Command line helpers: `check` (infrastructure), `init-memory` (customer memory database), `smoke`
+(recommendation pipeline) and `chat` (terminal chat).
 
 uv run python -m smart_home_agent check
+uv run python -m smart_home_agent init-memory
 uv run python -m smart_home_agent smoke
-uv run python -m smart_home_agent chat
+uv run python -m smart_home_agent chat [--user ID]
 uv run python -m smart_home_agent guardrail-eval [--sweep] [--record]
 uv run python -m smart_home_agent upsell-eval
 """
@@ -21,6 +23,7 @@ from smart_home_agent.models.rich import to_plain
 
 if TYPE_CHECKING:
     from smart_home_agent.agent.trace import AgentReply
+    from smart_home_agent.config import Settings
 
 
 def check() -> int:
@@ -33,6 +36,40 @@ def check() -> int:
     print(f"Agent model                : {settings.agent.model}")
     print(f"Input guardrail            : {'on' if container.guardrail else 'off'}")
     print(f"Output check               : {'on' if settings.agent.guardrail_output_check else 'off'}")
+    print(f"Customer memory            : {_memory_status(settings)}")
+    return 0
+
+
+def _memory_status(settings: "Settings") -> str:
+    from sqlalchemy.exc import OperationalError
+
+    from smart_home_agent.memory.database import create_memory_engine, current_revision
+
+    if not settings.agent.memory_enabled:
+        return "off"
+    engine = create_memory_engine(settings.postgres, settings.agent.memory_db)
+    try:
+        revision = current_revision(engine)
+    except OperationalError:
+        return f"database {settings.agent.memory_db!r} not reachable (run init-memory)"
+    finally:
+        engine.dispose()
+    return f"{settings.agent.memory_db} (revision {revision})" if revision else "not initialized (run init-memory)"
+
+
+def init_memory() -> int:
+    """Creates the customer memory database on the POSTGRES_* server and migrates it (idempotent)."""
+    from smart_home_agent.memory.database import create_memory_engine, ensure_database, upgrade_to_head
+
+    settings = get_settings()
+    name = settings.agent.memory_db
+    created = ensure_database(settings.postgres, name)
+    engine = create_memory_engine(settings.postgres, name)
+    try:
+        upgrade_to_head(engine)
+    finally:
+        engine.dispose()
+    print(f"Customer memory database {name!r} {'created and ' if created else ''}migrated to head.")
     return 0
 
 
@@ -55,24 +92,25 @@ def smoke() -> int:
     return 0
 
 
-def chat() -> int:
+def chat(user_id: str) -> int:
     from smart_home_agent.agent.orchestrator import AgentService, build_agent
 
     settings = get_settings()
     container = build_container(settings)
     agent = build_agent(container.services, settings, container.guardrail)
-    service = AgentService(agent, settings.agent.app_name, container.services.rich_content, container.services.cart)
+    services = container.services
+    service = AgentService(agent, settings.agent.app_name, services.rich_content, services.cart, services.profile)
     session_id = str(uuid.uuid4())
-    print("HomePilot (Ctrl-D to quit)")
+    print(f"HomePilot, customer {user_id!r} (Ctrl-D to quit)")
     for line in sys.stdin:
         if not line.strip():
             continue
-        reply = service.chat(session_id, line.strip())
+        reply = service.chat(session_id, line.strip(), user_id)
         _print_reply(reply)
         # Cart changes wait for an explicit yes, like the confirmation card in the web UI.
         while reply.pending_confirmations:
             decisions = {c.request_id: _ask(c) for c in reply.pending_confirmations}
-            reply = service.confirm(session_id, decisions)
+            reply = service.confirm(session_id, decisions, user_id)
             _print_reply(reply)
     return 0
 
@@ -116,13 +154,16 @@ def upsell_eval() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="smart_home_agent")
-    parser.add_argument("command", choices=["check", "smoke", "chat", "guardrail-eval", "upsell-eval"])
+    parser.add_argument("command", choices=["check", "init-memory", "smoke", "chat", "guardrail-eval", "upsell-eval"])
     parser.add_argument("--sweep", action="store_true", help="guardrail-eval: print score separation per category")
     parser.add_argument("--record", action="store_true", help="guardrail-eval: rewrite the offline test fixture")
+    parser.add_argument("--user", default="customer", help="chat: customer id (each customer has their own memory)")
     args = parser.parse_args()
     if args.command == "guardrail-eval":
         return guardrail_eval(args.sweep, args.record)
-    return {"check": check, "smoke": smoke, "chat": chat, "upsell-eval": upsell_eval}[args.command]()
+    if args.command == "chat":
+        return chat(args.user)
+    return {"check": check, "init-memory": init_memory, "smoke": smoke, "upsell-eval": upsell_eval}[args.command]()
 
 
 if __name__ == "__main__":

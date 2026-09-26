@@ -18,6 +18,15 @@ class AgentSettings(BaseSettings):
 
     model: str = "gemini-2.5-flash"  # chat/orchestration model (GEMINI_MODEL stays the enrichment model)
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
+    # Gemini 2.5 thinking tokens per model call: 0 = off, -1 = the model's dynamic default (not sent).
+    # With the dynamic default, gemini-2.5-flash often returned empty answers for this agent (7 of 12 answered on
+    # hard prompts); with 0 or 1024 all 18 of a live set answered, and 0 was faster (3.5s vs 5.1s per turn).
+    thinking_budget: int = Field(default=0, ge=-1, le=24576)
+    # Silent retries of a failed model call (an empty answer, or HTTP 408/429/5xx), with exponential backoff:
+    # initial_delay, 2x, 4x ... capped at max_delay. Only when all fail does the customer see an error.
+    model_retries: int = Field(default=3, ge=0, le=10)
+    model_retry_initial_delay: float = Field(default=1.0, ge=0.0, le=30.0)
+    model_retry_max_delay: float = Field(default=8.0, ge=0.0, le=60.0)
     app_name: str = "homepilot"
     # Candidates pulled from each retrieval path (semantic and structured) before hard filtering.
     candidate_pool: int = Field(default=50, ge=5, le=500)
@@ -43,6 +52,11 @@ class AgentSettings(BaseSettings):
     guardrail_input_off_topic: bool = False
     # Deterministic checks of the final answer (guardrail/output_check.py); AGENT_GUARDRAIL_OUTPUT_CHECK=false disables.
     guardrail_output_check: bool = True
+
+    # Customer memory (memory/): facts customers state about themselves, per user id, in a separate database on
+    # the POSTGRES_* server (created by `python -m smart_home_agent init-memory`). false = no memory tool.
+    memory_enabled: bool = True
+    memory_db: str = "homepilot_memory"
 
 
 @dataclass(frozen=True, slots=True)

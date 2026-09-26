@@ -21,6 +21,8 @@ def make_remember_preferences():
         """Store what the user told us about their home for the rest of this conversation (session only).
         Call it when the user states their ecosystem, voice assistant, protocols, budget, owned hubs or
         other needs. Stored ecosystems/protocols and budget become defaults for recommend_products.
+        This is not the customer's lasting memory: when the facts are about the customer's own home and the
+        remember_customer_facts tool is available, call it too, in the same step.
         Passing a value replaces the stored one; pass an empty list to clear a list.
 
         Args:

@@ -4,24 +4,29 @@ Run from the smart-home-agent directory (so `.env` is found):
     uv run streamlit run src/smart_home_agent/ui/streamlit_app.py
 """
 
+import logging
 import queue
 import time
 import uuid
 from collections.abc import Callable
 from concurrent.futures import Future
 from functools import partial
+from typing import Any
 
 import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
 
-from smart_home_agent.agent.orchestrator import AgentService, build_agent
+from smart_home_agent.agent.language import detect_language
+from smart_home_agent.agent.orchestrator import DEFAULT_USER, AgentService, build_agent
 from smart_home_agent.agent.state import SessionState
 from smart_home_agent.agent.trace import AgentReply
 from smart_home_agent.config import get_settings
-from smart_home_agent.container import build_container
+from smart_home_agent.container import build_container, build_profile_store
 from smart_home_agent.models import rich
 from smart_home_agent.models.cart import MAX_QUANTITY, CartConfirmation, CartView
+from smart_home_agent.models.profile import CustomerSummary
 from smart_home_agent.models.rich import RichContent
+from smart_home_agent.services.profile import ProfileService
 from smart_home_agent.ui.components import (
     ADVISOR_AVATAR,
     TYPING_HTML,
@@ -39,6 +44,7 @@ from smart_home_agent.ui.components import (
     confirm_button_label,
     confirmation_lead_html,
     decision_html,
+    failure_html,
     inject_behaviour,
     inject_styles,
     intro_html,
@@ -51,6 +57,8 @@ from smart_home_agent.ui.components import (
     upgrade_html,
 )
 from smart_home_agent.ui.images import missing_images
+
+logger = logging.getLogger(__name__)
 
 SUGGESTIONS = [
     Suggestion(
@@ -66,7 +74,8 @@ def get_agent_service() -> AgentService:
     settings = get_settings()
     container = build_container(settings)
     agent = build_agent(container.services, settings, container.guardrail)
-    return AgentService(agent, settings.agent.app_name, container.services.rich_content, container.services.cart)
+    services = container.services
+    return AgentService(agent, settings.agent.app_name, services.rich_content, services.cart, services.profile)
 
 
 # Submits a turn to the agent service; called with the `on_tool_call` listener as keyword argument.
@@ -93,7 +102,18 @@ def run_turn(start: TurnStarter, progress: DeltaGenerator) -> AgentReply:
     return future.result()
 
 
+# Session keys that survive "New conversation" and a customer switch (the customer and the picker widgets).
+_CUSTOMER_KEYS = frozenset(
+    {"customer_id", "known_customers", "hp-customer-pick", "hp-customer-new", "hp-customer-options"}
+)
+NEW_CUSTOMER = "__new_customer__"  # picker option that asks for a new customer id
+
+
 def init_session() -> None:
+    if "customer_id" not in st.session_state:
+        st.session_state.customer_id = DEFAULT_USER
+    if "known_customers" not in st.session_state:
+        st.session_state.known_customers = []  # created in this browser session, maybe nothing stored yet
     if "session_id" not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state.messages = []
@@ -110,12 +130,14 @@ def current_cart() -> CartView:
     message the service is not built yet and the new session's cart is empty anyway."""
     if not st.session_state.messages:
         return CartView()
-    return get_agent_service().cart(st.session_state.session_id)
+    return get_agent_service().cart(st.session_state.session_id, st.session_state.customer_id)
 
 
 def change_quantity(product_id: str, quantity: int) -> None:
     try:
-        get_agent_service().set_cart_quantity(st.session_state.session_id, product_id, quantity)
+        get_agent_service().set_cart_quantity(
+            st.session_state.session_id, product_id, quantity, st.session_state.customer_id
+        )
     except ValueError:  # the line changed in the meantime (for example removed by the advisor)
         st.toast("That product is no longer in your cart.", icon=":material/info:")
 
@@ -236,18 +258,169 @@ def latest_state(messages: list[dict]) -> SessionState | None:
     return replies[-1].state if replies else None
 
 
+def reset_conversation() -> None:
+    """Starts a new conversation for the same customer: their stored memory carries over."""
+    for key in list(st.session_state.keys()):
+        if key not in _CUSTOMER_KEYS:
+            del st.session_state[key]
+    init_session()
+
+
+def switch_customer(customer: str) -> None:
+    """Another customer: a new conversation, with that customer's memory. Both stay in the picker for this
+    browser session, even while nothing is stored for them yet."""
+    if customer != st.session_state.customer_id:
+        known = [st.session_state.customer_id, *st.session_state.known_customers, customer]
+        st.session_state.known_customers = list(dict.fromkeys(known))
+        st.session_state.customer_id = customer
+        reset_conversation()
+
+
+def pick_customer() -> None:
+    choice = st.session_state["hp-customer-pick"]
+    if choice not in st.session_state.get("hp-customer-options", []):
+        # Not an option of the picker as drawn: the browser sent a stale value (it keeps a selectbox's value as
+        # the displayed text). Never treat it as a customer id: keep the current customer.
+        st.session_state["hp-customer-pick"] = st.session_state.customer_id
+        return
+    if choice != NEW_CUSTOMER:  # "New customer..." only reveals the id field
+        switch_customer(choice)
+
+
+def create_customer() -> None:
+    """The id typed for a new customer (Enter): it is selected at once, before anything is stored for it."""
+    customer = st.session_state["hp-customer-new"].strip()
+    st.session_state["hp-customer-new"] = ""
+    if not customer or customer in (NEW_CUSTOMER, customer_label(NEW_CUSTOMER)):  # labels must stay unique
+        return
+    st.session_state["hp-customer-pick"] = customer
+    switch_customer(customer)
+
+
+@st.cache_resource(show_spinner=False)
+def get_customer_directory() -> ProfileService | None:
+    """Reads the customer memory only (no Gemini or Qdrant), so the picker works before the first message."""
+    store = build_profile_store(get_settings())
+    return ProfileService(store) if store is not None else None
+
+
+@st.cache_data(ttl=5, show_spinner=False)
+def stored_customers() -> list[CustomerSummary] | None:
+    """Customers with stored facts, most recently active first; None when the memory is off or unreachable.
+    Cached for a few seconds, so reruns (every click) do not query the database each time."""
+    directory = get_customer_directory()
+    if directory is None:
+        return None
+    try:
+        return directory.customers()
+    except Exception:
+        logger.warning("customer memory: listing the customers failed", exc_info=True)
+        return None
+
+
+def customer_options(stored: list[CustomerSummary] | None, current: str, known: list[str]) -> list[str]:
+    """Stored customers first (most recent first), then this session's other customers in the order they were
+    used, then "New customer...". The order stays stable while switching."""
+    ids = [c.user_id for c in stored or []]
+    ids += [c for c in dict.fromkeys([*known, current]) if c not in ids]
+    return [*ids, NEW_CUSTOMER]
+
+
+def customer_label(option: str) -> str:
+    """The displayed text of a picker option. It must never change for the same customer: Streamlit's browser
+    side keeps the selection as this text, so a changing label (e.g. with a fact count) is sent back as an
+    unknown value on the next interaction."""
+    return "+ New customer…" if option == NEW_CUSTOMER else option
+
+
+def stored_facts_caption(customer: str, stored: list[CustomerSummary] | None) -> str:
+    """What is stored for the selected customer (shown under the picker, never in the option labels)."""
+    if stored is None:
+        return "Stored customers are not available (customer memory off or not reachable)."
+    summary = next((c for c in stored if c.user_id == customer), None)
+    if summary is None or summary.active_facts == 0:
+        return "Nothing stored for this customer yet."
+    return f"{summary.active_facts} fact{'s' if summary.active_facts != 1 else ''} stored for this customer."
+
+
+def render_customer_picker(stored: list[CustomerSummary] | None, busy: bool) -> None:
+    """Testing aid: pick a stored customer instead of remembering ids. Switching starts a new conversation."""
+    options = customer_options(stored, st.session_state.customer_id, st.session_state.known_customers)
+    st.session_state["hp-customer-options"] = options  # for pick_customer: values outside it are stale
+    if st.session_state.get("hp-customer-pick") not in options:
+        st.session_state["hp-customer-pick"] = st.session_state.customer_id
+    st.selectbox(
+        "Customer",
+        options,
+        key="hp-customer-pick",
+        format_func=customer_label,
+        on_change=pick_customer,
+        disabled=busy,
+        help="Each customer has their own memory. Switching starts a new conversation with that customer.",
+    )
+    if st.session_state["hp-customer-pick"] == NEW_CUSTOMER:
+        st.text_input(
+            "New customer id",
+            key="hp-customer-new",
+            placeholder="e.g. anna, then press Enter",
+            on_change=create_customer,
+            disabled=busy,
+        )
+    else:
+        st.caption(stored_facts_caption(st.session_state.customer_id, stored))
+
+
+@st.dialog("Stored data about this customer", width="large")
+def show_customer_memory(customer_id: str) -> None:
+    """Developer view: everything the memory database holds about the customer, retracted facts included."""
+    try:
+        profile = get_agent_service().profile(customer_id, include_retracted=True)
+    except Exception as exc:  # the memory database may be down or not initialized
+        st.error(f"The customer memory could not be read: {type(exc).__name__}: {exc}")
+        return
+    if profile is None:
+        st.info("The customer memory is disabled (AGENT_MEMORY_ENABLED=false).")
+        return
+    st.markdown(f"**Customer:** `{customer_id}` · {len(profile.active())} active, {len(profile.facts)} total facts")
+    if not profile.facts:
+        st.caption("Nothing stored yet.")
+        return
+    st.dataframe(
+        [
+            {
+                "kind": f.kind.value,
+                "value": f.value,
+                "label": f.label,
+                "canonical": f.canonical,
+                "evidence": f.evidence,
+                "active": f.active,
+                "created": f.created_at,
+                "retracted": f.retracted_at,
+                "retracted because": f.retracted_evidence,
+                "conversation": f.session_id,
+            }
+            for f in profile.facts
+        ],
+        hide_index=True,
+    )
+    st.json(profile.model_dump(mode="json"), expanded=False)
+
+
 def render_sidebar(cart: CartView, busy: bool) -> bool:
     """Returns the developer toggle."""
     with st.sidebar:
         st.html('<p class="hp-rail-brand"><span class="hp-rail-brand__mark"></span>HomePilot</p>')
+        render_customer_picker(stored_customers(), busy)
         st.html(setup_panel_html(latest_state(st.session_state.messages)))
         render_cart(cart, busy)
         st.html('<p class="hp-rail-label">Conversation</p>')
         if st.button("New conversation", icon=":material/refresh:", type="primary", width="stretch"):
-            st.session_state.clear()
+            reset_conversation()
             st.rerun()
         st.html('<p class="hp-rail-label">Developer</p>')
-        debug = st.toggle("Developer panel", value=False, help="Show language, tools, candidates and compatibility.")
+        debug = st.toggle("Developer panel", key="hp-debug", help="Show language, tools, candidates and compatibility.")
+        if debug and st.button("Stored data about me", icon=":material/person_search:", width="stretch"):
+            show_customer_memory(st.session_state.customer_id)
         st.html('<p class="hp-rail-footer">Answers based on the HomePilot catalog · EN / DE</p>')
     return debug
 
@@ -279,6 +452,9 @@ def render_debug(reply: AgentReply) -> None:
         st.markdown(f"**Selected products:** {', '.join(reply.state.selected_products) or 'none'}")
         st.markdown("**Session state**")
         st.json(reply.state.model_dump(mode="json"), expanded=False)
+        if reply.profile is not None:
+            st.markdown("**Customer profile (end of this turn)**")
+            st.json([f"{f.kind.value}: {f.value}" for f in reply.profile.active()], expanded=False)
         st.markdown("**Raw tool calls**")
         st.json([c.model_dump(mode="json") for c in trace.tool_calls], expanded=False)
 
@@ -323,6 +499,8 @@ def render_message(message: dict, debug: bool, is_last: bool = False) -> None:
     with st.chat_message("assistant", avatar=ADVISOR_AVATAR):
         st.html(assistant_eyebrow_html())
         reply = message.get("reply")
+        if message.get("failed"):
+            show_failure(message.get("language"), debug, reply.error if reply is not None else None)
         if message["content"]:
             render_answer(message["content"], reply.rich if reply is not None else None)
         if reply is not None and reply.pending_confirmations:
@@ -331,19 +509,42 @@ def render_message(message: dict, debug: bool, is_last: bool = False) -> None:
             render_debug(reply)
 
 
-def answer_turn(start: TurnStarter, debug: bool) -> bool:
-    """Runs a turn in a new assistant message and stores it. Returns False when the backend failed."""
+def reply_language(prompt: str | None) -> str | None:
+    """Language for interface messages of this turn: the prompt's, else the conversation's."""
+    detected = detect_language(prompt) if prompt else None
+    state = latest_state(st.session_state.messages)
+    return detected or (state.language if state else None)
+
+
+def show_failure(language: str | None, debug: bool, detail: str | None) -> None:
+    """A friendly notice instead of the answer; the technical detail only in developer mode (and the log)."""
+    st.html(failure_html(language))
+    if debug and detail:
+        st.caption(f"Developer detail: {detail}")
+
+
+def answer_turn(start: TurnStarter, debug: bool, language: str | None) -> bool:
+    """Runs a turn in a new assistant message and stores it. The model call is already retried silently
+    (agent/model.py), so a failure is shown as a friendly notice:
+    - the turn ran but produced nothing to show (empty answer after all retries): stored in the history as a
+      failed message, since its tools (e.g. a confirmed cart change) did run; returns True;
+    - the backend raised: nothing is stored and False is returned, so the caller can offer a retry."""
     with st.chat_message("assistant", avatar=ADVISOR_AVATAR):
         st.html(assistant_eyebrow_html())
         answer = st.empty()  # progress first, then the answer, at the same position as in render_message
         try:
             reply = run_turn(start, answer)
         except Exception as exc:  # the UI must survive backend failures (quota, network, database down)
-            answer.error(f"Sorry, something went wrong: {type(exc).__name__}: {exc}")
+            logger.exception("turn failed")
+            with answer.container():
+                show_failure(language, debug, f"{type(exc).__name__}: {exc}")
             return False
-        text = reply.text or ("" if reply.pending_confirmations else "_(no answer)_")
+        text = reply.text
         with answer.container():
-            message = {"role": "assistant", "content": text, "reply": reply}
+            message: dict[str, Any] = {"role": "assistant", "content": text, "reply": reply}
+            if reply.failed:
+                message |= {"failed": True, "language": reply.detected_language or language}
+                show_failure(message["language"], debug, reply.error or "empty answer")
             if text:
                 render_answer(text, reply.rich)
             if reply.pending_confirmations:
@@ -351,6 +552,7 @@ def answer_turn(start: TurnStarter, debug: bool) -> bool:
             if debug:
                 render_debug(reply)
     st.session_state.messages.append(message)
+    stored_customers.clear()  # the turn may have stored facts: the picker shows fresh counts
     return True
 
 
@@ -374,13 +576,15 @@ def main() -> None:
         render_message(message, debug, is_last=index == len(messages) - 1)
 
     session_id = st.session_state.session_id
+    customer_id = st.session_state.customer_id
     if decisions:
         st.session_state.submitted |= set(decisions)
         confirmed = sum(decisions.values())
         decision = {"role": "decision", "confirmed": confirmed, "cancelled": len(decisions) - confirmed}
         messages.append(decision)
         render_message(decision, debug)
-        if not answer_turn(partial(get_agent_service().submit_confirmation, session_id, decisions), debug):
+        confirm = partial(get_agent_service().submit_confirmation, session_id, decisions, customer_id)
+        if not answer_turn(confirm, debug, reply_language(None)):
             messages.pop()  # the cards open again, so the customer can retry
             st.session_state.submitted -= set(decisions)
             for request_id in decisions:
@@ -401,7 +605,9 @@ def main() -> None:
     user_message = {"role": "user", "content": prompt}
     messages.append(user_message)
     render_message(user_message, debug)
-    if not answer_turn(partial(get_agent_service().submit, session_id, prompt), debug):
+    if not answer_turn(
+        partial(get_agent_service().submit, session_id, prompt, customer_id), debug, reply_language(prompt)
+    ):
         messages.pop()
         return
     # Redraw from history (no agent call): the next turn then starts from exactly the layout it re-renders,
