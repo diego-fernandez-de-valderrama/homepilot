@@ -22,6 +22,8 @@ from smart_home_agent.container import Services
 from smart_home_agent.guardrail.callbacks import GuardrailReport, make_input_callback, make_output_callback
 from smart_home_agent.guardrail.classifier import SemanticGuardrail
 from smart_home_agent.guardrail.output_check import OutputValidator
+from smart_home_agent.models.rich import RichContent
+from smart_home_agent.services.rich_content import RichContentService
 from smart_home_agent.tools import build_tools
 
 logger = logging.getLogger(__name__)
@@ -76,10 +78,13 @@ class AgentService:
 
     All turns run on one long-lived event loop (in a background thread): ADK caches its Gemini
     client per loop, so a new loop per turn (`asyncio.run`) would leave clients bound to closed loops.
+
+    With `rich_content`, the presentation tags of each answer are resolved to catalog data (`AgentReply.rich`).
     """
 
-    def __init__(self, agent: LlmAgent, app_name: str) -> None:
+    def __init__(self, agent: LlmAgent, app_name: str, rich_content: RichContentService | None = None) -> None:
         self._app_name = app_name
+        self._rich_content = rich_content
         self._sessions = InMemorySessionService()
         self._runner = Runner(app_name=app_name, agent=agent, session_service=self._sessions, auto_create_session=True)
         self._loop = asyncio.new_event_loop()
@@ -136,13 +141,27 @@ class AgentService:
         session = await self._sessions.get_session(app_name=self._app_name, user_id=user_id, session_id=session_id)
         state = session.state if session else {}
         report = state.get(GUARDRAIL_KEY)
+        reply_text = "".join(answer).strip()
+        session_state = read_state(state)
         return AgentReply(
-            text="".join(answer).strip(),
+            text=reply_text,
             detected_language=language,
             trace=trace,
-            state=read_state(state),
+            state=session_state,
             guardrail=GuardrailReport.model_validate(report) if report else None,
+            rich=await self._resolve_rich(reply_text, session_state),
         )
+
+    async def _resolve_rich(self, text: str, session: SessionState) -> RichContent | None:
+        if self._rich_content is None or not text:
+            return None
+        try:
+            return await asyncio.to_thread(
+                self._rich_content.resolve, text, session.must_support, session.owned_devices, session.last_upsell
+            )
+        except Exception:  # the answer is still shown, as plain text without the components
+            logger.warning("rich content: resolving the answer's tags failed", exc_info=True)
+            return None
 
     async def state_async(self, session_id: str, user_id: str = DEFAULT_USER) -> SessionState:
         session = await self._sessions.get_session(app_name=self._app_name, user_id=user_id, session_id=session_id)

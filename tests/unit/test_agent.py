@@ -41,6 +41,9 @@ def test_instruction_contains_rules_vocabulary_and_session():
     assert "google_home: Google Home" in text
     assert "budget_max: 150" in text
     assert "latest message is in German" in text
+    assert "Every catalog product you mention must be shown through a tag" in text
+    assert "otherwise, mention it with <item" in text
+    assert "do not add\n    an <item/> for it" in text
 
 
 def test_instruction_without_state():

@@ -5,7 +5,8 @@ replaces the whole answer with a fallback. Unknown stays unknown: a claim that c
 product, or a term that cannot be resolved, passes.
 
 - electrical: practical wiring / mains installation steps (EN/DE patterns, refusals excluded);
-- unknown_product: a product id that is neither in this turn's tool results nor in the catalog;
+- unknown_product: a product id (in prose or in an answer tag) that is neither in this turn's tool results
+  nor in the catalog;
 - unsupported_compatibility: a positive "works with X" claim about a product whose catalog facts do
   not support X (PostgreSQL facts, never the model's wording or Qdrant);
 - prompt_leak: internal tool names or verbatim lines of the system instruction;
@@ -23,6 +24,7 @@ from pydantic import BaseModel
 
 from smart_home_agent.guardrail.categories import Category
 from smart_home_agent.guardrail.classifier import SemanticGuardrail
+from smart_home_agent.models import rich
 from smart_home_agent.models.product import Product
 from smart_home_agent.repositories.postgres import CatalogReader
 
@@ -178,7 +180,9 @@ class OutputValidator:
         ]
 
     def _products(self, text: str, tool_products: Mapping[str, str]) -> list[Violation]:
-        mentioned = [pid for pid in dict.fromkeys(_PRODUCT_ID.findall(text)) if pid not in tool_products]
+        # Tag id lists ("ID,ID") are read from the parsed tags: the prose pattern skips comma-adjacent numbers.
+        ids = [*_PRODUCT_ID.findall(text), *rich.referenced_ids(rich.parse(text))]
+        mentioned = [pid for pid in dict.fromkeys(ids) if pid not in tool_products]
         if not mentioned:
             return []
         known = {p.id for p in self._catalog.get_products(mentioned)}

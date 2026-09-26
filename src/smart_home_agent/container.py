@@ -16,6 +16,7 @@ from smart_home_agent.services.compatibility import CompatibilityService
 from smart_home_agent.services.evidence import EvidenceService
 from smart_home_agent.services.recommendation import RecommendationService
 from smart_home_agent.services.retrieval import RetrievalService
+from smart_home_agent.services.rich_content import RichContentService
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ class Services:
     recommendation: RecommendationService
     comparison: ComparisonService
     evidence: EvidenceService
+    rich_content: RichContentService
 
     @classmethod
     def create(cls, catalog: CatalogRepository, index: SemanticIndex, settings: AgentSettings) -> "Services":
@@ -39,6 +41,7 @@ class Services:
             recommendation=RecommendationService(retrieval, settings.candidate_pool, settings.upsell_min_relevance),
             comparison=ComparisonService(catalog),
             evidence=EvidenceService(catalog),
+            rich_content=RichContentService(catalog),
         )
 
 

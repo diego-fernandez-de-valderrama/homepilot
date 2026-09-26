@@ -70,6 +70,11 @@ def test_product_ids_from_tools_or_catalog_pass():
     assert kinds("Also consider 30387250.") == []  # not in this turn's tools, but in the catalog
 
 
+def test_product_ids_inside_answer_tags_are_checked():
+    assert kinds('<items ids="30173510,99999999"/>') == ["unknown_product"]
+    assert kinds('The <item id="30173510"/> fits.\n<compatibility id="30387250"/>') == []
+
+
 def test_prices_and_eans_are_not_product_ids():
     assert kinds("It costs 49.99 EUR (EAN 4001234567890).") == []
 

@@ -772,6 +772,429 @@
   color: #8a8a84;
 }
 
+/* ---------- Answer components (product tags in an answer) ---------- */
+
+.hp-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--hp-s3);
+  margin: var(--hp-s2) 0;
+}
+
+.hp-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hp-s1);
+  padding: var(--hp-s3);
+  border: 1px solid var(--hp-rule);
+  border-radius: var(--hp-radius);
+  background: #fff;
+}
+
+.hp-card__image {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: var(--hp-grey-0);
+  margin-bottom: var(--hp-s2);
+}
+
+.hp-card__image--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--hp-grey-2);
+}
+
+.hp-card__image--empty span {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--hp-grey-3);
+}
+
+.hp-card__brand {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--hp-grey-4);
+}
+
+.hp-card__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--hp-ink);
+}
+
+.hp-card__price {
+  margin-top: auto;
+  font-family: var(--hp-heading);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--hp-ink);
+}
+
+.hp-card__was {
+  margin-left: var(--hp-s2);
+  font-family: var(--hp-body);
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--hp-grey-4);
+}
+
+.hp-card__link {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--hp-red) !important;
+  text-decoration: none;
+}
+
+.hp-card__link:hover {
+  color: var(--hp-red-dark) !important;
+  text-decoration: underline;
+}
+
+/* Inline product chip (the item tag): name and price in the sentence, a mini card on hover or keyboard focus. */
+/* Streamlit's markdown container scrolls (overflow: auto), which would clip the hover card. */
+[data-testid="stMarkdownContainer"]:has(.hp-item) {
+  overflow: visible;
+}
+
+.hp-item {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 6px;
+  font-weight: 600;
+  color: var(--hp-ink);
+  background: var(--hp-grey-0);
+  border: 1px solid var(--hp-grey-2);
+  border-bottom: 2px solid var(--hp-red);
+  border-radius: var(--hp-radius);
+  cursor: default;
+  outline: none;
+}
+
+.hp-item:hover,
+.hp-item:focus-visible {
+  background: var(--hp-red-tint);
+}
+
+.hp-item:focus-visible {
+  box-shadow: 0 0 0 2px var(--hp-red);
+}
+
+.hp-item__price {
+  font-size: 0.85em;
+  font-weight: 500;
+  color: var(--hp-grey-4);
+  white-space: nowrap;
+}
+
+/* Opens upward: the newest answer sits right above the pinned chat input, which would cover a card below. */
+.hp-item__card {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  z-index: 60;
+  display: none;
+  flex-direction: column;
+  gap: var(--hp-s1);
+  width: 240px;
+  margin-bottom: 6px;
+  padding: var(--hp-s3);
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: normal;
+  background: #fff;
+  border: 1px solid var(--hp-rule);
+  border-bottom: 2px solid var(--hp-ink);
+  border-radius: var(--hp-radius);
+  box-shadow: 0 -8px 24px rgba(27, 27, 27, 0.14);
+}
+
+/* Invisible bridge over the gap, so the card stays open while the pointer moves onto its link. */
+.hp-item__card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 8px;
+}
+
+/* Not enough room above the chip (item_card.js measures it): open downward instead. */
+.hp-item--below .hp-item__card {
+  top: 100%;
+  bottom: auto;
+  margin-top: 6px;
+  margin-bottom: 0;
+  border-top: 2px solid var(--hp-ink);
+  border-bottom: 1px solid var(--hp-rule);
+  box-shadow: 0 8px 24px rgba(27, 27, 27, 0.14);
+}
+
+.hp-item--below .hp-item__card::before {
+  top: -8px;
+  bottom: auto;
+}
+
+.hp-item:hover .hp-item__card,
+.hp-item:focus-within .hp-item__card {
+  display: flex;
+}
+
+.hp-item__image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: var(--hp-grey-0);
+  margin: 0 0 var(--hp-s2) 0 !important;
+}
+
+.hp-item__image--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--hp-grey-2);
+}
+
+.hp-item__image--empty span {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--hp-grey-3);
+}
+
+.hp-item__brand {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--hp-grey-4);
+}
+
+.hp-item__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hp-ink);
+}
+
+.hp-item__card-price {
+  font-family: var(--hp-heading);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--hp-ink);
+}
+
+.hp-item__link {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--hp-red) !important;
+  text-decoration: none;
+}
+
+.hp-item__link:hover {
+  color: var(--hp-red-dark) !important;
+  text-decoration: underline;
+}
+
+.hp-compare {
+  margin: var(--hp-s2) 0;
+  overflow-x: auto;
+}
+
+.hp-compare table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.hp-compare th,
+.hp-compare td {
+  padding: var(--hp-s2);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--hp-grey-2);
+}
+
+.hp-compare thead th {
+  font-weight: 600;
+  color: var(--hp-ink);
+  border-bottom: 2px solid var(--hp-ink);
+}
+
+.hp-compare tbody th {
+  font-weight: 500;
+  color: var(--hp-grey-4);
+  white-space: nowrap;
+}
+
+.hp-compare__price {
+  display: block;
+  font-family: var(--hp-heading);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.hp-compare__differs td {
+  background: var(--hp-grey-0);
+}
+
+.hp-compare__status--supported {
+  color: #1f6f3a;
+  font-weight: 600;
+}
+
+.hp-compare__status--unknown {
+  color: var(--hp-grey-4);
+}
+
+.hp-compare__status--unsupported {
+  color: var(--hp-red-dark);
+  font-weight: 600;
+}
+
+.hp-compare__notes,
+.hp-compat__notes,
+.hp-upgrade__reasons {
+  margin: var(--hp-s2) 0 0;
+  padding-left: var(--hp-s4);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--hp-grey-4);
+}
+
+.hp-compat,
+.hp-upgrade {
+  margin: var(--hp-s2) 0;
+  padding: var(--hp-s3) var(--hp-s4);
+  border: 1px solid var(--hp-rule);
+  border-left: 3px solid var(--hp-ink);
+  border-radius: var(--hp-radius);
+  background: #fff;
+}
+
+.hp-compat__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hp-ink);
+}
+
+.hp-compat__overall {
+  margin: var(--hp-s1) 0 var(--hp-s2) !important;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--hp-grey-4);
+}
+
+.hp-compat__overall--supported {
+  color: #1f6f3a;
+}
+
+.hp-compat__overall--unsupported {
+  color: var(--hp-red-dark);
+}
+
+.hp-compat__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hp-s1);
+}
+
+.hp-compat-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--hp-s2);
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--hp-ink);
+  border: 1px solid var(--hp-grey-2);
+  border-radius: var(--hp-radius);
+  background: var(--hp-grey-0);
+}
+
+.hp-compat-chip__status {
+  font-size: 0.6875rem;
+  color: var(--hp-grey-4);
+}
+
+.hp-compat-chip--supported {
+  border-left: 2px solid #1f6f3a;
+}
+
+.hp-compat-chip--supported .hp-compat-chip__status {
+  color: #1f6f3a;
+}
+
+/* Unknown is neutral: never styled like a yes or a no. */
+.hp-compat-chip--unknown {
+  border-style: dashed;
+}
+
+.hp-compat-chip--unsupported {
+  border-left: 2px solid var(--hp-red);
+}
+
+.hp-compat-chip--unsupported .hp-compat-chip__status {
+  color: var(--hp-red-dark);
+}
+
+.hp-compat__empty {
+  font-size: 0.8125rem;
+  color: var(--hp-grey-4);
+}
+
+.hp-upgrade {
+  border-left-color: var(--hp-red);
+}
+
+.hp-upgrade__pair {
+  display: flex;
+  align-items: center;
+  gap: var(--hp-s3);
+  margin-top: var(--hp-s2);
+}
+
+.hp-upgrade__product {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.8125rem;
+  color: var(--hp-ink);
+}
+
+.hp-upgrade__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--hp-grey-4);
+}
+
+.hp-upgrade__arrow {
+  font-size: 1.25rem;
+  color: var(--hp-grey-3);
+}
+
+.hp-upgrade__delta {
+  margin-top: var(--hp-s2) !important;
+  font-family: var(--hp-heading);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--hp-ink);
+}
+
 /* ---------- Small screens ---------- */
 
 @media (max-width: 640px) {
@@ -785,6 +1208,16 @@
 
   .hp-tile {
     min-height: 0;
+  }
+
+  .hp-upgrade__pair {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hp-upgrade__arrow {
+    transform: rotate(90deg);
+    align-self: center;
   }
 
   [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {

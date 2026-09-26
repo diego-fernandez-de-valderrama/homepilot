@@ -48,6 +48,7 @@ def test_recommend_products_output_and_state(tools):
     assert session.current_category == "heating_control"
     assert result["best_match"] in session.selected_products
     assert set(session.candidate_products) == {"t1", "t2", "t3"}
+    assert (session.last_upsell.model_dump(mode="json") if session.last_upsell else None) == result["upsell"]
 
 
 def test_recommend_uses_session_preferences_as_defaults(tools):

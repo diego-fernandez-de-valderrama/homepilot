@@ -5,6 +5,8 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
+from smart_home_agent.models.recommendation import UpsellSuggestion
+
 STATE_KEY = "homepilot"
 # Detected language of the latest user message ("en" | "de" | None), set by the orchestrator each turn.
 TURN_LANGUAGE_KEY = "homepilot_turn_language"
@@ -26,6 +28,7 @@ class SessionState(BaseModel):
     candidate_products: list[str] = Field(default_factory=list)
     selected_products: list[str] = Field(default_factory=list)
     comparison_products: list[str] = Field(default_factory=list)
+    last_upsell: UpsellSuggestion | None = None  # latest recommend_products upsell, the only valid <upgrade/>
 
     @property
     def must_support(self) -> list[str]:

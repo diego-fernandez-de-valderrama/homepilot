@@ -16,19 +16,29 @@ from smart_home_agent.agent.state import SessionState
 from smart_home_agent.agent.trace import AgentReply
 from smart_home_agent.config import get_settings
 from smart_home_agent.container import build_container
+from smart_home_agent.models import rich
+from smart_home_agent.models.rich import RichContent
 from smart_home_agent.ui.components import (
     ADVISOR_AVATAR,
     TYPING_HTML,
     Suggestion,
+    answer_markdown,
     assistant_eyebrow_html,
+    card_image_urls,
+    comparison_html,
+    compatibility_html,
+    inject_behaviour,
     inject_styles,
     intro_html,
     masthead_html,
+    product_cards_html,
     setup_panel_html,
     suggestion_tiles,
     tool_progress_html,
     tool_status_label,
+    upgrade_html,
 )
+from smart_home_agent.ui.images import missing_images
 
 SUGGESTIONS = [
     Suggestion(
@@ -43,7 +53,8 @@ SUGGESTIONS = [
 def get_agent_service() -> AgentService:
     settings = get_settings()
     container = build_container(settings)
-    return AgentService(build_agent(container.services, settings, container.guardrail), settings.agent.app_name)
+    agent = build_agent(container.services, settings, container.guardrail)
+    return AgentService(agent, settings.agent.app_name, container.services.rich_content)
 
 
 def run_turn(prompt: str, progress: DeltaGenerator) -> AgentReply:
@@ -122,6 +133,34 @@ def render_debug(reply: AgentReply) -> None:
         st.json([c.model_dump(mode="json") for c in trace.tool_calls], expanded=False)
 
 
+def render_answer(text: str, content: RichContent | None) -> None:
+    """Markdown with the answer tags replaced by catalog components. A tag without resolved data is dropped
+    (blocks) or shown as its id (inline); the raw tag is never shown."""
+    if content is None:
+        st.markdown(rich.to_plain(text, {}))
+        return
+    segments = rich.parse(text)
+    in_blocks = rich.block_ids(segments)
+    missing = missing_images(card_image_urls(list(content.products.values())))  # one cached check per answer
+    for segment in segments:
+        match segment:
+            case rich.TextSegment(body):
+                st.markdown(answer_markdown(body, content.products, in_blocks, missing), unsafe_allow_html=True)
+            case rich.ItemsBlock(ids):
+                products = [content.products[pid] for pid in ids if pid in content.products]
+                if products:
+                    st.html(product_cards_html(products, missing))
+            case rich.CompareBlock(ids):
+                if (comparison := content.comparisons.get(rich.compare_key(ids))) is not None:
+                    st.html(comparison_html(comparison))
+            case rich.CompatibilityBlock(product_id):
+                if (compatibility := content.compatibility.get(product_id)) is not None:
+                    st.html(compatibility_html(content.products[product_id], compatibility))
+            case rich.UpgradeBlock(from_id, to_id):
+                if (upsell := content.upgrades.get(rich.upgrade_key(from_id, to_id))) is not None:
+                    st.html(upgrade_html(content.products[from_id], content.products[to_id], upsell))
+
+
 def render_message(message: dict, debug: bool) -> None:
     if message["role"] == "user":
         with st.chat_message("user"):
@@ -129,14 +168,16 @@ def render_message(message: dict, debug: bool) -> None:
         return
     with st.chat_message("assistant", avatar=ADVISOR_AVATAR):
         st.html(assistant_eyebrow_html())
-        st.markdown(message["content"])
+        reply = message.get("reply")
+        render_answer(message["content"], reply.rich if reply is not None else None)
         if debug and message.get("reply") is not None:
             render_debug(message["reply"])
 
 
 def main() -> None:
-    st.set_page_config(page_title="HomePilot", page_icon=":material/home:", layout="centered")
+    st.set_page_config(page_title="HomePilot", page_icon=ADVISOR_AVATAR, layout="centered")
     inject_styles()
+    inject_behaviour()
     init_session()
     debug = render_sidebar()
     st.html(masthead_html())
@@ -169,7 +210,8 @@ def main() -> None:
             st.session_state.messages.pop()
             return
         text = reply.text or "_(no answer)_"
-        answer.markdown(text)
+        with answer.container():
+            render_answer(text, reply.rich)
     st.session_state.messages.append({"role": "assistant", "content": text, "reply": reply})
     # Redraw from history (no agent call): the next turn then starts from exactly the layout it re-renders,
     # so no element of this run is left behind as a faded duplicate while the next answer is computed.

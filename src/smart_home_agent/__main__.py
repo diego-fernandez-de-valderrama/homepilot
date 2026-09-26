@@ -14,6 +14,7 @@ import uuid
 from smart_home_agent.config import get_settings
 from smart_home_agent.container import build_container
 from smart_home_agent.models.recommendation import RecommendationRequest
+from smart_home_agent.models.rich import to_plain
 
 
 def check() -> int:
@@ -52,7 +53,8 @@ def chat() -> int:
 
     settings = get_settings()
     container = build_container(settings)
-    service = AgentService(build_agent(container.services, settings, container.guardrail), settings.agent.app_name)
+    agent = build_agent(container.services, settings, container.guardrail)
+    service = AgentService(agent, settings.agent.app_name, container.services.rich_content)
     session_id = str(uuid.uuid4())
     print("HomePilot (Ctrl-D to quit)")
     for line in sys.stdin:
@@ -63,7 +65,8 @@ def chat() -> int:
         guardrail = reply.guardrail
         verdict = guardrail.input.category if guardrail and guardrail.input else "n/a"
         replaced = f", reply: {guardrail.response_type}" if guardrail and guardrail.response_type else ""
-        print(f"\n{reply.text}\n  [tools: {tools}] [guardrail: {verdict}{replaced}]\n")
+        text = to_plain(reply.text, reply.rich.titles() if reply.rich else {})
+        print(f"\n{text}\n  [tools: {tools}] [guardrail: {verdict}{replaced}]\n")
     return 0
 
 

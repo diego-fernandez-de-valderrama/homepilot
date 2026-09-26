@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from smart_home_agent.agent.state import SessionState
 from smart_home_agent.guardrail.callbacks import GuardrailReport
+from smart_home_agent.models.rich import RichContent
 
 _INTENTS = {
     "recommend_products": "recommendation",
@@ -85,3 +86,4 @@ class AgentReply(BaseModel):
     trace: TurnTrace
     state: SessionState
     guardrail: GuardrailReport | None = None  # what the input/output guardrail decided this turn
+    rich: RichContent | None = None  # catalog data for the presentation tags in `text` (None: no tags)

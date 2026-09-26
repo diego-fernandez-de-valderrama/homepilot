@@ -71,6 +71,7 @@ def make_recommend_products(services: Services):
         session.selected_products = [
             pid for pid in (result.best_match, result.upsell and result.upsell.product_id) if pid
         ]
+        session.last_upsell = result.upsell
         state.save(tool_context, session)
         return ok(applied_from_session=applied, **result.model_dump(mode="json"))
 
