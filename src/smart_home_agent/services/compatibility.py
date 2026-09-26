@@ -98,6 +98,15 @@ def check_requirement(requirement: ProductRequirement, owned_devices: Sequence[s
     )
 
 
+def uses_owned_hub(product: Product, owned_devices: Sequence[str] | None) -> bool:
+    """A hub/gateway requirement of the product (for all or some features) names a device the customer owns."""
+    owned = set(owned_devices or ())
+    return any(
+        r.kind in _DEVICE_KINDS and owned & ({*r.alternatives} | ({r.canonical_item} if r.canonical_item else set()))
+        for r in product.requirements
+    )
+
+
 def overall_status(checks: Sequence[TermCheck]) -> FactStatus:
     statuses = {check.status for check in checks}
     if FactStatus.UNSUPPORTED in statuses:
@@ -118,6 +127,7 @@ def evaluate(
         checks=checks,
         requirements=[check_requirement(r, owned_devices) for r in product.requirements],
         requires_professional_installation=product.requires_professional_installation,
+        uses_owned_hub=uses_owned_hub(product, owned_devices),
     )
 
 

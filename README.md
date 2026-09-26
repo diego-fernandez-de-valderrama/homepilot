@@ -1,6 +1,6 @@
-# HomePilot Smart Home Agent (phase 2)
+# HomePilot Smart Home Agent
 
-A conversational shopping assistant for smart home products, built with **Google ADK + Gemini**. It answers in English or German. It recommends, filters, compares and checks compatibility of products from the catalog built by [`../catalog-ingestion`](../catalog-ingestion) (phase 1).
+A conversational shopping assistant for smart home products, built with **Google ADK + Gemini**. It answers in English or German. It recommends, filters, compares and checks compatibility of products from the catalog built by [`../catalog-ingestion`](../catalog-ingestion).
 
 Gemini understands the request, picks tools and writes the answer. **It is never the source of truth.** Every price, spec, compatibility statement, requirement and piece of evidence comes from PostgreSQL (structured truth) or Qdrant (semantic discovery only), through deterministic code.
 
@@ -184,7 +184,8 @@ Gemini writes the answer from this result
 - 0.6 × semantic relevance (normalized);
 - 0.15 × product-type match with the need (pushes a "valve adapter" below "radiator thermostat");
 - 0.1 × data completeness;
-- 0.15 × number of confirmed capabilities.
+- 0.15 × number of confirmed capabilities;
+- \+ 0.1 when the catalog names a hub for the product that the customer owns (`owned_devices`), so a product that fits the existing setup comes first. Missing hub data is never rewarded: without stated ownership, or with none owned, the score does not change.
 
 Price is not part of the score. The best match is chosen on fit.
 
@@ -192,9 +193,10 @@ Price is not part of the score. The best match is chosen on fit.
 - same category and compatible product type as the best match (a radiator thermostat is not upsold to an underfloor room thermostat);
 - more expensive, but **never above `max_price`**;
 - at least `AGENT_UPSELL_MIN_RELEVANCE` × the best match's relevance;
-- a **strict superset** of the best match's confirmed capabilities.
+- it **keeps every confirmed capability** of the best match (ecosystems, voice assistants, protocols and phone platforms iOS/Android);
+- it has **at least one verifiable advantage**: an extra confirmed capability or phone platform, or explicit stand-alone operation (`standalone` requirement alternative) where the best match needs a hub. A product whose catalog entry simply lists no hub is unknown, not stand-alone.
 
-Its `upgrade_reasons` are computed from the data (for example "Also supports Matter (confirmed in the catalog)" and "Costs 40.00 EUR more than ..."). The prompt only allows those reasons.
+Its `upgrade_reasons` are computed from the data (for example "Also supports Matter (confirmed in the catalog)", "Works without a separate hub (confirmed in the catalog); ... needs Philips Hue Bridge" and "Costs 40.00 EUR more than ..."). The prompt only allows those reasons.
 
 All confirmed alternatives are still returned, so cheaper valid options are never hidden. Unconfirmed products are returned separately and may only be mentioned as "compatibility not confirmed".
 
@@ -212,11 +214,12 @@ The business KPI is measured per `recommend_products` call with a best match:
 | Attach rate | share that offer at least one required hub (`accessories`) |
 | Basket uplift | (best match + upsell price difference + hubs of the best match) / best match - 1 (mean, median) |
 | Binding rule | when no upsell fired: the furthest upsell rule a near-miss candidate reached (the rule to revisit) |
-| Guard metrics (must be 0) | upsell over budget, not confirmed, not pricier, without a capability reason; hub attached to another product |
+| Setup fit | cases with stated ownership whose best match still needs a hub the customer lacks |
+| Guard metrics (must be 0) | upsell over budget, not confirmed, not pricier, without an advantage reason; hub attached to another product |
 
-`uv run python -m smart_home_agent upsell-eval` runs 25 fixed EN/DE requests (`upsell_eval.py`) through the real pipeline (one embedding each, no chat model), prints these metrics and exits with 1 if a guard metric is not 0. Each `recommend_products` call also logs one `commerce ...` line (best match, upsell and delta, hubs, bundle totals), so the same numbers can be computed from real sessions.
+`uv run python -m smart_home_agent upsell-eval` runs 29 fixed EN/DE requests (`upsell_eval.py`) through the real pipeline (one embedding each, no chat model), prints these metrics and exits with 1 if a guard metric is not 0. Each `recommend_products` call also logs one `commerce ...` line (best match, upsell and delta, hubs, bundle totals), so the same numbers can be computed from real sessions.
 
-First measurement (25 cases): upsell offer rate 0%, attach rate 36%, all guard metrics 0. The binding rule is `not_capability_superset` in 20 of 25 cases, so the strict superset rule is what keeps upsells from firing.
+Current measurement (29 cases): upsell offer rate 1/29, attach rate 31%, all guard metrics 0. The binding rule is `loses_capability` in 17 cases and `no_advantage` in 6: pricier products of the same type usually lack a capability the best match has confirmed. Details and history in [`docs/upselling.md`](docs/upselling.md).
 
 ---
 
@@ -448,7 +451,6 @@ The tests run the real classifier offline on the recorded embeddings in `tests/f
 - **Fail-open:** without embeddings (quota, outage), the input check is skipped.
 - **Per message, not per conversation:** a multi-turn injection spread over harmless-looking messages is judged one message at a time.
 - **The output checks are heuristics.** Wiring instructions without the listed terms, compatibility claims that name a product by a paraphrase instead of its catalog title or id, and prices are not verified.
-- **Existing issue, unrelated to the guardrail:** vocabulary resolution does not accept the display label "Apple Home (HomeKit)" (only "HomeKit" / "Apple Home"). When the model passes that label to `check_compatibility`, the tool returns `unrecognized`.
 
 ---
 
@@ -612,7 +614,6 @@ Agent: Bosch Smart Home Heizkörper-Thermostat II (55.00 EUR, radiator thermosta
 - **Container image.** Add one for the agent (it needs the shared package first) and a compose service joining the `homepilot-catalog` network.
 - **Evaluation set.** Build EN/DE conversations with expected tool calls and compatibility outcomes, using ADK evaluation, as regression tests for the prompt.
 - **Streaming responses** in Streamlit and a tool-call timeline (`st.status(type="step")`).
-- **Upsell rule tuning, measured with `upsell-eval`.** Count more verifiable differences as upgrades (control and mobile OS dimensions, "no hub needed", fewer subscriptions), since the strict capability superset blocks almost every upsell today.
 - **Better ranking signals.** Price tiers per category and margin data, if the business provides them. They must stay behind the compatibility gate.
 - **Category-aware product-type taxonomy.** The LLM `product_type` is free text, which limits type matching and upsell eligibility.
 - **Guardrail calibration on real traffic.** Log guardrail decisions (without message text, or with consent) and grow the prototypes and the evaluation set from the UNCERTAIN cases.

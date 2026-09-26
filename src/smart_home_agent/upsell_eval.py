@@ -7,7 +7,9 @@ Runs the real recommendation pipeline (one query embedding per case, no chat mod
 - attach rate: share that offer at least one required hub/gateway from the catalog;
 - basket uplift: (best match + upsell delta + accessories) / best match - 1, mean and median;
 - no-upsell diagnostics: the binding rule per case, i.e. the furthest rule that a near-miss candidate reached;
-- guard metrics, which must stay 0: upsell over budget, not confirmed, not pricier, without a capability
+- setup fit: in the cases where the customer said what they own, how often the best match still needs a hub
+  they do not have;
+- guard metrics, which must stay 0: upsell over budget, not confirmed, not pricier, without an advantage
   reason, or accessories attached to another product. The command exits with 1 if any guard fails.
 """
 
@@ -59,6 +61,19 @@ CASES: tuple[RecommendationRequest, ...] = (
     _case("window contact sensor", "contact_sensor"),
     _case("smoke detector smart", "safety_detector"),
     _case("video doorbell", "doorbell_intercom"),
+    # Stated ownership: the ranking should prefer products that fit the customer's hub.
+    _case("smart bulb, I have a Hue Bridge", "smart_bulb", owned_devices=["philips_hue_bridge"]),
+    _case(
+        "Heizkörperthermostat, ich habe den Bosch Controller",
+        "heating_control",
+        owned_devices=["bosch_smart_home_controller"],
+    ),
+    _case(
+        "window contact, I have a Homematic IP access point",
+        "contact_sensor",
+        owned_devices=["homematic_ip_access_point"],
+    ),
+    _case("Lichtschalter, ich habe keine Zentrale", "switch", owned_devices=[]),
 )
 
 
@@ -72,6 +87,8 @@ class CaseResult(BaseModel):
     accessories_total: float
     blockers: dict[str, int]
     guard_failures: list[str]
+    ownership_stated: bool = False
+    best_missing_hub: bool = False  # the best match needs a hub the customer said they do not own
 
     @property
     def uplift(self) -> float | None:
@@ -95,8 +112,8 @@ def guard_failures(result: Recommendation) -> list[str]:
             failures.append("upsell_not_confirmed")
         if best is None or best.product.price is None or upsell.price <= best.product.price:
             failures.append("upsell_not_pricier")
-        if not any(reason.startswith("Also supports") for reason in upsell.upgrade_reasons):
-            failures.append("upsell_without_capability_reason")
+        if not any(not reason.startswith("Costs ") for reason in upsell.upgrade_reasons):
+            failures.append("upsell_without_advantage_reason")
     offered = {result.best_match, upsell and upsell.product_id}
     if any(a.for_product_id not in offered for a in result.accessories):
         failures.append("accessory_for_other_product")
@@ -116,6 +133,8 @@ def case_result(result: Recommendation) -> CaseResult:
         accessories_total=sum(a.price for a in best_accessories),
         blockers=result.upsell_blockers,
         guard_failures=guard_failures(result),
+        ownership_stated=result.request.owned_devices is not None,
+        best_missing_hub=bool(best and best.missing_requirements),
     )
 
 
@@ -133,12 +152,15 @@ def report(results: Sequence[CaseResult]) -> str:
     uplifts = [u for r in with_best if (u := r.uplift) is not None]
     binding = Counter(binding_rule(r.blockers) for r in with_best if not r.upsell)
     guards = Counter(failure for r in results for failure in r.guard_failures)
+    stated = [r for r in with_best if r.ownership_stated]
     lines = [
         f"cases: {len(results)}, with a best match: {len(with_best)}",
         f"upsell offer rate: {_pct(sum(1 for r in with_best if r.upsell), len(with_best))}",
         f"attach rate (required hub offered): {_pct(sum(1 for r in with_best if r.accessories), len(with_best))}",
         "basket uplift: "
         + (f"mean {statistics.mean(uplifts):.1%}, median {statistics.median(uplifts):.1%}" if uplifts else "n/a"),
+        "best match needs a hub the customer lacks (ownership stated): "
+        + _pct(sum(1 for r in stated if r.best_missing_hub), len(stated)),
         "",
         "per case:",
     ]

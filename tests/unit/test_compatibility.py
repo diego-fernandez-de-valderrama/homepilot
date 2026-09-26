@@ -1,5 +1,5 @@
 import pytest
-from catalog_ingestion.domain.enums import FactStatus, RequirementKind
+from catalog_ingestion.domain.enums import FactStatus, Necessity, RequirementKind
 
 from smart_home_agent.services import compatibility, vocabulary
 from smart_home_agent.services.compatibility import CompatibilityService, ProductNotFoundError
@@ -113,3 +113,26 @@ def test_service_without_accessory_service_offers_no_hub():
     [result] = CompatibilityService(FakeCatalog([dimmer])).check(["1"], [])
     assert result.requirements[0].status == "unverified"
     assert result.accessories == []
+
+
+def test_needed_hubs_and_owned_hub_fit_follow_the_stated_ownership():
+    hub = product("1", requirements=[requirement("philips_hue_bridge")])
+    assert compatibility.evaluate(hub, [], None).needed_hubs() == {"philips_hue_bridge"}
+    assert compatibility.evaluate(hub, [], []).needed_hubs() == {"philips_hue_bridge"}
+    owned = compatibility.evaluate(hub, [], ["philips_hue_bridge"])
+    assert owned.needed_hubs() == frozenset()
+    assert owned.uses_owned_hub
+    assert "uses_owned_hub" not in owned.model_dump()  # a ranking signal, not tool output
+    assert not compatibility.evaluate(hub, [], None).uses_owned_hub
+    optional = product(
+        "2", requirements=[requirement("philips_hue_bridge", necessity=Necessity.REQUIRED_FOR_SOME_FEATURES)]
+    )
+    assert compatibility.evaluate(optional, [], ["philips_hue_bridge"]).uses_owned_hub
+    assert not compatibility.evaluate(product("3"), [], ["philips_hue_bridge"]).uses_owned_hub
+
+
+def test_only_an_explicit_standalone_alternative_means_stand_alone():
+    either = requirement("philips_hue_bridge", alternatives=["philips_hue_bridge", "standalone"])
+    assert product("1", requirements=[either]).runs_standalone
+    assert not product("2", requirements=[requirement("philips_hue_bridge")]).runs_standalone
+    assert not product("3").runs_standalone  # no hub row: unknown, not stand-alone

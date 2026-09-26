@@ -1,6 +1,6 @@
 from smart_home_agent.models.recommendation import RecommendationRequest
 from smart_home_agent.upsell_eval import binding_rule, evaluate, guard_failures, report
-from tests.fakes import fact, product, services_for
+from tests.fakes import fact, product, requirement, services_for
 
 PRODUCTS = [
     product("cheap", price=55.0, facts=[fact("google_home"), fact("wifi")]),
@@ -28,8 +28,28 @@ def test_guards_catch_an_upsell_over_budget():
 
 
 def test_binding_rule_is_the_furthest_rule_reached():
-    assert binding_rule({"not_pricier": 3, "not_capability_superset": 1}) == "not_capability_superset"
+    assert binding_rule({"not_pricier": 3, "no_advantage": 1}) == "no_advantage"
+    assert binding_rule({"loses_capability": 2, "no_advantage": 1}) == "no_advantage"
     assert binding_rule({}) == "no_other_confirmed_candidate"
     # Versions of the best match are set aside before any rule, so every real rule outranks them.
     assert binding_rule({"other_version_of_best": 2, "not_pricier": 1}) == "not_pricier"
     assert binding_rule({"other_version_of_best": 2}) == "other_version_of_best"
+
+
+def test_guards_catch_an_upsell_without_an_advantage_reason():
+    result = _recommend(REQUEST)
+    assert result.upsell is not None
+    price_only = result.upsell.model_copy(update={"upgrade_reasons": result.upsell.upgrade_reasons[-1:]})
+    assert "upsell_without_advantage_reason" in guard_failures(result.model_copy(update={"upsell": price_only}))
+
+
+def test_report_counts_best_matches_that_need_a_hub_the_customer_lacks():
+    hub = product("hub", price=40.0, facts=[fact("google_home")], requirements=[requirement("philips_hue_bridge")])
+
+    def recommend(request):
+        return services_for([hub], {"hub": 0.9}).recommendation.recommend(request)
+
+    stated = REQUEST.model_copy(update={"owned_devices": []})
+    results = evaluate(recommend, [REQUEST, stated])
+    assert [r.best_missing_hub for r in results] == [False, True]
+    assert "best match needs a hub the customer lacks (ownership stated): 1/1 (100%)" in report(results)

@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field
 from smart_home_agent.models.evidence import Evidence, FieldProvenance
 
 CAPABILITY_DIMENSIONS = (Dimension.ECOSYSTEM, Dimension.VOICE_ASSISTANT, Dimension.PROTOCOL)
+# An upgrade may also win on the phone platforms its app supports (canonical iOS / Android facts).
+UPGRADE_DIMENSIONS = (*CAPABILITY_DIMENSIONS, Dimension.MOBILE_OS)
+_HUB_KINDS = (RequirementKind.HUB, RequirementKind.GATEWAY)
 
 
 class CompatibilityFact(BaseModel):
@@ -112,3 +115,9 @@ class Product(ProductSummary):
     @property
     def requires_professional_installation(self) -> bool:
         return any(r.kind is RequirementKind.PROFESSIONAL_INSTALLATION for r in self.requirements)
+
+    @property
+    def runs_standalone(self) -> bool:
+        """The catalog explicitly says the product also works without its hub ("standalone" alternative).
+        A product without any hub requirement is unknown here, not stand-alone."""
+        return any(r.kind in _HUB_KINDS and "standalone" in r.alternatives for r in self.requirements)

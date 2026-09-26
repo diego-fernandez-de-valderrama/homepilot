@@ -20,7 +20,7 @@ need + constraints (category, budget, brands, must_support, owned hubs)
   -> hydrate from PostgreSQL
   -> hard filters (category, price, brand)
   -> compatibility gate: confirmed | unconfirmed | excluded
-  -> price-neutral ranking               (services/ranking.py)
+  -> price-neutral ranking, owned-hub fit (services/ranking.py)
   -> upsell: at most one upgrade         (ranking.select_upsell)
   -> accessories: required hubs          (services/accessories.py)
   -> the agent writes the answer from this result
@@ -39,14 +39,25 @@ The tool result contains `best_match`, `upsell` and `accessories`. The session s
 | The upgrade stays within `max_price` | `over_budget` |
 | Same category and same product type ("Radiator thermostat" ~ "Smart radiator thermostat", not ~ "Room thermostat") | `other_product_type` |
 | Relevance at least `AGENT_UPSELL_MIN_RELEVANCE` (default 0.75) x the best match's relevance | `low_relevance` |
-| Confirmed capabilities (ecosystems, voice assistants, protocols) are a strict superset of the best match's | `not_capability_superset` |
+| Keeps every confirmed capability of the best match: ecosystems, voice assistants, protocols and phone platforms (iOS/Android) | `loses_capability` |
+| Has at least one verifiable advantage: an extra confirmed capability or phone platform, or explicit stand-alone operation (a `standalone` requirement alternative) while the best match needs a hub | `no_advantage` |
+
+A product without any hub requirement row is *unknown*, not stand-alone, so it never earns the "no hub" advantage.
 
 One extra rule is applied in `services/recommendation.py` before `select_upsell`: the upgrade must not need a hub or gateway that the best match does not need (reported as `needs_extra_hub`). Otherwise its price difference would understate what the customer really pays.
 
 The `UpsellSuggestion` carries `upgrade_reasons` computed from data, for example:
 
 - "Also supports Matter (confirmed in the catalog)"
+- "Also supports iOS (confirmed in the catalog)"
+- "Works without a separate hub (confirmed in the catalog); Product X needs Philips Hue Bridge"
 - "Costs 40.00 EUR more than Product X"
+
+## Ranking: fit to the customer's hub
+
+The best match is chosen price-neutrally (`ranking.score`). When the customer said which hubs they own, a product whose catalog requirements name one of them (for all or some features) gets `WEIGHT_OWNED_HUB` (0.1) on top. The flag `CompatibilityResult.uses_owned_hub` is computed by `services/compatibility.py`, and ranking only reads it; it is excluded from tool output.
+
+It is a bonus for explicit fit, not a penalty for a missing hub. A penalty was tried first: it rewarded products whose hub requirement is simply missing from the catalog (for "Unterputz Schalter Homematic IP" it picked a rocker cover over the switch) and lowered the attach rate from 36% to 24%.
 
 ## Lever 2: required hubs (cross-sell)
 
@@ -77,7 +88,7 @@ The `<upgrade>` block only renders for the pair stored in `last_upsell` (`servic
 
 ## Measuring the KPI
 
-`uv run python -m smart_home_agent upsell-eval` (`upsell_eval.py`) runs 25 fixed EN/DE requests through the real pipeline. It makes one embedding call per request and no chat model call. It reports:
+`uv run python -m smart_home_agent upsell-eval` (`upsell_eval.py`) runs 29 fixed EN/DE requests (4 with stated hub ownership) through the real pipeline. It makes one embedding call per request and no chat model call. It reports:
 
 | Metric | Definition |
 |---|---|
@@ -85,7 +96,8 @@ The `<upgrade>` block only renders for the pair stored in `last_upsell` (`servic
 | Attach rate | share offering at least one required hub |
 | Basket uplift | (best match + upsell difference + hubs of the best match) / best match - 1, mean and median |
 | Binding rule | when no upsell fired: the furthest rule a near-miss candidate reached, i.e. the rule to revisit |
-| Guard metrics (must be 0) | upsell over budget, not confirmed, not pricier, without a capability reason; hub attached to another product |
+| Setup fit | cases with stated ownership whose best match still needs a hub the customer lacks |
+| Guard metrics (must be 0) | upsell over budget, not confirmed, not pricier, without an advantage reason (any reason besides the price line); hub attached to another product |
 
 The command exits with code 1 if a guard metric is not 0. The rejection counts behind the binding rule are kept in `Recommendation.upsell_blockers`, which is excluded from the tool output, so the model never sees them.
 
@@ -97,29 +109,35 @@ commerce best_match=... upsell=... upsell_delta=... accessories=[...] bundle_tot
 
 The same KPIs can be computed from these lines.
 
-## Current numbers and next steps
+## Current numbers
 
-First measurement on the 25 cases:
+| | First measurement (25 cases) | Current (29 cases) |
+|---|---|---|
+| Upsell offer rate | 0/25 | 1/29 |
+| Attach rate | 36% | 31% |
+| Basket uplift (mean / median) | 46% / 0% | 38.5% / 0% |
+| Setup fit (best match lacks an owned hub) | n/a | 2/7 |
+| Guard metrics | all 0 | all 0 |
+| Binding rule | `not_capability_superset` 20, `other_product_type` 3, `not_pricier` 2 | `loses_capability` 17, `no_advantage` 6, `other_product_type` 3, `not_pricier` 2 |
 
-- upsell offer rate: 0%;
-- attach rate: 36%;
-- basket uplift: mean 46%, median 0% (all from hubs);
-- guard metrics: all 0.
+On the original 25 cases the new rules add no upsell and the ranking changes one best match, as intended: with a Homematic IP access point the customer now gets the Homematic thermostat instead of a Bosch one that needs a Bosch controller. The one upsell comes from a new case ("Lichtschalter, ich habe keine Zentrale") under the existing capability rule ("Also supports Proprietary radio (RF)"); it reflects a gap in the best match's attributes rather than a real difference, since both are Homematic IP radio devices.
 
-The binding rule is `not_capability_superset` in 20 of 25 cases: the catalog rarely has a pricier product of the same type that supports everything the best match supports plus more. Possible next steps, each measurable with `upsell-eval`:
+The splitting of the old rule shows the real blocker: in most cases the pricier same-type product does not have a capability the best match has confirmed (`loses_capability`), which is often a gap in its catalog attributes rather than in the product.
 
-- count more verifiable differences as upgrade reasons: control options, mobile OS, "no hub needed", fewer required subscriptions;
-- let hubs the customer already owns influence the ranking, so a product that fits the existing setup comes first.
+Differences left out, because the data cannot back them:
+
+- control options: all `control` facts have no canonical id (brand apps, remotes), so they cannot be compared safely;
+- fewer subscriptions: only `ring_subscription` exists, always "for some features", and a missing row is unknown, not "none needed".
 
 ## Files
 
 | File | Role |
 |---|---|
-| `services/ranking.py` | price-neutral ranking, upsell rules, `select_upsell`, `upsell_blockers` |
+| `services/ranking.py` | price-neutral ranking, owned-hub bonus, upsell rules, `select_upsell`, `upsell_blockers` |
 | `services/recommendation.py` | pipeline, extra-hub filter, attaches accessories |
 | `services/accessories.py` | hub lookup and `AccessorySuggestion` |
 | `models/recommendation.py` | `UpsellSuggestion`, `AccessorySuggestion`, `Recommendation` |
 | `tools/recommend.py` | tool, session state, commerce log line |
 | `agent/prompts.py` | presentation rules |
 | `upsell_eval.py` | KPI evaluation cases and report |
-| `tests/unit/test_ranking.py`, `test_recommendation.py`, `test_accessories.py`, `test_upsell_eval.py` | unit tests |
+| `tests/unit/test_ranking.py`, `test_recommendation.py`, `test_accessories.py`, `test_compatibility.py`, `test_upsell_eval.py` | unit tests |

@@ -208,3 +208,19 @@ def test_the_upsell_version_takes_its_products_slot():
     titles = [r.product.title for r in result.confirmed]
     assert len(titles) == len(set(titles))
     assert "other" in {r.product.id for r in result.confirmed}
+
+
+def test_stated_ownership_prefers_the_product_that_fits_the_customers_hub():
+    hue = product("hue", price=40.0, facts=[fact("google_home")], requirements=[requirement("philips_hue_bridge")])
+    bosch = product(
+        "bosch", price=45.0, facts=[fact("google_home")], requirements=[requirement("bosch_smart_home_controller")]
+    )
+    services = services_for([hue, bosch], {"hue": 0.9, "bosch": 0.85})
+
+    def best(owned: list[str] | None) -> str | None:
+        request = RecommendationRequest(need="radiator thermostat", must_support=["google_home"], owned_devices=owned)
+        return services.recommendation.recommend(request).best_match
+
+    assert best(None) == "hue"
+    assert best(["philips_hue_bridge"]) == "hue"
+    assert best(["bosch_smart_home_controller"]) == "bosch"

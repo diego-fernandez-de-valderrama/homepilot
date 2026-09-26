@@ -1,1 +1,1 @@
-"""HomePilot smart home conversational agent (phase 2)."""
+"""HomePilot smart home conversational agent."""

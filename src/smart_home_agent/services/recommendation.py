@@ -44,11 +44,6 @@ _VERSION_STATUS: dict[FactStatus, VersionStatus] = {
 }
 
 
-def _needed_hubs(result: CompatibilityResult) -> frozenset[str]:
-    """Required hubs/gateways the customer does not (or did not say they) own."""
-    return frozenset(r.canonical_item or r.label for r in result.requirements if r.status in ("missing", "unverified"))
-
-
 def one_per_product(candidates: list[RankingCandidate], taken: frozenset[str] = frozenset()) -> list[RankingCandidate]:
     """The best-ranked version of each product (versions share the title); titles in `taken` are skipped."""
     seen = set(taken)
@@ -100,10 +95,9 @@ class RecommendationService:
         request: RecommendationRequest,
     ) -> tuple[UpsellSuggestion | None, list[AccessorySuggestion], dict[str, int]]:
         """(upsell, required-hub accessories for the best match and the upsell, why no upsell fired)."""
-        best_hubs = _needed_hubs(results[best.product.id])
         # Another version of the best match (color, size, pack) is not an upgrade of it.
         others = [c for c in confirmed if c.product.title != best.product.title]
-        eligible = [c for c in others if _needed_hubs(results[c.product.id]) <= best_hubs]
+        eligible = [c for c in others if c.needed_hubs <= best.needed_hubs]
         upsell = ranking.select_upsell(eligible, best, request.max_price, self._upsell_min_relevance)
         blockers: dict[str, int] = {}
         if not upsell:
@@ -148,7 +142,7 @@ class RecommendationService:
                 passed.append(product)
 
         results = {p.id: compatibility.evaluate(p, terms, request.owned_devices) for p in passed}
-        candidates = ranking.rank(ranking.build_candidates(passed, scores, request.need))
+        candidates = ranking.rank(ranking.build_candidates(passed, scores, request.need, results))
         confirmed = [c for c in candidates if results[c.product.id].overall is FactStatus.SUPPORTED]
         unconfirmed = [c for c in candidates if results[c.product.id].overall is FactStatus.UNKNOWN]
         unsupported = len(candidates) - len(confirmed) - len(unconfirmed)
