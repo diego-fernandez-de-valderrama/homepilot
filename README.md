@@ -174,7 +174,7 @@ compatibility gate:  supported -> confirmed | unknown -> unconfirmed | unsupport
   ▼
 ranking (confirmed; price-neutral)
   ▼
-upselling (at most one alternative)
+upselling (at most one alternative) + required-hub accessories
   ▼
 Gemini writes the answer from this result
 ```
@@ -196,6 +196,26 @@ Price is not part of the score. The best match is chosen on fit.
 Its `upgrade_reasons` are computed from the data (for example "Also supports Matter (confirmed in the catalog)" and "Costs 40.00 EUR more than ..."). The prompt only allows those reasons.
 
 All confirmed alternatives are still returned, so cheaper valid options are never hidden. Unconfirmed products are returned separately and may only be mentioned as "compatibility not confirmed".
+
+An upsell must not need a hub or gateway that the best match does not need (its price difference would understate the real extra cost).
+
+**Hub cross-sell** (`services/accessories.py`). Many devices only work with a hub that is itself in the catalog (Homematic IP Access Point, Bosch Smart Home Controller, Philips Hue Bridge, Gardena gateway, ...). When a required hub of the best match or the upsell is `missing` (the customer said they do not own it) or `unverified` (ownership not stated), the result carries an `accessories` entry: the cheapest bare hub product in `hub_gateway` whose title matches the keywords mapped to that canonical requirement id (starter sets are never offered), plus the `bundle_total`. Requirements without a safe mapping (the generic `smart_hub`) get none. The prompt makes the agent name the hub, say it is required and give the bundle total, even when that total exceeds the budget.
+
+### Upselling KPI
+
+The business KPI is measured per `recommend_products` call with a best match:
+
+| Metric | Definition |
+|---|---|
+| Upsell offer rate | share of recommendations that carry an `upsell` |
+| Attach rate | share that offer at least one required hub (`accessories`) |
+| Basket uplift | (best match + upsell price difference + hubs of the best match) / best match - 1 (mean, median) |
+| Binding rule | when no upsell fired: the furthest upsell rule a near-miss candidate reached (the rule to revisit) |
+| Guard metrics (must be 0) | upsell over budget, not confirmed, not pricier, without a capability reason; hub attached to another product |
+
+`uv run python -m smart_home_agent upsell-eval` runs 25 fixed EN/DE requests (`upsell_eval.py`) through the real pipeline (one embedding each, no chat model), prints these metrics and exits with 1 if a guard metric is not 0. Each `recommend_products` call also logs one `commerce ...` line (best match, upsell and delta, hubs, bundle totals), so the same numbers can be computed from real sessions.
+
+First measurement (25 cases): upsell offer rate 0%, attach rate 36%, all guard metrics 0. The binding rule is `not_capability_superset` in 20 of 25 cases, so the strict superset rule is what keeps upsells from firing.
 
 ---
 
@@ -456,6 +476,7 @@ cp .env.example .env                 # same GEMINI/POSTGRES/QDRANT values as abo
 uv sync
 uv run python -m smart_home_agent check    # PostgreSQL/Qdrant counts + embedding model check
 uv run python -m smart_home_agent smoke    # recommendation pipeline only (1 embedding call, no chat model)
+uv run python -m smart_home_agent upsell-eval   # upselling KPI over 25 fixed requests (no chat model)
 uv run streamlit run src/smart_home_agent/ui/streamlit_app.py
 ```
 
@@ -564,6 +585,7 @@ Agent: Bosch Smart Home Heizkörper-Thermostat II (55.00 EUR, radiator thermosta
 - **Container image.** Add one for the agent (it needs the shared package first) and a compose service joining the `homepilot-catalog` network.
 - **Evaluation set.** Build EN/DE conversations with expected tool calls and compatibility outcomes, using ADK evaluation, as regression tests for the prompt.
 - **Streaming responses** in Streamlit and a tool-call timeline (`st.status(type="step")`).
+- **Upsell rule tuning, measured with `upsell-eval`.** Count more verifiable differences as upgrades (control and mobile OS dimensions, "no hub needed", fewer subscriptions), since the strict capability superset blocks almost every upsell today.
 - **Better ranking signals.** Price tiers per category and margin data, if the business provides them. They must stay behind the compatibility gate.
 - **Category-aware product-type taxonomy.** The LLM `product_type` is free text, which limits type matching and upsell eligibility.
 - **Guardrail calibration on real traffic.** Log guardrail decisions (without message text, or with consent) and grow the prototypes and the evaluation set from the UNCERTAIN cases.

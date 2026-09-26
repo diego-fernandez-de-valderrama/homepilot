@@ -11,6 +11,7 @@ from smart_home_agent.config import AgentSettings, Settings
 from smart_home_agent.guardrail.classifier import GuardrailThresholds, SemanticGuardrail, gemini_embed
 from smart_home_agent.repositories.postgres import CatalogRepository, create_readonly_sessions
 from smart_home_agent.repositories.qdrant import QdrantIndex, SemanticIndex
+from smart_home_agent.services.accessories import AccessoryService
 from smart_home_agent.services.comparison import ComparisonService
 from smart_home_agent.services.compatibility import CompatibilityService
 from smart_home_agent.services.evidence import EvidenceService
@@ -38,7 +39,9 @@ class Services:
             catalog=catalog,
             retrieval=retrieval,
             compatibility=CompatibilityService(catalog),
-            recommendation=RecommendationService(retrieval, settings.candidate_pool, settings.upsell_min_relevance),
+            recommendation=RecommendationService(
+                retrieval, AccessoryService(catalog), settings.candidate_pool, settings.upsell_min_relevance
+            ),
             comparison=ComparisonService(catalog),
             evidence=EvidenceService(catalog),
             rich_content=RichContentService(catalog),

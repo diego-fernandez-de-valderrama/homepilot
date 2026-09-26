@@ -101,3 +101,40 @@ def test_required_hub_is_flagged():
     )
     result = services.recommendation.recommend(request)
     assert result.confirmed[0].missing_requirements == ["Bosch Smart Home Controller"]
+
+
+BOSCH_CONTROLLER = product(
+    "controller", title="Bosch Smart Home Controller II", category="hub_gateway", product_type="Controller", price=78.0
+)
+
+
+def test_required_hub_is_offered_as_accessory_with_bundle_total():
+    thermostat = product(
+        "bosch", price=70.0, facts=[fact("google_home")], requirements=[requirement("bosch_smart_home_controller")]
+    )
+    services = services_for([thermostat, BOSCH_CONTROLLER])
+    request = RecommendationRequest(need="thermostat", category="heating_control", must_support=["google_home"])
+    [accessory] = services.recommendation.recommend(request).accessories
+    assert (accessory.for_product_id, accessory.product_id) == ("bosch", "controller")
+    assert (accessory.status, accessory.bundle_total) == ("unverified", 148.0)
+
+    owned = request.model_copy(update={"owned_devices": ["bosch_smart_home_controller"]})
+    assert services.recommendation.recommend(owned).accessories == []
+
+
+def test_upsell_that_needs_an_extra_hub_is_skipped():
+    hub_premium = product(
+        "premium",
+        price=120.0,
+        facts=[fact("google_home"), fact("wifi"), fact("matter")],
+        requirements=[requirement("bosch_smart_home_controller")],
+    )
+    services = services_for([CONFIRMED_CHEAP, hub_premium], {"cheap": 0.9, "premium": 0.85})
+    request = RecommendationRequest(
+        need="radiator thermostat", category="heating_control", must_support=["google_home"]
+    )
+    result = services.recommendation.recommend(request)
+    assert result.best_match == "cheap"
+    assert result.upsell is None
+    assert result.upsell_blockers == {"needs_extra_hub": 1}
+    assert "upsell_blockers" not in result.model_dump()  # diagnostics never reach the model

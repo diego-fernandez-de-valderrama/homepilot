@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from google.adk.tools import ToolContext
@@ -7,6 +8,8 @@ from smart_home_agent.container import Services
 from smart_home_agent.models.recommendation import RecommendationRequest
 from smart_home_agent.services import vocabulary
 from smart_home_agent.tools._common import ToolResult, ok, resolve_category, resolve_devices, tool_errors
+
+logger = logging.getLogger(__name__)
 
 
 def make_recommend_products(services: Services):
@@ -28,7 +31,8 @@ def make_recommend_products(services: Services):
         (category, price, brand), deterministic compatibility gate, ranking and upselling.
         Returns `confirmed` products (every must_support term is supported by catalog evidence),
         `unconfirmed` products (compatibility unknown for some term, never present them as compatible),
-        `excluded` counts, the `best_match` id and an optional `upsell` with factual upgrade reasons.
+        `excluded` counts, the `best_match` id, an optional `upsell` with factual upgrade reasons and
+        `accessories`: catalog hubs/gateways that the best match or the upsell require (with the bundle total).
 
         Args:
           need: The user's need in their own words (any language), e.g. "smart radiator thermostat".
@@ -67,12 +71,25 @@ def make_recommend_products(services: Services):
 
         session.current_category = request.category or session.current_category
         session.last_search = {"tool": "recommend_products", **request.model_dump(mode="json")}
-        session.candidate_products = [r.product.id for r in (*result.confirmed, *result.unconfirmed)]
+        session.candidate_products = list(
+            dict.fromkeys(
+                [r.product.id for r in (*result.confirmed, *result.unconfirmed)]
+                + [a.product_id for a in result.accessories]
+            )
+        )
         session.selected_products = [
             pid for pid in (result.best_match, result.upsell and result.upsell.product_id) if pid
         ]
         session.last_upsell = result.upsell
         state.save(tool_context, session)
+        logger.info(
+            "commerce best_match=%s upsell=%s upsell_delta=%s accessories=%s bundle_totals=%s",
+            result.best_match,
+            result.upsell and result.upsell.product_id,
+            result.upsell and result.upsell.price_difference,
+            [a.product_id for a in result.accessories],
+            [a.bundle_total for a in result.accessories],
+        )
         return ok(applied_from_session=applied, **result.model_dump(mode="json"))
 
     return recommend_products

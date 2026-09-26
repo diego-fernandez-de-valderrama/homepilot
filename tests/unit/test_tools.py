@@ -3,7 +3,7 @@ from google.adk.tools import FunctionTool
 
 from smart_home_agent.agent.state import STATE_KEY, read_state
 from smart_home_agent.tools import build_tools
-from tests.fakes import FakeToolContext, fact, product, services_for
+from tests.fakes import FakeToolContext, fact, product, requirement, services_for
 
 PRODUCTS = [
     product("t1", price=55.0, facts=[fact("google_home"), fact("wifi")]),
@@ -49,6 +49,19 @@ def test_recommend_products_output_and_state(tools):
     assert result["best_match"] in session.selected_products
     assert set(session.candidate_products) == {"t1", "t2", "t3"}
     assert (session.last_upsell.model_dump(mode="json") if session.last_upsell else None) == result["upsell"]
+    assert result["accessories"] == []
+
+
+def test_recommended_accessories_are_known_to_the_session():
+    hub = product("hub", title="Bosch Smart Home Controller II", category="hub_gateway", price=78.0)
+    thermostat = product(
+        "bosch", price=70.0, facts=[fact("google_home")], requirements=[requirement("bosch_smart_home_controller")]
+    )
+    recommend = {t.__name__: t for t in build_tools(services_for([thermostat, hub]))}["recommend_products"]
+    context = FakeToolContext()
+    result = recommend("thermostat", context, category="heating_control", must_support=["Google Home"])
+    assert [a["product_id"] for a in result["accessories"]] == ["hub"]
+    assert "hub" in read_state(context.state).candidate_products
 
 
 def test_recommend_uses_session_preferences_as_defaults(tools):

@@ -83,6 +83,54 @@ def rank(candidates: Sequence[RankingCandidate]) -> list[RankingCandidate]:
     return sorted(candidates, key=lambda c: (-c.score, c.product.id))
 
 
+# Upsell rules in evaluation order: a candidate rejected by a later rule got further (a closer near-miss).
+UPSELL_RULES = (
+    "no_price",
+    "not_pricier",
+    "over_budget",
+    "other_product_type",
+    "low_relevance",
+    "not_capability_superset",
+)
+
+
+def upsell_rejection(
+    candidate: RankingCandidate, best: RankingCandidate, max_price: float | None, min_relative_relevance: float
+) -> str | None:
+    """Why `candidate` cannot be the upsell of `best` (None when it qualifies)."""
+    price, base_price = candidate.product.price, best.product.price
+    if candidate is best:
+        return "best_match"
+    if price is None or base_price is None:
+        return "no_price"
+    if price <= base_price:
+        return "not_pricier"
+    if max_price is not None and price > max_price:
+        return "over_budget"
+    if candidate.product.category != best.product.category or not same_product_type(candidate.product, best.product):
+        return "other_product_type"
+    if candidate.relevance < min_relative_relevance * best.relevance:
+        return "low_relevance"
+    if not candidate.capabilities > best.capabilities:
+        return "not_capability_superset"
+    return None
+
+
+def upsell_blockers(
+    ranked: Sequence[RankingCandidate],
+    best: RankingCandidate,
+    max_price: float | None,
+    min_relative_relevance: float,
+) -> dict[str, int]:
+    """Rejection reason -> number of candidates (the best match itself is not counted)."""
+    counts: dict[str, int] = {}
+    for candidate in ranked:
+        reason = upsell_rejection(candidate, best, max_price, min_relative_relevance)
+        if reason and reason != "best_match":
+            counts[reason] = counts.get(reason, 0) + 1
+    return counts
+
+
 def select_upsell(
     ranked: Sequence[RankingCandidate],
     best: RankingCandidate,
@@ -91,25 +139,13 @@ def select_upsell(
 ) -> UpsellSuggestion | None:
     """Higher-value alternative to `best`, chosen among compatible candidates only.
 
-    Conditions: same category and product type, higher price but within `max_price`, comparable relevance to the
-    need, and a strict superset of the best match's confirmed capabilities.
+    Conditions (see `upsell_rejection`): same category and product type, higher price but within `max_price`,
+    comparable relevance to the need, and a strict superset of the best match's confirmed capabilities.
     """
-    base_price = best.product.price
-    if base_price is None:
-        return None
     for candidate in ranked:  # already ordered by score: the best-fitting upgrade wins, not the priciest
-        price = candidate.product.price
-        if (
-            candidate is best
-            or price is None
-            or price <= base_price
-            or (max_price is not None and price > max_price)
-            or candidate.product.category != best.product.category
-            or not same_product_type(candidate.product, best.product)
-            or candidate.relevance < min_relative_relevance * best.relevance
-            or not candidate.capabilities > best.capabilities
-        ):
+        if upsell_rejection(candidate, best, max_price, min_relative_relevance):
             continue
+        price, base_price = candidate.product.price or 0.0, best.product.price or 0.0
         extra = sorted(vocabulary.label(c) for c in candidate.capabilities - best.capabilities)
         difference = round(price - base_price, 2)
         currency = candidate.product.currency or ""

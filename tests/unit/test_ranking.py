@@ -65,3 +65,23 @@ def test_same_product_type_rule():
         product("1", product_type="Radiator thermostat"), product("2", product_type="Room thermostat")
     )
     assert not ranking.same_product_type(product("1", product_type=None), product("2"))
+
+
+def test_upsell_rejection_names_the_failing_rule():
+    ranked = _ranked([BASIC, PREMIUM, PRICEY, SIDEGRADE, OTHER_TYPE, product("cheaper", price=10.0)])
+    best = next(c for c in ranked if c.product.id == "basic")
+    reasons = {c.product.id: ranking.upsell_rejection(c, best, 150, 0.75) for c in ranked}
+    assert reasons == {
+        "basic": "best_match",
+        "premium": None,
+        "pricey": "over_budget",
+        "sidegrade": "not_capability_superset",
+        "floor": "other_product_type",
+        "cheaper": "not_pricier",
+    }
+    assert ranking.upsell_blockers(ranked, best, 150, 0.75) == {
+        "over_budget": 1,
+        "not_capability_superset": 1,
+        "other_product_type": 1,
+        "not_pricier": 1,
+    }

@@ -4,6 +4,7 @@ uv run python -m smart_home_agent check
 uv run python -m smart_home_agent smoke
 uv run python -m smart_home_agent chat
 uv run python -m smart_home_agent guardrail-eval [--sweep] [--record]
+uv run python -m smart_home_agent upsell-eval
 """
 
 import argparse
@@ -43,6 +44,7 @@ def smoke() -> int:
         "unconfirmed": [(r.product.id, r.product.title, r.compatibility.value) for r in result.unconfirmed],
         "excluded": result.excluded,
         "upsell": result.upsell.model_dump() if result.upsell else None,
+        "accessories": [a.model_dump() for a in result.accessories],
     }
     print(json.dumps(summary, indent=2, ensure_ascii=False))
     return 0
@@ -77,15 +79,25 @@ def guardrail_eval(sweep: bool, record: bool) -> int:
     return run(get_settings(), do_sweep=sweep, record=record)
 
 
+def upsell_eval() -> int:
+    """Upselling KPI over a fixed request set (one embedding per case, no chat model)."""
+    from smart_home_agent.upsell_eval import evaluate, report
+
+    container = build_container(get_settings())
+    results = evaluate(container.services.recommendation.recommend)
+    print(report(results))
+    return 1 if any(r.guard_failures for r in results) else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="smart_home_agent")
-    parser.add_argument("command", choices=["check", "smoke", "chat", "guardrail-eval"])
+    parser.add_argument("command", choices=["check", "smoke", "chat", "guardrail-eval", "upsell-eval"])
     parser.add_argument("--sweep", action="store_true", help="guardrail-eval: print score separation per category")
     parser.add_argument("--record", action="store_true", help="guardrail-eval: rewrite the offline test fixture")
     args = parser.parse_args()
     if args.command == "guardrail-eval":
         return guardrail_eval(args.sweep, args.record)
-    return {"check": check, "smoke": smoke, "chat": chat}[args.command]()
+    return {"check": check, "smoke": smoke, "chat": chat, "upsell-eval": upsell_eval}[args.command]()
 
 
 if __name__ == "__main__":
