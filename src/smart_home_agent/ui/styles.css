@@ -50,16 +50,22 @@
 /* ---------- Masthead ---------- */
 
 /* The masthead row (brand + buttons) stays pinned while the conversation scrolls beneath it. The rule sits on
-   the row, so the brand and the buttons share one baseline and one underline. */
-.st-key-hp-masthead {
+   the row, so the brand and the buttons share one baseline and one underline. Streamlit wraps a horizontal
+   container in an stLayoutWrapper of the same height, so the sticky rule sits on that wrapper (a sticky
+   element never leaves its parent). */
+[data-testid="stLayoutWrapper"]:has(> .st-key-hp-masthead) {
   position: sticky;
   top: 0;
   z-index: 100;
+  margin-top: calc(-1 * var(--hp-s3));
+}
+
+.st-key-hp-masthead {
+  position: relative;
   flex-wrap: nowrap;
   background: #fff;
   padding-top: var(--hp-s3);
   padding-bottom: var(--hp-s3);
-  margin-top: calc(-1 * var(--hp-s3));
   margin-bottom: var(--hp-s2);
   border-bottom: 2px solid var(--hp-ink);
 }
