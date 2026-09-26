@@ -9,7 +9,7 @@ Google Home, Matter is not a transport protocol. Ambiguous input raises instead 
 import re
 from dataclasses import dataclass
 
-from catalog_ingestion.domain.enums import Dimension
+from catalog_ingestion.domain.enums import Dimension, RequirementKind
 from catalog_ingestion.vocabulary import categories as category_vocabulary
 from catalog_ingestion.vocabulary import compatibility as compatibility_vocabulary
 from catalog_ingestion.vocabulary import requirements as requirement_vocabulary
@@ -202,10 +202,21 @@ def resolve_owned_device(value: str) -> str:
     key = _key(value)
     if requirement_vocabulary.term_by_canonical(key):
         return key
-    found = requirement_vocabulary.lookup(value)
+    # "Hue-Bridge" is the usual German spelling of "Hue Bridge".
+    found = requirement_vocabulary.lookup(value) or requirement_vocabulary.lookup(value.replace("-", " "))
     if found is None or found.canonical == "smart_hub":
         raise TermResolutionError("owned device", value)
     return found.canonical
+
+
+def is_hub(canonical: str) -> bool:
+    """True for a specific hub, bridge or gateway (not the generic one, a network, a phone or a subscription)."""
+    found = requirement_vocabulary.term_by_canonical(canonical)
+    return (
+        found is not None
+        and found.kind in (RequirementKind.HUB, RequirementKind.GATEWAY)
+        and found.canonical != "smart_hub"
+    )
 
 
 def requirement_label(canonical: str) -> str:

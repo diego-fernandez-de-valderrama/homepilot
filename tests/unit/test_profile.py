@@ -40,7 +40,7 @@ def test_stated_facts_are_stored_with_canonical_ids_and_evidence(service):
         ("name", "Anna"),
         ("ecosystem", "apple_home"),
         ("ecosystem", "amazon_alexa"),
-        ("owned_device", "philips_hue_bridge"),
+        ("hub", "philips_hue_bridge"),
     }
     assert {f.evidence for f in update.added} == {"I use HomeKit and Alexa and I have a Hue Bridge"}
     assert all(f.session_id == "s1" for f in update.added)
@@ -108,6 +108,40 @@ def test_a_protocol_is_not_an_ecosystem(service):
 def test_unknown_hardware_keeps_the_customers_wording_without_guessing_a_hub(service):
     [fact] = remember(service, "I own an iPhone", owned_devices=["iPhone"]).added
     assert (fact.kind, fact.value, fact.canonical, fact.label) == (FactKind.OWNED_DEVICE, "iphone", None, "iPhone")
+
+
+def test_hubs_map_to_canonical_ids_or_keep_the_customers_wording(service):
+    update = remember(
+        service,
+        "Ich habe eine Hue-Bridge und eine Zigbee Bridge",
+        hubs=["Hue-Bridge", "Zigbee Bridge"],
+    )
+    assert {(f.kind, f.value, f.canonical) for f in update.added} == {
+        (FactKind.HUB, "philips_hue_bridge", "philips_hue_bridge"),
+        (FactKind.HUB, "zigbee bridge", None),  # no safe mapping: never guess a hub
+    }
+
+
+def test_a_hub_passed_as_owned_device_is_stored_as_hub(service):
+    remember(
+        service,
+        "I have a Homematic IP Access Point and an iPhone",
+        owned_devices=["Homematic IP Access Point", "iPhone"],
+    )
+    assert active(service) == {("hub", "homematic_ip_access_point"), ("owned_device", "iphone")}
+
+
+def test_a_hub_is_stored_once_whichever_field_names_it(service):
+    update = remember(service, "I have a Hue Bridge", hubs=["Hue Bridge"], owned_devices=["Hue Bridge"])
+    assert len(update.added) == 1
+    assert remember(service, "I have a Hue Bridge", owned_devices=["Hue Bridge"]).unchanged == ["philips_hue_bridge"]
+
+
+def test_no_longer_owned_retracts_hubs_by_wording(service):
+    remember(service, "I have a Zigbee bridge", hubs=["Zigbee bridge"])
+    update = remember(service, "I sold my zigbee bridge", no_longer_owned=["zigbee bridge"])
+    assert [f.kind for f in update.retracted] == [FactKind.HUB]
+    assert active(service) == set()
 
 
 def test_a_new_name_supersedes_the_old_one(service):

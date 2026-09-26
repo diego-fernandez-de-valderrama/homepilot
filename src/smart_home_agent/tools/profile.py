@@ -20,6 +20,7 @@ def make_remember_customer_facts(profiles: ProfileService):
         name: str | None = None,
         language: str | None = None,
         ecosystems: list[str] | None = None,
+        hubs: list[str] | None = None,
         owned_devices: list[str] | None = None,
         preferences: list[str] | None = None,
         no_longer_used: list[str] | None = None,
@@ -37,10 +38,12 @@ def make_remember_customer_facts(profiles: ProfileService):
           name: The customer's own name.
           language: Preferred conversation language, "en" or "de".
           ecosystems: Ecosystems or voice assistants the customer uses, e.g. ["Apple HomeKit", "Alexa"].
-          owned_devices: Smart home hardware the customer owns, e.g. ["Hue Bridge", "Sonos speaker"].
+          hubs: Bridges, hubs, gateways, access points or connectors the customer owns, e.g. ["Hue Bridge",
+            "Homematic IP Access Point", "Zigbee bridge"].
+          owned_devices: Other smart home hardware the customer owns, e.g. ["Sonos speaker", "Echo Dot"].
           preferences: Lasting preferences in the customer's words, e.g. ["prefers battery-powered devices"].
           no_longer_used: Ecosystems or voice assistants the customer stopped using.
-          no_longer_owned: Hardware the customer no longer owns (sold, broken, given away).
+          no_longer_owned: Hubs or hardware the customer no longer owns (sold, broken, given away).
         """
         update = profiles.remember(
             tool_context.user_id,
@@ -50,6 +53,7 @@ def make_remember_customer_facts(profiles: ProfileService):
             name=name,
             language=language,
             ecosystems=ecosystems,
+            hubs=hubs,
             owned_devices=owned_devices,
             preferences=preferences,
             no_longer_used=no_longer_used,

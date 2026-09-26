@@ -437,7 +437,7 @@ def test_customer_memory_dialog_lists_active_and_retracted_facts():
     rows = table.value.to_dict("records")
     assert [(r["kind"], r["value"], r["active"]) for r in rows] == [
         ("ecosystem", "amazon_alexa", True),
-        ("owned_device", "philips_hue_bridge", False),
+        ("hub", "philips_hue_bridge", False),
     ]
     assert rows[1]["retracted because"] == "I sold my Hue Bridge"
 

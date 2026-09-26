@@ -10,14 +10,19 @@ class FactKind(StrEnum):
     NAME = "name"
     LANGUAGE = "language"
     ECOSYSTEM = "ecosystem"  # ecosystems and voice assistants the customer uses (canonical ids)
-    OWNED_DEVICE = "owned_device"  # hardware the customer owns (canonical hub id when it maps safely)
+    HUB = "hub"  # bridges, hubs, gateways, access points, connectors (canonical hub id when it maps safely)
+    OWNED_DEVICE = "owned_device"  # other smart home hardware the customer owns, in their wording
     PREFERENCE = "preference"  # lasting preferences, free text
 
 
 # Kinds with one value at a time: a new fact supersedes the previous one.
 SINGLE_VALUED = frozenset({FactKind.NAME, FactKind.LANGUAGE})
 # Retracted facts the instruction still mentions, so the model does not assume them again.
-_NO_LONGER = {FactKind.ECOSYSTEM: "no longer uses", FactKind.OWNED_DEVICE: "no longer owns"}
+_NO_LONGER = {
+    FactKind.ECOSYSTEM: "no longer uses",
+    FactKind.HUB: "no longer owns",
+    FactKind.OWNED_DEVICE: "no longer owns",
+}
 
 
 class CustomerFact(BaseModel):

@@ -183,7 +183,8 @@ MEMORY_INSTRUCTION = """\
 The customer has a personal memory that lasts across conversations (section "Known about this customer
 (profile)" below). Keep it accurate:
 - When the customer states a lasting fact about THEMSELF (their name, the ecosystems or voice assistants
-  they use, smart home hardware they own, lasting preferences, preferred language), call
+  they use, bridges/hubs/gateways/connectors and other smart home hardware they own, lasting preferences,
+  preferred language), call
   remember_customer_facts with `evidence` = their exact words from the latest message, in addition to
   remember_preferences when it matters for the current request. Do not mention the memory tool.
 - When they say they no longer own or use something (sold, broken, switched), pass it in
@@ -199,8 +200,8 @@ The customer has a personal memory that lasts across conversations (section "Kno
 
 # Using the profile
 - Greet the customer by name when you know it (not in every message).
-- When the purchase is for the customer themself, use the stored ecosystems and owned hardware as their
-  setup (pass them to the tools and say briefly that you assume it, e.g. "since you use HomeKit").
+- When the purchase is for the customer themself, use the stored ecosystems and hubs as their setup (pass
+  the hubs as owned_devices to the tools and say briefly that you assume it, e.g. "since you use HomeKit").
 - When they shop for someone else, ignore the profile for that purchase and ask about the recipient's setup.
 - If the customer contradicts the profile, the latest statement wins: update the memory.
 """

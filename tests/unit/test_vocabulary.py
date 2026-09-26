@@ -83,6 +83,12 @@ def test_owned_devices():
     assert vocabulary.resolve_owned_device("Homematic IP Access Point") == "homematic_ip_access_point"
     with pytest.raises(TermResolutionError):
         vocabulary.resolve_owned_device("some gateway")  # generic hub says nothing about compatibility
+    assert vocabulary.resolve_owned_device("Hue-Bridge") == "philips_hue_bridge"  # German spelling
+
+
+def test_is_hub_only_for_specific_hubs():
+    assert vocabulary.is_hub("philips_hue_bridge") and vocabulary.is_hub("gardena_smart_gateway")
+    assert not any(vocabulary.is_hub(c) for c in ("smart_hub", "smartphone", "wifi_network", "ring_subscription"))
 
 
 def test_vocabulary_overview_lists_canonical_ids():

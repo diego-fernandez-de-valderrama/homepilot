@@ -3,8 +3,10 @@
 - a fact is stored only with a verbatim quote from the customer's current message, so cart contents, tool
   results and the model's own guesses can never become facts;
 - quotes about other people (a friend, family, a gift) are rejected: only the customer's own facts are kept;
-- ecosystems and voice assistants resolve to canonical ids (ambiguous input raises, as everywhere); owned
-  hardware maps to a canonical hub id only when that is safe, otherwise it keeps the customer's wording.
+- ecosystems and voice assistants resolve to canonical ids (ambiguous input raises, as everywhere);
+- hubs (bridges, gateways, access points, connectors) map to a canonical hub id only when that is safe,
+  otherwise they keep the customer's wording. Owned hardware that maps to a hub is stored as a hub too, so
+  the hubs are complete even when the model passes a bridge as an owned device.
 """
 
 import re
@@ -55,14 +57,27 @@ def _clean(values: list[str] | None) -> list[str]:
     return list(dict.fromkeys(v.strip()[:_MAX_VALUE] for v in values or [] if v.strip()))
 
 
+def _hub_id(value: str) -> str | None:
+    """Canonical hub id when `value` names a specific hub, else None."""
+    try:
+        canonical = vocabulary.resolve_owned_device(value)
+    except TermResolutionError:
+        return None
+    return canonical if vocabulary.is_hub(canonical) else None
+
+
 class MemoryRuleError(ValueError):
     """The whole update is refused (missing, foreign or third-party evidence): nothing is stored."""
 
 
 @dataclass(frozen=True, slots=True)
 class _Retraction:
-    kind: FactKind
+    kinds: tuple[FactKind, ...]
     text: str
+
+
+# Kinds a "no longer owned" statement retracts: the customer does not say whether it was a hub.
+_OWNED = (FactKind.HUB, FactKind.OWNED_DEVICE)
 
 
 class ProfileService:
@@ -85,6 +100,7 @@ class ProfileService:
         name: str | None = None,
         language: str | None = None,
         ecosystems: list[str] | None = None,
+        hubs: list[str] | None = None,
         owned_devices: list[str] | None = None,
         preferences: list[str] | None = None,
         no_longer_used: list[str] | None = None,
@@ -103,11 +119,12 @@ class ProfileService:
             else:
                 rejected.append(RejectedFact(kind=FactKind.LANGUAGE, value=language, reason="only 'en' or 'de'"))
         new += self._ecosystems(_clean(ecosystems), rejected)
+        new += [self._hub(value) for value in _clean(hubs)]
         new += [self._device(value) for value in _clean(owned_devices)]
         new += [NewFact(kind=FactKind.PREFERENCE, value=_normalize(p), label=p) for p in _clean(preferences)]
 
-        retractions = [_Retraction(FactKind.ECOSYSTEM, v) for v in _clean(no_longer_used)]
-        retractions += [_Retraction(FactKind.OWNED_DEVICE, v) for v in _clean(no_longer_owned)]
+        retractions = [_Retraction((FactKind.ECOSYSTEM,), v) for v in _clean(no_longer_used)]
+        retractions += [_Retraction(_OWNED, v) for v in _clean(no_longer_owned)]
         retract_ids, retract_rejected = self._retractions(current, retractions)
         rejected += retract_rejected
 
@@ -172,11 +189,18 @@ class ProfileService:
         return facts
 
     @staticmethod
-    def _device(value: str) -> NewFact:
+    def _hub(value: str) -> NewFact:
+        canonical = _hub_id(value)  # None: keep the customer's wording ("Zigbee bridge"), never guess a hub
+        return NewFact(kind=FactKind.HUB, value=canonical or _normalize(value), canonical=canonical, label=value)
+
+    @classmethod
+    def _device(cls, value: str) -> NewFact:
         try:
             canonical: str | None = vocabulary.resolve_owned_device(value)
         except TermResolutionError:
-            canonical = None  # no safe mapping: keep the customer's wording, never guess a hub
+            canonical = None  # no safe mapping: keep the customer's wording
+        if canonical is not None and vocabulary.is_hub(canonical):
+            return cls._hub(value)
         return NewFact(
             kind=FactKind.OWNED_DEVICE, value=canonical or _normalize(value), canonical=canonical, label=value
         )
@@ -191,10 +215,10 @@ class ProfileService:
             matches = [
                 f
                 for f in current.active()
-                if f.kind is item.kind and (f.value in candidates or _normalize(f.label) in candidates)
+                if f.kind in item.kinds and (f.value in candidates or _normalize(f.label) in candidates)
             ]
             if not matches:
-                rejected.append(RejectedFact(kind=item.kind, value=item.text, reason="not in the stored profile"))
+                rejected.append(RejectedFact(kind=item.kinds[0], value=item.text, reason="not in the stored profile"))
             ids += [f.id for f in matches if f.id not in ids]
         return ids, rejected
 
@@ -202,7 +226,7 @@ class ProfileService:
     def _retraction_values(item: _Retraction) -> set[str]:
         values = {_normalize(item.text)}
         try:
-            if item.kind is FactKind.ECOSYSTEM:
+            if FactKind.ECOSYSTEM in item.kinds:
                 values.add(vocabulary.resolve_term(item.text).canonical)
             else:
                 values.add(vocabulary.resolve_owned_device(item.text))
