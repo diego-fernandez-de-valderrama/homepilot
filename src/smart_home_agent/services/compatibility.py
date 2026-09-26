@@ -17,6 +17,7 @@ from smart_home_agent.models.compatibility import CompatibilityResult, Requireme
 from smart_home_agent.models.product import Product, ProductRequirement
 from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.services import vocabulary
+from smart_home_agent.services.accessories import AccessoryService
 from smart_home_agent.services.vocabulary import ResolvedTerm
 
 _DEVICE_KINDS = (RequirementKind.HUB, RequirementKind.GATEWAY)
@@ -121,8 +122,9 @@ def evaluate(
 
 
 class CompatibilityService:
-    def __init__(self, catalog: CatalogReader) -> None:
+    def __init__(self, catalog: CatalogReader, accessories: AccessoryService | None = None) -> None:
         self._catalog = catalog
+        self._accessories = accessories
 
     def check(
         self, product_ids: Sequence[str], terms: Sequence[ResolvedTerm], owned_devices: Sequence[str] | None = None
@@ -131,4 +133,10 @@ class CompatibilityService:
         missing = [pid for pid in product_ids if pid not in {p.id for p in products}]
         if missing:
             raise ProductNotFoundError(missing)
-        return [evaluate(product, terms, owned_devices) for product in products]
+        results = []
+        for product in products:
+            result = evaluate(product, terms, owned_devices)
+            if self._accessories:  # the catalog hub products for required hubs the customer may not own
+                result.accessories = self._accessories.for_product(product, result.requirements)
+            results.append(result)
+        return results

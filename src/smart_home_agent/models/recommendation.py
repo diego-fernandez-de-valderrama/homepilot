@@ -1,11 +1,11 @@
 """Recommendation request and result. Compatibility gates the candidate set before any ranking."""
 
-from typing import Literal, Self
+from typing import Self
 
 from catalog_ingestion.domain.enums import FactStatus
 from pydantic import BaseModel, Field, model_validator
 
-from smart_home_agent.models.compatibility import TermCheck
+from smart_home_agent.models.compatibility import AccessorySuggestion, TermCheck
 from smart_home_agent.models.product import ProductSummary
 
 
@@ -45,19 +45,6 @@ class UpsellSuggestion(BaseModel):
     base_product_id: str
     price_difference: float
     upgrade_reasons: list[str]  # factual, computed from structured data
-
-
-class AccessorySuggestion(BaseModel):
-    """A catalog hub/gateway that a recommended product requires and the customer may not own yet."""
-
-    for_product_id: str
-    requirement_label: str
-    canonical_item: str
-    status: Literal["missing", "unverified"]  # missing = user said they do not own it; unverified = not stated
-    product_id: str
-    title: str
-    price: float
-    bundle_total: float  # price of `for_product_id` + this accessory
 
 
 class Recommendation(BaseModel):

@@ -3,7 +3,7 @@
 from typing import Literal
 
 from catalog_ingestion.domain.enums import Dimension, FactStatus, Necessity, RequirementKind
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from smart_home_agent.models.evidence import Evidence
 
@@ -29,6 +29,19 @@ class RequirementCheck(BaseModel):
     evidence: Evidence
 
 
+class AccessorySuggestion(BaseModel):
+    """A catalog hub/gateway that a product requires and the customer may not own yet."""
+
+    for_product_id: str
+    requirement_label: str
+    canonical_item: str
+    status: Literal["missing", "unverified"]  # missing = user said they do not own it; unverified = not stated
+    product_id: str
+    title: str
+    price: float
+    bundle_total: float  # price of `for_product_id` + this accessory
+
+
 class CompatibilityResult(BaseModel):
     product_id: str
     title: str
@@ -36,3 +49,4 @@ class CompatibilityResult(BaseModel):
     checks: list[TermCheck]
     requirements: list[RequirementCheck]
     requires_professional_installation: bool
+    accessories: list[AccessorySuggestion] = Field(default_factory=list)  # catalog hubs for missing/unverified hubs

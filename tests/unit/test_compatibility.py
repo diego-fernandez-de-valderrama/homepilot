@@ -106,3 +106,10 @@ def test_service_reports_unknown_products():
     service = CompatibilityService(FakeCatalog([product("1")]))
     with pytest.raises(ProductNotFoundError):
         service.check(["1", "404"], [HOMEKIT])
+
+
+def test_service_without_accessory_service_offers_no_hub():
+    dimmer = product("1", requirements=[requirement("bosch_smart_home_controller")])
+    [result] = CompatibilityService(FakeCatalog([dimmer])).check(["1"], [])
+    assert result.requirements[0].status == "unverified"
+    assert result.accessories == []

@@ -1,11 +1,26 @@
+from catalog_ingestion.domain.enums import RequirementKind
 from google.adk.tools import ToolContext
 
 from smart_home_agent.agent import state
 from smart_home_agent.container import Services
+from smart_home_agent.models.compatibility import CompatibilityResult
 from smart_home_agent.services import vocabulary
 from smart_home_agent.tools._common import ToolResult, ok, resolve_devices, tool_errors
 
 MAX_PRODUCTS = 10
+_SETUP_KINDS = (RequirementKind.HUB, RequirementKind.GATEWAY, RequirementKind.SUBSCRIPTION)
+# Unknown stays unknown: no listed requirement is not proof that none exists.
+_NO_SETUP_REQUIREMENT = (
+    "The catalog lists no hub, gateway or subscription for this product. Say exactly that; do not claim "
+    "that it works on its own unless a requirement states stand-alone operation."
+)
+
+
+def _with_notes(result: CompatibilityResult) -> dict:
+    payload = result.model_dump(mode="json")
+    if not any(r.kind in _SETUP_KINDS for r in result.requirements):
+        payload["requirements_note"] = _NO_SETUP_REQUIREMENT
+    return payload
 
 
 def make_check_compatibility(services: Services):
@@ -21,8 +36,10 @@ def make_check_compatibility(services: Services):
 
         Status per requirement: "supported" (explicit evidence), "unsupported" (explicit negative
         evidence) or "unknown" (the catalog does not say, which is NOT the same as unsupported).
-        Also reports the product's own requirements (hubs, gateways, subscriptions) and whether
-        professional installation is required.
+        Also reports the product's own requirements (hubs, gateways, subscriptions; `necessity` says
+        whether they are required or only needed for some features), whether professional installation
+        is required, and `accessories`: the catalog hub/gateway products for required hubs the customer
+        may not own, with the bundle total.
 
         Args:
           product_ids: Catalog product ids to check (1-10).
@@ -39,6 +56,6 @@ def make_check_compatibility(services: Services):
         results = services.compatibility.check(
             [pid.strip() for pid in product_ids], terms, resolve_devices(owned_devices)
         )
-        return ok(results=[r.model_dump(mode="json") for r in results])
+        return ok(results=[_with_notes(r) for r in results])
 
     return check_compatibility

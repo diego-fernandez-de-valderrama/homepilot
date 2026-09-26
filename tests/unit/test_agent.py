@@ -49,6 +49,18 @@ def test_instruction_contains_rules_vocabulary_and_session():
     assert "The interface asks the customer to confirm every add and remove" in text
 
 
+def test_instruction_frames_upselling_as_setup_completion():
+    text = build_instruction(SimpleNamespace(state={}))
+    assert "Upselling never means the most expensive product" in text
+    for kind in ("- Required:", "- Optional:", "- Higher-value alternative:", "- Anything else is unnecessary"):
+        assert kind in text
+    assert "The budget covers the whole setup" in text
+    assert "# Setup overview" in text and "# What else does it need" in text
+    assert "The catalog lists no hub, gateway\nor subscription for it" in text
+    assert "hub in one add_to_cart call" in text
+    assert "Never add anything silently" in text
+
+
 def test_instruction_keeps_the_cart_out_of_the_prompt():
     cart = {"cart": [{"product_id": "41234567", "quantity": 2}], "cart_checked": True}
     text = build_instruction(SimpleNamespace(state={STATE_KEY: cart}))

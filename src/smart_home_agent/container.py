@@ -37,12 +37,13 @@ class Services:
     @classmethod
     def create(cls, catalog: CatalogReader, index: SemanticIndex, settings: AgentSettings) -> "Services":
         retrieval = RetrievalService(catalog, index)
+        accessories = AccessoryService(catalog)  # shared, so the hub products are loaded once
         return cls(
             catalog=catalog,
             retrieval=retrieval,
-            compatibility=CompatibilityService(catalog),
+            compatibility=CompatibilityService(catalog, accessories),
             recommendation=RecommendationService(
-                retrieval, AccessoryService(catalog), settings.candidate_pool, settings.upsell_min_relevance
+                retrieval, accessories, settings.candidate_pool, settings.upsell_min_relevance
             ),
             comparison=ComparisonService(catalog),
             evidence=EvidenceService(catalog),

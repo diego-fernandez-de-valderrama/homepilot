@@ -120,6 +120,30 @@ def test_check_compatibility_contract(tools):
     assert tools["check_compatibility"](["404"], ["Matter"], FakeToolContext())["status"] == "not_found"
 
 
+def test_check_compatibility_offers_the_required_hub_product():
+    dimmer = product(
+        "dimmer", price=68.0, facts=[fact("amazon_alexa")], requirements=[requirement("bosch_smart_home_controller")]
+    )
+    controller = product(
+        "controller", title="Bosch Smart Home Controller II", category="hub_gateway", product_type="Hub", price=78.0
+    )
+    check = by_name(build_tools(services_for([dimmer, controller])))["check_compatibility"]
+    [result] = check(["dimmer"], [], FakeToolContext())["results"]
+    [accessory] = result["accessories"]
+    assert (accessory["product_id"], accessory["status"], accessory["bundle_total"]) == (
+        "controller",
+        "unverified",
+        146.0,
+    )
+
+    owned = check(["dimmer"], [], FakeToolContext(), owned_devices=["Bosch Smart Home Controller"])
+    assert owned["results"][0]["accessories"] == []
+    assert "requirements_note" not in result
+    [plain] = check(["controller"], [], FakeToolContext())["results"]
+    assert plain["accessories"] == []
+    assert "lists no hub, gateway or subscription" in plain["requirements_note"]
+
+
 def test_filter_products_contract(tools):
     context = FakeToolContext()
     result = tools["filter_products"](context, supports=["Matter"], max_price=150)
