@@ -153,3 +153,40 @@ def test_titles_echoed_next_to_their_own_tag_are_removed():
     other = f"The {tag} is cheaper than the Acme Pro Thermostat."
     assert rich.strip_echoed_titles(other, titles) == other  # only the product's own title, only next to it
     assert rich.to_plain(f"The {tag} {BASIC.title} fits.", titles) == f"The {BASIC.title} fits."
+
+
+def test_strip_invalid_tags_removes_what_would_never_render():
+    text = (
+        f'Add a <item id="philips_hue_bridge"/>. Then <item id="{BASIC.id}"/> works.\n'
+        f'<items ids="hue-bridge"/>\n<compare ids="{BASIC.id}"/>\n<upgrade from="{PRO.id}" to="{BASIC.id}"/>\n'
+        f"The <item>Hue Bridge</item> (<item id='x'>) is required <items ids=\"{BASIC.id}\""
+    )
+    assert rich.strip_invalid_tags(text, upsell=(BASIC.id, PRO.id)) == (
+        f'Add a. Then <item id="{BASIC.id}"/> works.\nThe Hue Bridge is required'
+    )
+
+
+def test_strip_invalid_tags_keeps_valid_tags_and_code():
+    code = '```\n<item id="hue"/>\n```'
+    assert rich.strip_invalid_tags(ANSWER, upsell=(BASIC.id, PRO.id)) == ANSWER
+    assert rich.strip_invalid_tags(code) == code
+    assert rich.strip_invalid_tags(ANSWER) == ANSWER.replace(f'<upgrade from="{BASIC.id}" to="{PRO.id}"/>\n', "")
+
+
+def test_invalid_tags_never_reach_the_interface_or_the_history():
+    llm = ScriptedLlm(
+        script=[text_response(f'You need a <item id="philips_hue_bridge"/> for <item id="{BASIC.id}"/>.')]
+    )
+    services = services_for([BASIC, PRO])
+    agent = AgentService(build_agent(services, settings(), model=llm), "test-app", services.rich_content)
+    reply = agent.chat("s1", "Thermostat for Google Home?")
+    assert reply.text == f'You need a for <item id="{BASIC.id}"/>.'
+    agent.chat("s1", "Thanks")
+    history = llm.requests[-1].contents[-2]
+    assert history.parts is not None and history.parts[0].text == reply.text
+
+
+def test_answer_of_only_invalid_tags_is_replaced_by_the_fallback():
+    llm = ScriptedLlm(script=[text_response('<items ids="hue_bridge"/>')])
+    reply = AgentService(build_agent(services_for([BASIC]), settings(), model=llm), "test-app").chat("s1", "Hi")
+    assert reply.text and "<" not in reply.text

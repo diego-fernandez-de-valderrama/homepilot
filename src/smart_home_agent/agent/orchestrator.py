@@ -63,7 +63,8 @@ def build_agent(
 
     The guardrail wraps the unchanged agent through ADK callbacks: the semantic input check runs
     before the model (only when a `guardrail` is given and AGENT_GUARDRAIL_ENABLED is true) and the
-    deterministic output check after it (AGENT_GUARDRAIL_OUTPUT_CHECK). `model` replaces the Gemini
+    deterministic output check after it (AGENT_GUARDRAIL_OUTPUT_CHECK). Answer tags that would never render
+    are always removed from the answer, for the interface and the history. `model` replaces the Gemini
     model (tests only).
     """
     if model is None:
@@ -101,7 +102,7 @@ def build_agent(
             ),
         ),
         before_agent_callback=make_input_callback(input_guardrail) if input_guardrail else None,
-        after_model_callback=make_output_callback(validator) if validator else None,
+        after_model_callback=make_output_callback(validator),
         after_tool_callback=make_cart_result_callback(services),
     )
 

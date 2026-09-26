@@ -8,6 +8,7 @@ Five self-closing tags are recognized, with 8-digit catalog ids only:
     <upgrade from="ID" to="ID"/>     higher-value alternative (only the recommender's upsell)
 
 Anything else that looks like markup stays plain text, and tags inside fenced code blocks are not parsed.
+`strip_invalid_tags` removes malformed tags from the answer before it is shown or kept in the history.
 A tag only says what to show: every value comes from `RichContent`, which is resolved from PostgreSQL.
 """
 
@@ -31,6 +32,10 @@ _BLOCK = re.compile(
     rf'|<upgrade\s+from="(?P<from>{_ID})"\s+to="(?P<to>{_ID})"\s*/>'
 )
 _FENCE = re.compile(r"(```.*?(?:```|\Z))", re.DOTALL)  # capturing: re.split keeps the fences
+# Anything that looks like one of the tags (opening, closing, self-closing, or cut off at the line end).
+_TAG_LIKE = re.compile(r"</?\s*(?:items?|compare|compatibility|upgrade)\b[^<>\n]*(?:>|$)", re.IGNORECASE | re.MULTILINE)
+_REMOVED = "\x00"  # marks a removed tag, so a line that held only tags goes away entirely
+_COMPARE_SIZES = range(2, 5)  # services.comparison.MIN_PRODUCTS..MAX_PRODUCTS
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +110,47 @@ def parse(text: str) -> list[Segment]:
         buffer.append(part[last:])
     flush()
     return segments
+
+
+def _renderable(tag: str, upsell: tuple[str, str] | None) -> bool:
+    if _ITEM.fullmatch(tag):
+        return True
+    match = _BLOCK.fullmatch(tag)
+    if match is None:
+        return False
+    match _block(match):
+        case CompareBlock(ids):
+            return len(ids) in _COMPARE_SIZES
+        case UpgradeBlock(from_id, to_id):
+            return (from_id, to_id) == upsell
+    return True
+
+
+def _tidy(text: str) -> str:
+    text = re.sub(r"\(\s*\)", "", text)
+    text = re.sub(r"(?<=\S)[ \t]{2,}", " ", text)  # keeps list indentation
+    text = re.sub(r"[ \t]+(?=[.,;:!?)])", "", text)
+    text = re.sub(r"[ \t]+$", "", text, flags=re.MULTILINE)
+    return re.sub(r"\n{3,}", "\n\n", text)
+
+
+def strip_invalid_tags(text: str, upsell: tuple[str, str] | None = None) -> str:
+    """Removes tag markup that would never be rendered: a tag with a non-catalog id (`<item id="hue_bridge"/>`),
+    wrong attributes, an opening/closing pair (the enclosed text stays), a <compare> of fewer than two or more
+    than four products, or an <upgrade> that is not `upsell` (base id, upsell id). Valid tags and code fences
+    stay unchanged. Whether an id exists in the catalog is the output check's job."""
+    out: list[str] = []
+    for part, is_code in _outside_fences(text):
+        if is_code:
+            out.append(part)
+            continue
+        marked = _TAG_LIKE.sub(lambda m: m[0] if _renderable(m[0], upsell) else _REMOVED, part)
+        if marked == part:
+            out.append(part)
+            continue
+        marked = re.sub(rf"^[ \t]*{_REMOVED}(?:[ \t]*{_REMOVED})*[ \t]*(?:\n|$)", "", marked, flags=re.MULTILINE)
+        out.append(_tidy(marked.replace(_REMOVED, "")))
+    return "".join(out).strip()
 
 
 def render_prose(text: str, render_text: Callable[[str], str], render_item: Callable[[str], str]) -> str:
