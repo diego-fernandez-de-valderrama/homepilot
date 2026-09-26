@@ -1,7 +1,7 @@
 """Business models for products, mapped from the PostgreSQL catalog by the repository."""
 
 from catalog_ingestion.domain.enums import Dimension, FactStatus, Necessity, RequirementKind
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from smart_home_agent.models.evidence import Evidence, FieldProvenance
 
@@ -33,6 +33,16 @@ class Spec(BaseModel):
     unit: str | None = None
 
 
+class ProductVersion(BaseModel):
+    """Another version of a product (same title): enough to name it and to offer it by id."""
+
+    id: str
+    variant: str | None
+    subtitle: str | None
+    price: float | None
+    currency: str | None
+
+
 class ProductSummary(BaseModel):
     """Compact view used in lists (search, filter, recommendation)."""
 
@@ -49,6 +59,15 @@ class ProductSummary(BaseModel):
     summary_en: str | None
     summary_de: str | None
     source_url: str | None
+    # Versions of one product (color, size, pack) share a title; these catalog strings tell them apart.
+    subtitle: str | None = None
+    variant: str | None = None  # this version's own option label, e.g. "Anthrazit", "2 Stk.", "806 lm"
+    variant_options: list[str] = Field(default_factory=list)  # every option label the shop lists for the product
+
+    @property
+    def name(self) -> str:
+        """Title plus this version's option label when it has one ("Access Point 2 (Anthrazit)")."""
+        return f"{self.title} ({self.variant})" if self.variant else self.title
 
 
 class Product(ProductSummary):
@@ -68,6 +87,11 @@ class Product(ProductSummary):
     attributes: dict[str, dict[str, str]]  # original catalog attributes {section: {key: value}}
     provenance: list[FieldProvenance]
     validation_notes: list[str]
+
+    def version(self) -> ProductVersion:
+        return ProductVersion(
+            id=self.id, variant=self.variant, subtitle=self.subtitle, price=self.price, currency=self.currency
+        )
 
     def summary(self) -> ProductSummary:
         return ProductSummary.model_validate(self.model_dump(include=set(ProductSummary.model_fields)))

@@ -1,12 +1,12 @@
 """Recommendation request and result. Compatibility gates the candidate set before any ranking."""
 
-from typing import Self
+from typing import Literal, Self
 
 from catalog_ingestion.domain.enums import FactStatus
 from pydantic import BaseModel, Field, model_validator
 
 from smart_home_agent.models.compatibility import AccessorySuggestion, TermCheck
-from smart_home_agent.models.product import ProductSummary
+from smart_home_agent.models.product import ProductSummary, ProductVersion
 
 
 class RecommendationRequest(BaseModel):
@@ -26,6 +26,16 @@ class RecommendationRequest(BaseModel):
         return self
 
 
+VersionStatus = Literal["confirmed", "unconfirmed", "unsupported", "filtered_out"]
+
+
+class VersionOption(ProductVersion):
+    """Another version of a recommended product, with its own result for this request."""
+
+    status: VersionStatus
+    filter_reason: str | None = None  # the hard filter that removed it (price, brand, ...) when filtered_out
+
+
 class RankedProduct(BaseModel):
     product: ProductSummary
     compatibility: FactStatus  # overall status for the requested terms
@@ -36,11 +46,13 @@ class RankedProduct(BaseModel):
     missing_requirements: list[str]  # required hubs/gateways the user said they do not own
     unverified_requirements: list[str]  # required hubs/gateways; ownership not stated
     requires_professional_installation: bool
+    other_versions: list[VersionOption] = Field(default_factory=list)  # same title, other color/size/pack
 
 
 class UpsellSuggestion(BaseModel):
     product_id: str
     title: str
+    variant: str | None = None  # the upsell's version label (color, size, pack), when it has one
     price: float
     base_product_id: str
     price_difference: float

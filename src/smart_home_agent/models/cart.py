@@ -44,6 +44,8 @@ class CartView(BaseModel):
             {
                 "product_id": line.product_id,
                 "title": line.product.title if line.product else None,
+                "variant": line.product.variant if line.product else None,  # tells versions of one product apart
+                "subtitle": line.product.subtitle if line.product else None,
                 "quantity": line.quantity,
                 "unit_price": line.unit_price,
                 "line_total": line.line_total,

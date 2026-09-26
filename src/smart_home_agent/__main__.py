@@ -7,6 +7,7 @@ uv run python -m smart_home_agent smoke
 uv run python -m smart_home_agent chat [--user ID]
 uv run python -m smart_home_agent guardrail-eval [--sweep] [--record]
 uv run python -m smart_home_agent upsell-eval
+uv run python -m smart_home_agent variant-eval
 """
 
 import argparse
@@ -120,7 +121,7 @@ def _print_reply(reply: "AgentReply") -> None:
     guardrail = reply.guardrail
     verdict = guardrail.input.category if guardrail and guardrail.input else "n/a"
     replaced = f", reply: {guardrail.response_type}" if guardrail and guardrail.response_type else ""
-    text = to_plain(reply.text, reply.rich.titles() if reply.rich else {})
+    text = to_plain(reply.text, reply.rich.titles(), reply.rich.names()) if reply.rich else to_plain(reply.text, {})
     print(f"\n{text}\n  [tools: {tools}] [guardrail: {verdict}{replaced}]\n")
 
 
@@ -128,7 +129,7 @@ def _ask(change: CartConfirmation) -> bool:
     verb = "Add to" if change.action == "add" else "Remove from"
     print(f"{verb} the cart:")
     for line in change.lines:
-        title = line.product.title if line.product else f"product {line.product_id} (not in the catalog)"
+        title = line.product.name if line.product else f"product {line.product_id} (not in the catalog)"
         amount = "all units of" if line.quantity is None else f"{line.quantity} x"
         print(f"  - {amount} {title}")
     answer = input("Confirm? [y/N] ")
@@ -152,9 +153,26 @@ def upsell_eval() -> int:
     return 1 if any(r.guard_failures for r in results) else 0
 
 
+def variant_eval() -> int:
+    """Product version grouping over a fixed request set (one embedding per case, no chat model)."""
+    from smart_home_agent.variant_eval import evaluate, report
+
+    container = build_container(get_settings())
+    results = evaluate(container.services.recommendation.recommend)
+    print(report(results))
+    return 1 if any(r.guard_failures for r in results) else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="smart_home_agent")
-    parser.add_argument("command", choices=["check", "init-memory", "smoke", "chat", "guardrail-eval", "upsell-eval"])
+    commands = {
+        "check": check,
+        "init-memory": init_memory,
+        "smoke": smoke,
+        "upsell-eval": upsell_eval,
+        "variant-eval": variant_eval,
+    }
+    parser.add_argument("command", choices=[*commands, "chat", "guardrail-eval"])
     parser.add_argument("--sweep", action="store_true", help="guardrail-eval: print score separation per category")
     parser.add_argument("--record", action="store_true", help="guardrail-eval: rewrite the offline test fixture")
     parser.add_argument("--user", default="customer", help="chat: customer id (each customer has their own memory)")
@@ -163,7 +181,7 @@ def main() -> int:
         return guardrail_eval(args.sweep, args.record)
     if args.command == "chat":
         return chat(args.user)
-    return {"check": check, "init-memory": init_memory, "smoke": smoke, "upsell-eval": upsell_eval}[args.command]()
+    return commands[args.command]()
 
 
 if __name__ == "__main__":

@@ -120,6 +120,7 @@ def init_session() -> None:
         st.session_state.decisions = {}  # confirmation request id -> the customer's choice
         st.session_state.submitted = set()  # request ids already answered in a confirmation turn
         st.session_state.expired = set()  # request ids left open when the customer typed a new message
+        st.session_state.cart_open = False  # the customer panel (cart and setup) on the right
 
 
 # ---------- Cart ----------
@@ -143,9 +144,8 @@ def change_quantity(product_id: str, quantity: int) -> None:
 
 
 def render_cart(view: CartView, busy: bool) -> None:
-    """Sidebar cart: the customer can change quantities or remove lines; only the advisor adds products.
-    `busy`: a turn runs in this script run, so edits wait until it is done."""
-    st.html(cart_header_html(view))
+    """Cart lines in the customer panel: the customer can change quantities or remove lines; only the advisor
+    adds products. `busy`: a turn runs in this script run, so edits wait until it is done."""
     missing = missing_images(card_image_urls([line.product for line in view.lines if line.product]))
     for line in view.lines:
         pid = line.product_id
@@ -185,6 +185,49 @@ def render_cart(view: CartView, busy: bool) -> None:
                 )
     if view.lines:
         st.html(cart_total_html(view))
+
+
+def toggle_cart() -> None:
+    st.session_state.cart_open = not st.session_state.cart_open
+
+
+def render_masthead(cart: CartView, busy: bool) -> None:
+    """Pinned masthead: the brand, "New conversation" and the cart button that opens the customer panel."""
+    with st.container(horizontal=True, vertical_alignment="center", gap="small", key="hp-masthead"):
+        st.html(masthead_html())
+        if st.button("New conversation", icon=":material/refresh:", key="hp-new-conversation", disabled=busy):
+            reset_conversation()
+            st.rerun()
+        count = cart.item_count
+        label = f"{count} item{'s' if count != 1 else ''} in your cart"
+        st.button(
+            str(count),
+            icon=":material/shopping_cart:",
+            key=f"hp-cart-toggle-{'filled' if count else 'empty'}",  # the key suffix drives the filled style
+            help=f"{label}. Click to {'hide' if st.session_state.cart_open else 'show'} your cart.",
+            on_click=toggle_cart,
+            disabled=busy,  # a click would rerun the script and cut off the running turn
+        )
+
+
+def render_cart_panel(cart: CartView, busy: bool) -> None:
+    """The customer panel on the right (pinned by CSS): the cart, then what the advisor knows about the setup.
+    The dark sidebar on the left holds only developer and testing controls."""
+    if not st.session_state.cart_open:
+        return
+    with st.container(key="hp-cart-panel"):
+        with st.container(horizontal=True, vertical_alignment="center", key="hp-cart-panel-head"):
+            st.html(cart_header_html(cart))
+            st.button(
+                "",
+                icon=":material/close:",
+                key="hp-cart-close",
+                help="Hide your cart",
+                on_click=toggle_cart,
+                disabled=busy,
+            )
+        render_cart(cart, busy)
+        st.html(setup_panel_html(latest_state(st.session_state.messages)))
 
 
 # ---------- Cart confirmations ----------
@@ -406,17 +449,13 @@ def show_customer_memory(customer_id: str) -> None:
     st.json(profile.model_dump(mode="json"), expanded=False)
 
 
-def render_sidebar(cart: CartView, busy: bool) -> bool:
-    """Returns the developer toggle."""
+def render_sidebar(busy: bool) -> bool:
+    """The dark rail: developer and testing controls only (customer content lives in the customer panel).
+    Returns the developer toggle."""
     with st.sidebar:
         st.html('<p class="hp-rail-brand"><span class="hp-rail-brand__mark"></span>HomePilot</p>')
+        st.html('<p class="hp-rail-label">Testing</p>')
         render_customer_picker(stored_customers(), busy)
-        st.html(setup_panel_html(latest_state(st.session_state.messages)))
-        render_cart(cart, busy)
-        st.html('<p class="hp-rail-label">Conversation</p>')
-        if st.button("New conversation", icon=":material/refresh:", type="primary", width="stretch"):
-            reset_conversation()
-            st.rerun()
         st.html('<p class="hp-rail-label">Developer</p>')
         debug = st.toggle("Developer panel", key="hp-debug", help="Show language, tools, candidates and compatibility.")
         if debug and st.button("Stored data about me", icon=":material/person_search:", width="stretch"):
@@ -562,14 +601,23 @@ def main() -> None:
     inject_behaviour()
     init_session()
 
-    prompt = st.chat_input("Ask about smart home products...", submit_mode="disable")
-    if prompt:  # typing instead of deciding leaves the open changes unconfirmed (never sent later)
+    # An open cart change blocks the input: the customer answers it on its card first.
+    awaiting_decision = bool(open_confirmations())
+    placeholder = (
+        "Confirm or cancel the cart change above to continue"
+        if awaiting_decision
+        else "Ask about smart home products..."
+    )
+    prompt = st.chat_input(placeholder, submit_mode="disable", disabled=awaiting_decision)
+    if prompt:  # guard only (the input is disabled then): the open changes stay unconfirmed, never sent later
         st.session_state.expired |= {c.request_id for c in open_confirmations()}
     decisions = None if prompt else ready_decisions()
 
+    busy = bool(prompt or decisions)
+    debug = render_sidebar(busy)
     cart = current_cart()
-    debug = render_sidebar(cart, busy=bool(prompt or decisions))
-    st.html(masthead_html(cart.item_count))
+    render_masthead(cart, busy)
+    render_cart_panel(cart, busy)
 
     messages = st.session_state.messages
     for index, message in enumerate(messages):
@@ -578,6 +626,7 @@ def main() -> None:
     session_id = st.session_state.session_id
     customer_id = st.session_state.customer_id
     if decisions:
+        adds = {c.request_id for c in open_confirmations() if c.action == "add"}
         st.session_state.submitted |= set(decisions)
         confirmed = sum(decisions.values())
         decision = {"role": "decision", "confirmed": confirmed, "cancelled": len(decisions) - confirmed}
@@ -590,6 +639,8 @@ def main() -> None:
             for request_id in decisions:
                 st.session_state.decisions.pop(request_id, None)
             return
+        if any(decisions[r] for r in adds):  # show the customer what they just added
+            st.session_state.cart_open = True
         st.rerun()
 
     if not messages and not prompt:

@@ -60,3 +60,22 @@ def test_google_assistant_products_are_not_google_home_products(catalog):
 def test_sessions_are_read_only(catalog):
     with catalog._sessions() as session, pytest.raises(InternalError):
         session.execute(text("UPDATE products SET title = title WHERE false"))
+
+
+def test_versions_share_the_title_and_carry_their_own_variant(catalog):
+    _, products = catalog.filter_products(ProductFilter(limit=500))
+    assert any(p.subtitle for p in products)  # read from the untouched raw input
+    with_options = [p for p in products if len(p.variant_options) > 1]
+    versions = catalog.get_versions([p.title for p in with_options])
+    families = [family for family in versions.values() if len(family) > 1]
+    assert families, "the catalog has products sold in several versions"
+    for family in families:
+        assert len({p.title for p in family}) == 1
+        prices = [p.price for p in family if p.price is not None]
+        assert prices == sorted(prices)  # cheapest first
+        for p in family:
+            if p.variant:
+                assert p.variant in p.variant_options
+                assert p.variant.casefold() in (p.subtitle or "").casefold()
+    assert catalog.get_versions([]) == {}
+    assert catalog.get_versions(["no such title"]) == {}

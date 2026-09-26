@@ -107,6 +107,13 @@ class FakeCatalog:
     def get_product(self, product_id: str) -> Product | None:
         return self.products.get(product_id)
 
+    def get_versions(self, titles: Sequence[str]) -> dict[str, list[Product]]:
+        versions: dict[str, list[Product]] = {}
+        for p in sorted(self.products.values(), key=lambda p: (p.price is None, p.price or 0.0, p.id)):
+            if p.title in titles:
+                versions.setdefault(p.title, []).append(p)
+        return versions
+
     def filter_products(self, criteria: ProductFilter) -> tuple[int, list[Product]]:
         matches = [
             p

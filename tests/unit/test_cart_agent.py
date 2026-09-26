@@ -76,7 +76,9 @@ def test_rejected_change_reports_the_unchanged_cart():
     assert result["changes"] == [
         {
             "product_id": "30173510",
-            "title": None,
+            "title": "Acme Smart Radiator Thermostat",  # named from the catalog, although not in the cart
+            "variant": None,
+            "subtitle": None,
             "quantity_changed": 0,
             "remaining_of_product": 0,
             "note": "none of this product left in the cart",

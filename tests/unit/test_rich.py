@@ -75,6 +75,9 @@ def test_resolve_without_tags_makes_no_catalog_call():
         def filter_products(self, criteria):
             raise AssertionError("no catalog call expected")
 
+        def get_versions(self, titles):
+            raise AssertionError("no catalog call expected")
+
     assert RichContentService(NoCatalog()).resolve("Hello! How can I help?") is None
 
 
@@ -142,8 +145,11 @@ def test_titles_echoed_next_to_their_own_tag_are_removed():
         f"The {tag} {BASIC.title} fits.",
         f"The **{BASIC.title}** ({tag}) fits.",
         f"The {BASIC.title} {tag} fits.",
+        f"The {tag} ({BASIC.title}) fits.",
     ):
         assert rich.strip_echoed_titles(echoed, titles) == f"The {tag} fits."
+    partial = f"The {tag} ({BASIC.title} in anthracite) fits."
+    assert rich.strip_echoed_titles(partial, titles) == f"The {tag} (in anthracite) fits."
     other = f"The {tag} is cheaper than the Acme Pro Thermostat."
     assert rich.strip_echoed_titles(other, titles) == other  # only the product's own title, only next to it
     assert rich.to_plain(f"The {tag} {BASIC.title} fits.", titles) == f"The {BASIC.title} fits."

@@ -54,7 +54,7 @@ class Services:
             retrieval=retrieval,
             compatibility=CompatibilityService(catalog, accessories),
             recommendation=RecommendationService(
-                retrieval, accessories, settings.candidate_pool, settings.upsell_min_relevance
+                retrieval, accessories, catalog, settings.candidate_pool, settings.upsell_min_relevance
             ),
             comparison=ComparisonService(catalog),
             evidence=EvidenceService(catalog),

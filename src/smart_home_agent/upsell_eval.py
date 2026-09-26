@@ -21,7 +21,8 @@ from pydantic import BaseModel
 from smart_home_agent.models.recommendation import Recommendation, RecommendationRequest
 from smart_home_agent.services.ranking import UPSELL_RULES
 
-_FUNNEL = (*UPSELL_RULES, "needs_extra_hub")  # the hub filter runs after every ranking rule
+# The hub filter runs after every ranking rule; versions of the best match are set aside before any rule.
+_FUNNEL = ("other_version_of_best", *UPSELL_RULES, "needs_extra_hub")
 
 
 def _case(need: str, category: str, **fields: object) -> RecommendationRequest:

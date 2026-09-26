@@ -16,6 +16,7 @@ from smart_home_agent.agent import state
 from smart_home_agent.agent.state import SessionState
 from smart_home_agent.container import Services
 from smart_home_agent.models.cart import CartAction, CartView
+from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.services.cart import CartChangeError
 from smart_home_agent.tools._common import ToolResult, ok, tool_errors
 
@@ -45,16 +46,24 @@ def change_result(
     after: CartView,
     message: str | None = None,
     errors: list[dict[str, str]] | None = None,
+    catalog: CatalogReader | None = None,
 ) -> ToolResult:
     """Outcome of an add or remove: success or failure, per product the units changed and the units left
-    (or a note that none are left), and the remaining cart lines (or a note that the cart is empty)."""
+    (or a note that none are left), and the remaining cart lines (or a note that the cart is empty).
+    `catalog` names the products that are in neither cart view (an add waiting for confirmation)."""
+    products = {line.product_id: line.product for line in after.lines + before.lines if line.product}
+    missing = [pid for pid in product_ids if pid not in products]
+    if catalog is not None and missing:
+        products.update({p.id: p for p in catalog.get_products(missing)})
     changes = []
     for pid in product_ids:
         remaining = after.quantity_of(pid)
-        line = next((line for line in after.lines + before.lines if line.product_id == pid), None)
+        product = products.get(pid)
         change: dict[str, Any] = {
             "product_id": pid,
-            "title": line.product.title if line and line.product else None,
+            "title": product.title if product else None,
+            "variant": product.variant if product else None,
+            "subtitle": product.subtitle if product else None,
             "quantity_changed": abs(remaining - before.quantity_of(pid)),
             "remaining_of_product": remaining,
         }
@@ -113,12 +122,13 @@ def _change_cart(
     except CartChangeError as exc:  # nothing applied: the customer confirmed the change as a whole
         state.save(tool_context, session)
         message = "Nothing was changed: " + str(exc)
-        return change_result(exc.status, action, ids, before, before, message, exc.errors)
+        return change_result(exc.status, action, ids, before, before, message, exc.errors, services.catalog)
     except ValueError as exc:
         state.save(tool_context, session)
-        return change_result("invalid_input", action, ids, before, before, f"Nothing was changed: {exc}")
+        message = f"Nothing was changed: {exc}"
+        return change_result("invalid_input", action, ids, before, before, message, catalog=services.catalog)
     state.save(tool_context, session)
-    return change_result("ok", action, ids, before, services.cart.view(session.cart))
+    return change_result("ok", action, ids, before, services.cart.view(session.cart), catalog=services.catalog)
 
 
 def make_add_to_cart(services: Services):
@@ -176,6 +186,7 @@ def make_cart_result_callback(
         state.save(tool_context, session)
         status, message = ("awaiting_confirmation", _AWAITING) if confirmation is None else ("rejected", _REJECTED)
         view = services.cart.view(session.cart)
-        return change_result(status, action, _ids(args.get("product_ids")), view, view, message)
+        ids = _ids(args.get("product_ids"))
+        return change_result(status, action, ids, view, view, message, catalog=services.catalog)
 
     return cart_result

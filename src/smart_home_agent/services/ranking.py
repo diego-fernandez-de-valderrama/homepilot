@@ -154,6 +154,7 @@ def select_upsell(
         return UpsellSuggestion(
             product_id=candidate.product.id,
             title=candidate.product.title,
+            variant=candidate.product.variant,
             price=price,
             base_product_id=best.product.id,
             price_difference=difference,

@@ -94,7 +94,8 @@ def make_get_product(services: Services):
     @tool_errors
     def get_product(product_id: str, tool_context: ToolContext) -> ToolResult:
         """Full structured data of one product: price, brand, category, specs, key features, use cases,
-        compatibility facts (with status and evidence), requirements and the original catalog attributes.
+        compatibility facts (with status and evidence), requirements, the original catalog attributes and
+        `other_versions`: the same product in another color, size or pack (id, variant, subtitle, price).
 
         Args:
           product_id: The catalog product id, e.g. "28477998".
@@ -108,6 +109,8 @@ def make_get_product(services: Services):
         state.save(tool_context, session)
         payload = product.model_dump(mode="json", exclude={"provenance", "validation_notes"})
         payload["requires_professional_installation"] = product.requires_professional_installation
-        return ok(product=payload)
+        versions = services.catalog.get_versions([product.title]).get(product.title, [])
+        other_versions = [v.version().model_dump(mode="json") for v in versions if v.id != product.id]
+        return ok(product=payload, other_versions=other_versions)
 
     return get_product

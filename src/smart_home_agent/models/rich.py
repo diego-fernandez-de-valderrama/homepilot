@@ -127,13 +127,16 @@ def replace_items(text: str, render: Callable[[str], str]) -> str:
 
 def strip_echoed_titles(text: str, titles: Mapping[str, str]) -> str:
     """Removes a product title the model wrote right next to that product's own <item/> tag ("<item/> Title",
-    "**Title** <item/>"): the tag already renders the name, so the echo would show it twice."""
+    "<item/> (Title)", "**Title** <item/>"): the tag already renders the name, so the echo would show it twice.
+    An echo with more words keeps them: "<item/> (Title in anthracite)" -> "<item/> (in anthracite)"."""
     for pid, title in titles.items():
         if not title.strip():
             continue
-        name = rf"(?:\*\*)?{re.escape(title.strip())}(?:\*\*)?"
+        bare = rf"(?:\*\*)?{re.escape(title.strip())}(?:\*\*)?"
+        name = rf"(?:\({bare}\)|{bare})"  # also "<item/> (Title)", the model's habit of repeating the name
         tag = rf'<item\s+id="{pid}"\s*/>'
         text = re.sub(rf"({tag})[ \t]*[:,-]?[ \t]*{name}", r"\1", text, flags=re.IGNORECASE)
+        text = re.sub(rf"({tag})[ \t]*\({bare}[ \t]+(?=[^)\s])", r"\1 (", text, flags=re.IGNORECASE)
         text = re.sub(rf"{name}[ \t]*[:,-]?[ \t]*\(?({tag})\)?", r"\1", text, flags=re.IGNORECASE)
     return text
 
@@ -164,17 +167,22 @@ def block_ids(segments: list[Segment]) -> set[str]:
     return set(referenced_ids([s for s in segments if not isinstance(s, TextSegment)]))
 
 
-def to_plain(text: str, titles: Mapping[str, str]) -> str:
-    """Text-only rendering (terminal chat, or when no data could be resolved): never shows raw tags."""
+def to_plain(text: str, titles: Mapping[str, str], names: Mapping[str, str] | None = None) -> str:
+    """Text-only rendering (terminal chat, or when no data could be resolved): never shows raw tags.
+    Like the web interface, an inline <item/> shows the catalog title (the model names the version in its
+    own words) and an <items> list shows `names` (title plus version label, the cards' subtitle line)."""
+
+    def title(pid: str) -> str:
+        return titles.get(pid) or pid
 
     def name(pid: str) -> str:
-        return titles.get(pid) or pid
+        return (names or {}).get(pid) or title(pid)
 
     parts = []
     for segment in parse(text):
         match segment:
             case TextSegment(body):
-                parts.append(replace_items(strip_echoed_titles(body, titles), name))
+                parts.append(replace_items(strip_echoed_titles(body, titles), title))
             case ItemsBlock(ids):
                 parts.append("\n".join(f"- {name(pid)}" for pid in ids))
     return "\n\n".join(parts)
@@ -203,3 +211,7 @@ class RichContent(BaseModel):
 
     def titles(self) -> dict[str, str]:
         return {pid: p.title for pid, p in self.products.items()}
+
+    def names(self) -> dict[str, str]:
+        """Display names: the title plus the version label, so two versions of one product read differently."""
+        return {pid: p.name for pid, p in self.products.items()}

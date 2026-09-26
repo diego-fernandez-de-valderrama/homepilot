@@ -11,6 +11,7 @@ from typing import Protocol
 from catalog_ingestion.core.settings import PostgresSettings
 from catalog_ingestion.domain.enums import FactStatus
 from catalog_ingestion.schemas.catalog_product import CatalogProductSchema
+from catalog_ingestion.schemas.raw_product import RawProductSchema
 from catalog_ingestion.storage.postgres.engine import create_db_engine, create_session_factory
 from catalog_ingestion.storage.postgres.models import CompatibilityRecord, ProductRecord, RequirementRecord
 from catalog_ingestion.vocabulary.requirements import term_by_canonical
@@ -30,6 +31,8 @@ class CatalogReader(Protocol):
     def get_product(self, product_id: str) -> Product | None: ...
 
     def filter_products(self, criteria: ProductFilter) -> tuple[int, list[Product]]: ...
+
+    def get_versions(self, titles: Sequence[str]) -> dict[str, list[Product]]: ...
 
 
 def create_readonly_sessions(settings: PostgresSettings) -> tuple[Engine, sessionmaker[Session]]:
@@ -77,10 +80,22 @@ def _requirement(record: RequirementRecord) -> ProductRequirement:
     )
 
 
+def own_variant(subtitle: str | None, options: Sequence[str]) -> str | None:
+    """The option label of this version: the longest shop option that its subtitle contains ("Weiß" in
+    "GU10, Dimmbar, RGBW, 350 lm, 4,8 W, Weiß"). None when the subtitle names none of them."""
+    text = (subtitle or "").casefold()
+    matches = [option for option in options if option.casefold() in text]
+    return max(matches, key=len) if matches else None
+
+
 def to_product(record: ProductRecord) -> Product:
     """ORM row -> business model. Typed columns and child tables win; the JSONB document adds
-    the enriched descriptive fields (specs, features, provenance)."""
+    the enriched descriptive fields (specs, features, provenance), the untouched raw input the
+    version fields (subtitle and the shop's variant options)."""
     document = CatalogProductSchema.model_validate(record.document)
+    raw = RawProductSchema.model_validate(record.raw)
+    subtitle = raw.subtitle.strip() or None
+    options = [option.strip() for option in raw.variants if option.strip()]
     return Product(
         id=record.id,
         title=record.title,
@@ -96,6 +111,9 @@ def to_product(record: ProductRecord) -> Product:
         summary_en=record.summary_en,
         summary_de=record.summary_de,
         source_url=record.source_url,
+        subtitle=subtitle,
+        variant=own_variant(subtitle, options),
+        variant_options=options,
         ean=record.ean,
         image_url=record.image_url,
         is_smart_home=record.is_smart_home,
@@ -191,6 +209,21 @@ class CatalogRepository:
     def get_product(self, product_id: str) -> Product | None:
         products = self.get_products([product_id])
         return products[0] if products else None
+
+    def get_versions(self, titles: Sequence[str]) -> dict[str, list[Product]]:
+        """Active products per title (the versions of one product share it), cheapest first."""
+        if not titles:
+            return {}
+        statement = _with_children(
+            select(ProductRecord)
+            .where(ProductRecord.active, ProductRecord.title.in_(list(dict.fromkeys(titles))))
+            .order_by(ProductRecord.price_value.asc().nulls_last(), ProductRecord.id)
+        )
+        versions: dict[str, list[Product]] = {}
+        with self._sessions() as session:
+            for record in session.scalars(statement):
+                versions.setdefault(record.title, []).append(to_product(record))
+        return versions
 
     def filter_products(self, criteria: ProductFilter) -> tuple[int, list[Product]]:
         """(total number of matches, first `limit` matches)."""

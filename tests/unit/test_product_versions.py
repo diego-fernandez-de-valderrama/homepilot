@@ -1,0 +1,101 @@
+from smart_home_agent.models import rich
+from smart_home_agent.models.rich import RichContent
+from smart_home_agent.repositories.postgres import own_variant
+from smart_home_agent.tools import build_tools
+from tests.fakes import FakeToolContext, fact, product, services_for
+from tests.unit.test_tools import by_name
+
+WHITE = product("33081816", title="Access Point", price=59.95, subtitle="Weiß, 10 x 10 cm", variant="Weiß")
+ANTHRACITE = product("33081825", title="Access Point", price=64.95, subtitle="Anthrazit, 10 x 10 cm")
+
+
+def test_own_variant_is_the_option_named_in_the_subtitle():
+    assert own_variant("GU10, Dimmbar, RGBW, 350 lm, 4,8 W, Weiß", ["Chrom", "Schwarz", "Weiß"]) == "Weiß"
+    assert own_variant("E27, RGBW, 1.055 lm, 11 W", ["470 lm", "806 lm", "1.055 lm", "55 lm"]) == "1.055 lm"
+    assert own_variant("Länge: 5 m, RGBW", ["2 m", "5 m"]) == "5 m"
+    assert own_variant("E27, Dimmbar, Warmweiß", ["A60", "G80"]) is None
+    assert own_variant(None, ["Weiß"]) is None
+    assert own_variant("Weiß", []) is None
+
+
+def test_lists_name_the_version_and_inline_items_show_the_title():
+    content = RichContent(products={WHITE.id: WHITE, ANTHRACITE.id: ANTHRACITE})
+    assert content.titles() == {WHITE.id: "Access Point", ANTHRACITE.id: "Access Point"}
+    assert content.names() == {WHITE.id: "Access Point (Weiß)", ANTHRACITE.id: "Access Point"}
+    tag = f'<item id="{WHITE.id}"/>'
+    # Inline, the model names the version in its own words; "(Title)" right after the tag is an echo.
+    plain = rich.to_plain(f"Take the {tag} (Access Point) in white.", content.titles(), content.names())
+    assert plain == "Take the Access Point in white."
+    listed = rich.to_plain(f'<items ids="{WHITE.id},{ANTHRACITE.id}"/>', content.titles(), content.names())
+    assert listed == "- Access Point (Weiß)\n- Access Point"
+
+
+def test_get_product_lists_the_other_versions():
+    other = product("other", title="Something else", facts=[fact("google_home")])
+    tools = by_name(build_tools(services_for([WHITE, ANTHRACITE, other])))
+    result = tools["get_product"](WHITE.id, FakeToolContext())
+    assert result["product"]["subtitle"] == "Weiß, 10 x 10 cm"
+    assert [v["id"] for v in result["other_versions"]] == [ANTHRACITE.id]
+    assert result["other_versions"][0]["subtitle"] == "Anthrazit, 10 x 10 cm"
+    assert tools["get_product"]("other", FakeToolContext())["other_versions"] == []
+
+
+def test_ui_shows_which_version_a_product_is():
+    from smart_home_agent.ui import components
+
+    card = components.product_cards_html([WHITE])
+    assert '<span class="hp-card__version">Weiß, 10 x 10 cm</span>' in card
+    chip = components.item_chip_html(WHITE, WHITE.id)
+    assert '<span class="hp-item__name">Access Point</span>' in chip  # the text names the version
+    assert '<span class="hp-item__version">Weiß, 10 x 10 cm</span>' in chip  # hover card
+    assert "hp-card__version" not in components.product_cards_html([product("12345678")])  # no subtitle, no line
+
+
+def test_blocks_name_the_version():
+    from smart_home_agent.models.recommendation import UpsellSuggestion
+    from smart_home_agent.services.comparison import compare
+    from smart_home_agent.services.rich_content import product_compatibility
+    from smart_home_agent.ui import components
+
+    head = components.comparison_html(compare([WHITE, ANTHRACITE]))
+    assert '<span class="hp-compare__version">Weiß, 10 x 10 cm</span>' in head
+    assert '<span class="hp-compare__version">Anthrazit, 10 x 10 cm</span>' in head
+    compat = components.compatibility_html(WHITE, product_compatibility(WHITE, [], None))
+    assert '<span class="hp-compat__version">Weiß, 10 x 10 cm</span>' in compat
+    upsell = UpsellSuggestion(
+        product_id=ANTHRACITE.id,
+        title=ANTHRACITE.title,
+        price=64.95,
+        base_product_id=WHITE.id,
+        price_difference=5.0,
+        upgrade_reasons=[],
+    )
+    assert components.upgrade_html(WHITE, ANTHRACITE, upsell).count("hp-upgrade__version") == 2
+
+
+def test_cart_results_name_the_version():
+    from smart_home_agent.models.cart import CartItem
+    from smart_home_agent.tools.cart import change_result
+
+    cart = services_for([WHITE, ANTHRACITE]).cart
+    before = cart.view([])
+    after = cart.view([CartItem(product_id=WHITE.id, quantity=1)])
+    [line] = after.for_model()
+    assert (line["title"], line["variant"], line["subtitle"]) == ("Access Point", "Weiß", "Weiß, 10 x 10 cm")
+    [change] = change_result("ok", "add", [WHITE.id], before, after)["changes"]
+    assert (change["variant"], change["subtitle"]) == ("Weiß", "Weiß, 10 x 10 cm")
+
+
+def test_a_change_awaiting_confirmation_names_the_product_from_the_catalog():
+    from smart_home_agent.tools.cart import change_result
+
+    services = services_for([WHITE, ANTHRACITE])
+    empty = services.cart.view([])  # nothing added yet: neither cart view knows the product
+    [change] = change_result("awaiting_confirmation", "add", [WHITE.id], empty, empty, catalog=services.catalog)[
+        "changes"
+    ]
+    assert (change["title"], change["variant"]) == ("Access Point", "Weiß")
+    [unknown] = change_result("awaiting_confirmation", "add", ["99999999"], empty, empty, catalog=services.catalog)[
+        "changes"
+    ]
+    assert unknown["title"] is None

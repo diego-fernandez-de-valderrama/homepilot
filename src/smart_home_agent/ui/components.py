@@ -1,14 +1,14 @@
-"""Presentation helpers for the Streamlit UI: stylesheet, masthead, empty state, sidebar setup and cart panels,
+"""Presentation helpers for the Streamlit UI: stylesheet, masthead, empty state, the customer panel (setup, cart),
 the cart confirmation card and the product components behind the answer tags (cards, comparison,
 compatibility, upgrade).
 
 Presentation only. The HTML builders are pure functions (easy to test); every dynamic value is escaped.
-The setup panel only shows what the agent already stored in the session state.
+The setup block only shows what the agent already stored in the session state.
 """
 
 import html
 import re
-from collections.abc import Collection, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -21,7 +21,7 @@ from smart_home_agent.agent.state import SessionState
 from smart_home_agent.models import rich
 from smart_home_agent.models.cart import CartChangeLine, CartConfirmation, CartLine, CartView
 from smart_home_agent.models.comparison import NOT_LISTED, ComparisonResult
-from smart_home_agent.models.product import Product
+from smart_home_agent.models.product import Product, ProductSummary
 from smart_home_agent.models.recommendation import UpsellSuggestion
 from smart_home_agent.models.rich import ProductCompatibility
 from smart_home_agent.services import vocabulary
@@ -73,10 +73,8 @@ def inject_behaviour() -> None:
     st.html(f"<script>{script}</script>", unsafe_allow_javascript=True)
 
 
-def masthead_html(cart_count: int = 0) -> str:
-    """`cart_count`: units in the cart, shown as a badge (the cart itself lives in the sidebar)."""
-    label = f"{cart_count} item{'s' if cart_count != 1 else ''} in your cart"
-    badge_class = "hp-cart-badge hp-cart-badge--filled" if cart_count else "hp-cart-badge"
+def masthead_html() -> str:
+    """The brand part of the masthead; its buttons (new conversation, cart) are Streamlit widgets beside it."""
     return (
         '<header class="hp-masthead">'
         '<div class="hp-masthead__mark" aria-hidden="true"></div>'
@@ -85,9 +83,6 @@ def masthead_html(cart_count: int = 0) -> str:
         '<span class="hp-masthead__tag">Smart home advisor · Smart-Home-Beratung</span>'
         "</div>"
         '<span class="hp-masthead__meta">Catalog-verified answers</span>'
-        f'<span class="{badge_class}" title="{label}" aria-label="{label}">'
-        '<span class="hp-cart-badge__icon" aria-hidden="true">shopping_cart</span>'
-        f'<span class="hp-cart-badge__count">{cart_count}</span></span>'
         "</header>"
     )
 
@@ -159,7 +154,7 @@ def _format_budget(value: float) -> str:
 
 
 def setup_panel_html(state: SessionState | None) -> str:
-    """The sidebar "Your setup" block: only what the session already knows, never inferred."""
+    """The customer panel's "Your setup" block: only what the session already knows, never inferred."""
     rows: list[tuple[str, list[str]]] = []
     if state is not None:
         if state.must_support:
@@ -183,7 +178,7 @@ def setup_panel_html(state: SessionState | None) -> str:
             f'<div class="hp-setup__values">{_chips(values)}</div></div>'
             for key, values in rows
         )
-    return f'<section class="hp-setup"><p class="hp-rail-label">Your setup</p>{body}</section>'
+    return f'<section class="hp-setup"><p class="hp-panel-label">Your setup</p>{body}</section>'
 
 
 # ---------- Answer components (data from the catalog only, never from the model's text) ----------
@@ -221,6 +216,14 @@ def _image_html(product: Product, missing_images: frozenset[str], css_class: str
     return f'<span class="{css_class} {css_class}--empty"><span>No image</span></span>'
 
 
+def _version_html(product: ProductSummary, block: str, escape: Callable[[str], str] = html.escape) -> str:
+    """The line that tells versions of one product apart (the catalog subtitle, e.g. "GU10, RGBW, Weiß").
+    `escape`: `_markdown_literal` inside markdown (the item chip), plain HTML escaping elsewhere."""
+    if not product.subtitle:
+        return ""
+    return f'<span class="{block}__version">{escape(product.subtitle)}</span>'
+
+
 def item_chip_html(
     product: Product | None, product_id: str, shown_in_block: bool = False, missing_images: frozenset[str] = frozenset()
 ) -> str:
@@ -238,10 +241,11 @@ def item_chip_html(
         if source_url
         else ""
     )
+    version = _version_html(product, "hp-item", _markdown_literal)
     card = (
         '<span class="hp-item__card" role="tooltip">'
         f"{_image_html(product, missing_images, 'hp-item__image')}{brand}"
-        f'<span class="hp-item__title">{_markdown_literal(product.title)}</span>'
+        f'<span class="hp-item__title">{_markdown_literal(product.title)}</span>{version}'
         f'<span class="hp-item__card-price">{_markdown_literal(price)}</span>{link}</span>'
     )
     return (
@@ -292,7 +296,7 @@ def _product_card(product: Product, missing_images: frozenset[str]) -> str:
     return (
         '<article class="hp-card">'
         f"{image}{brand}"
-        f'<span class="hp-card__title">{html.escape(product.title)}</span>'
+        f'<span class="hp-card__title">{html.escape(product.title)}</span>{_version_html(product, "hp-card")}'
         f'<span class="hp-card__price">{html.escape(format_price(product.price))}{was}</span>'
         f"{link}</article>"
     )
@@ -313,8 +317,8 @@ def _cell(group: str, value: str) -> str:
 def comparison_html(result: ComparisonResult) -> str:
     """Rows where every product is "not listed" are left out; other "not listed" values stay verbatim."""
     head = "".join(
-        f'<th scope="col">{html.escape(p.title)}<span class="hp-compare__price">{html.escape(format_price(p.price))}'
-        "</span></th>"
+        f'<th scope="col">{html.escape(p.title)}{_version_html(p, "hp-compare")}'
+        f'<span class="hp-compare__price">{html.escape(format_price(p.price))}</span></th>'
         for p in result.products
     )
     rows = "".join(
@@ -359,7 +363,7 @@ def compatibility_html(product: Product, compatibility: ProductCompatibility) ->
     notes = "".join(f"<li>{html.escape(n)}</li>" for n in requirements)
     return (
         '<section class="hp-compat">'
-        f'<p class="hp-compat__title">{html.escape(product.title)}</p>{heading}'
+        f'<p class="hp-compat__title">{html.escape(product.title)}</p>{_version_html(product, "hp-compat")}{heading}'
         f'<div class="hp-compat__chips">{chips}</div>'
         + (f'<ul class="hp-compat__notes">{notes}</ul>' if notes else "")
         + "</section>"
@@ -373,10 +377,12 @@ def upgrade_html(base: Product, target: Product, upsell: UpsellSuggestion) -> st
         '<p class="hp-eyebrow">Upgrade option</p>'
         '<div class="hp-upgrade__pair">'
         f'<div class="hp-upgrade__product"><span class="hp-upgrade__label">Your match</span>'
-        f"<span>{html.escape(base.title)}</span><span>{html.escape(format_price(base.price))}</span></div>"
+        f"<span>{html.escape(base.title)}</span>{_version_html(base, 'hp-upgrade')}"
+        f"<span>{html.escape(format_price(base.price))}</span></div>"
         '<span class="hp-upgrade__arrow" aria-hidden="true">→</span>'
         f'<div class="hp-upgrade__product"><span class="hp-upgrade__label">Upgrade</span>'
-        f"<span>{html.escape(target.title)}</span><span>{html.escape(format_price(target.price))}</span></div>"
+        f"<span>{html.escape(target.title)}</span>{_version_html(target, 'hp-upgrade')}"
+        f"<span>{html.escape(format_price(target.price))}</span></div>"
         "</div>"
         f'<p class="hp-upgrade__delta">+{html.escape(format_price(upsell.price_difference))}</p>'
         + (f'<ul class="hp-upgrade__reasons">{reasons}</ul>' if reasons else "")
@@ -384,7 +390,7 @@ def upgrade_html(base: Product, target: Product, upsell: UpsellSuggestion) -> st
     )
 
 
-# ---------- Shopping cart (sidebar panel and confirmation card) ----------
+# ---------- Shopping cart (customer panel and confirmation card) ----------
 
 
 def _thumb_html(product: Product | None, missing_images: frozenset[str], css_class: str) -> str:
@@ -404,7 +410,7 @@ def cart_header_html(view: CartView) -> str:
     empty = (
         '<p class="hp-cart__empty">Your cart is empty. Ask HomePilot to add a product.</p>' if not view.lines else ""
     )
-    return f'<div class="hp-cart"><p class="hp-rail-label hp-cart__label">Your cart{count}</p>{empty}</div>'
+    return f'<div class="hp-cart"><p class="hp-panel-label hp-cart__label">Your cart{count}</p>{empty}</div>'
 
 
 def cart_line_html(line: CartLine, missing_images: frozenset[str] = frozenset()) -> str:
@@ -427,6 +433,7 @@ def cart_line_html(line: CartLine, missing_images: frozenset[str] = frozenset())
         '<div class="hp-cart__line">'
         f"{_thumb_html(product, missing_images, 'hp-cart__thumb')}"
         f'<div class="hp-cart__info">{brand}<span class="hp-cart__title">{html.escape(product.title)}</span>'
+        f"{_version_html(product, 'hp-cart')}"
         f'<span class="hp-cart__price">{html.escape(format_price(line.line_total))}</span>{subtotal}</div></div>'
     )
 
@@ -464,6 +471,7 @@ def _confirmation_line_html(
     return (
         f'<li class="hp-confirm__body">{_thumb_html(product, missing_images, "hp-confirm__image")}'
         f'<div class="hp-confirm__info"><span class="hp-confirm__title">{html.escape(title)}</span>'
+        f"{_version_html(product, 'hp-confirm') if product else ''}"
         f'<span class="hp-confirm__detail">{html.escape(detail)}</span>'
         f'<span class="hp-confirm__cart">{html.escape(in_cart)}</span></div></li>'
     )

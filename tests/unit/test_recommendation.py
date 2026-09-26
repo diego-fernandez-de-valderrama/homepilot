@@ -140,3 +140,71 @@ def test_upsell_that_needs_an_extra_hub_is_skipped():
     assert result.upsell is None
     assert result.upsell_blockers == {"needs_extra_hub": 1}
     assert "upsell_blockers" not in result.model_dump()  # diagnostics never reach the model
+
+
+# Versions of one product share the title (another color, size or pack), like the catalog's sibling products.
+WHITE = product("white", title="Thermostat X", price=55.0, facts=[fact("google_home"), fact("wifi")])
+ANTHRACITE = product(
+    "anthracite", title="Thermostat X", price=65.0, facts=[fact("google_home"), fact("wifi"), fact("matter")]
+)
+NO_ATTRIBUTES = product("no_attributes", title="Thermostat X", price=55.0)  # Google Home unknown
+DOUBLE_PACK = product("double_pack", title="Thermostat X", price=200.0, facts=[fact("google_home")])
+OTHER = product("other", title="Thermostat Y", price=60.0, facts=[fact("google_home"), fact("wifi"), fact("matter")])
+# The white version leads on relevance (ranking also rewards the extra capability of the anthracite one).
+VERSION_SCORES = {"white": 0.9, "anthracite": 0.8, "no_attributes": 0.88, "double_pack": 0.87, "other": 0.86}
+
+
+def _recommend_versions(products, **overrides: Any):
+    fields: dict[str, Any] = {
+        "need": "thermostat",
+        "category": "heating_control",
+        "max_price": 150,
+        "must_support": ["google_home"],
+    }
+    request = RecommendationRequest(**(fields | overrides))
+    return services_for(products, VERSION_SCORES).recommendation.recommend(request)
+
+
+def test_versions_of_one_product_share_one_slot_with_their_own_status():
+    result = _recommend_versions([WHITE, ANTHRACITE, NO_ATTRIBUTES, DOUBLE_PACK, OTHER])
+    assert [r.product.id for r in result.confirmed] == ["white", "other"]
+    assert result.unconfirmed == []  # the product has a confirmed version: no second, unconfirmed entry
+    versions = {v.id: (v.status, v.filter_reason) for v in result.confirmed[0].other_versions}
+    assert versions == {
+        "anthracite": ("confirmed", None),
+        "no_attributes": ("unconfirmed", None),
+        "double_pack": ("filtered_out", "price"),
+    }
+    assert result.confirmed[1].other_versions == []
+    assert any("other_versions" in note for note in result.notes)
+
+
+def test_versions_that_were_no_candidates_are_still_checked_against_the_request():
+    # Only the white version is found by the search; the anthracite one is a structured Matter match.
+    services = services_for([WHITE, ANTHRACITE, NO_ATTRIBUTES], {"white": 0.9})
+    request = RecommendationRequest(need="thermostat", category="heating_control", must_support=["matter"])
+    result = services.recommendation.recommend(request)
+    [entry] = result.confirmed
+    assert entry.product.id == "anthracite"
+    assert result.unconfirmed == []  # the white version is not listed again as a separate product
+    assert {v.id: v.status for v in entry.other_versions} == {"white": "unconfirmed", "no_attributes": "unconfirmed"}
+
+
+def test_a_version_of_the_best_match_is_never_its_upsell():
+    result = _recommend_versions([WHITE, ANTHRACITE])
+    assert result.best_match == "white"
+    assert result.upsell is None  # pricier and with more confirmed capabilities, but the same product
+    assert result.upsell_blockers == {"other_version_of_best": 1}
+
+
+def test_the_upsell_version_takes_its_products_slot():
+    # Best match: white (X). The cheaper Y version ranks above the Y version that is the upsell.
+    small = product("small", title="Thermostat Y", price=58.0, facts=[fact("google_home")])
+    scores = {"white": 0.99, "small": 0.95, "other": 0.86}
+    services = services_for([WHITE, small, OTHER], scores)
+    request = RecommendationRequest(need="thermostat", category="heating_control", must_support=["google_home"])
+    result = services.recommendation.recommend(request)
+    assert result.upsell is not None and result.upsell.product_id == "other"
+    titles = [r.product.title for r in result.confirmed]
+    assert len(titles) == len(set(titles))
+    assert "other" in {r.product.id for r in result.confirmed}

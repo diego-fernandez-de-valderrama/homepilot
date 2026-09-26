@@ -205,10 +205,11 @@ def test_cart_panel_states():
     assert "not listed" in cart_total_html(CART.view([CartItem(product_id="n", quantity=1)]))
 
 
-def test_masthead_badge_counts_units():
-    assert ">0<" in masthead_html() and "hp-cart-badge--filled" not in masthead_html()
-    assert "hp-cart-badge--filled" in masthead_html(3) and "3 items in your cart" in masthead_html(3)
-    assert "1 item in your cart" in masthead_html(1)
+def test_masthead_is_brand_only():
+    # The cart button is a Streamlit widget beside the masthead (it opens the customer panel), not HTML.
+    masthead = masthead_html()
+    assert "hp-masthead" in masthead and "HomePilot" in masthead
+    assert "cart" not in masthead
 
 
 def test_confirmation_card_from_catalog_data():

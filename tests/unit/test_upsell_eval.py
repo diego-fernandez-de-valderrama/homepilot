@@ -30,3 +30,6 @@ def test_guards_catch_an_upsell_over_budget():
 def test_binding_rule_is_the_furthest_rule_reached():
     assert binding_rule({"not_pricier": 3, "not_capability_superset": 1}) == "not_capability_superset"
     assert binding_rule({}) == "no_other_confirmed_candidate"
+    # Versions of the best match are set aside before any rule, so every real rule outranks them.
+    assert binding_rule({"other_version_of_best": 2, "not_pricier": 1}) == "not_pricier"
+    assert binding_rule({"other_version_of_best": 2}) == "other_version_of_best"
