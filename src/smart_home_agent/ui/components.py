@@ -1,5 +1,6 @@
-"""Presentation helpers for the Streamlit UI: stylesheet, masthead, empty state, sidebar setup panel and the
-product components behind the answer tags (cards, comparison, compatibility, upgrade).
+"""Presentation helpers for the Streamlit UI: stylesheet, masthead, empty state, sidebar setup and cart panels,
+the cart confirmation card and the product components behind the answer tags (cards, comparison,
+compatibility, upgrade).
 
 Presentation only. The HTML builders are pure functions (easy to test); every dynamic value is escaped.
 The setup panel only shows what the agent already stored in the session state.
@@ -10,6 +11,7 @@ import re
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import streamlit as st
 from catalog_ingestion.domain.enums import FactStatus
@@ -17,6 +19,7 @@ from catalog_ingestion.vocabulary import categories as category_vocabulary
 
 from smart_home_agent.agent.state import SessionState
 from smart_home_agent.models import rich
+from smart_home_agent.models.cart import CartChangeLine, CartConfirmation, CartLine, CartView
 from smart_home_agent.models.comparison import NOT_LISTED, ComparisonResult
 from smart_home_agent.models.product import Product
 from smart_home_agent.models.recommendation import UpsellSuggestion
@@ -38,6 +41,9 @@ _TOOL_LABELS = {
     "compare_products": "Comparing products",
     "get_evidence": "Looking up the sources",
     "remember_preferences": "Noting your preferences",
+    "view_cart": "Checking your cart",
+    "add_to_cart": "Preparing the change to your cart",
+    "remove_from_cart": "Preparing the change to your cart",
 }
 
 # Neutral "the advisor is writing" cue: no text, so it never claims work that is not happening.
@@ -66,7 +72,10 @@ def inject_behaviour() -> None:
     st.html(f"<script>{script}</script>", unsafe_allow_javascript=True)
 
 
-def masthead_html() -> str:
+def masthead_html(cart_count: int = 0) -> str:
+    """`cart_count`: units in the cart, shown as a badge (the cart itself lives in the sidebar)."""
+    label = f"{cart_count} item{'s' if cart_count != 1 else ''} in your cart"
+    badge_class = "hp-cart-badge hp-cart-badge--filled" if cart_count else "hp-cart-badge"
     return (
         '<header class="hp-masthead">'
         '<div class="hp-masthead__mark" aria-hidden="true"></div>'
@@ -75,6 +84,9 @@ def masthead_html() -> str:
         '<span class="hp-masthead__tag">Smart home advisor · Smart-Home-Beratung</span>'
         "</div>"
         '<span class="hp-masthead__meta">Catalog-verified answers</span>'
+        f'<span class="{badge_class}" title="{label}" aria-label="{label}">'
+        '<span class="hp-cart-badge__icon" aria-hidden="true">shopping_cart</span>'
+        f'<span class="hp-cart-badge__count">{cart_count}</span></span>'
         "</header>"
     )
 
@@ -369,3 +381,140 @@ def upgrade_html(base: Product, target: Product, upsell: UpsellSuggestion) -> st
         + (f'<ul class="hp-upgrade__reasons">{reasons}</ul>' if reasons else "")
         + "</section>"
     )
+
+
+# ---------- Shopping cart (sidebar panel and confirmation card) ----------
+
+
+def _thumb_html(product: Product | None, missing_images: frozenset[str], css_class: str) -> str:
+    """Cart and confirmation thumbnails: the product image, or a quiet package glyph when there is none
+    (a missing image is not information for the customer, so no "No image" text)."""
+    image_url = safe_url(product.image_url) if product else None
+    if image_url and image_url not in missing_images:
+        return f'<img class="{css_class}" src="{html.escape(image_url)}" alt="" loading="lazy">'
+    return (
+        f'<span class="{css_class} {css_class}--empty" aria-hidden="true">'
+        '<span class="hp-thumb-glyph">inventory_2</span></span>'
+    )
+
+
+def cart_header_html(view: CartView) -> str:
+    count = f'<span class="hp-cart__count">{view.item_count}</span>' if view.item_count else ""
+    empty = (
+        '<p class="hp-cart__empty">Your cart is empty. Ask HomePilot to add a product.</p>' if not view.lines else ""
+    )
+    return f'<div class="hp-cart"><p class="hp-rail-label hp-cart__label">Your cart{count}</p>{empty}</div>'
+
+
+def cart_line_html(line: CartLine, missing_images: frozenset[str] = frozenset()) -> str:
+    """One cart line (the stepper buttons are Streamlit widgets rendered right below it)."""
+    product = line.product
+    if product is None:
+        return (
+            '<div class="hp-cart__line hp-cart__line--gone">'
+            f"{_thumb_html(None, missing_images, 'hp-cart__thumb')}"
+            f'<div class="hp-cart__info"><span class="hp-cart__title">Product {html.escape(line.product_id)}</span>'
+            '<span class="hp-cart__note">No longer available</span></div></div>'
+        )
+    brand = f'<span class="hp-cart__brand">{html.escape(product.brand)}</span>' if product.brand else ""
+    subtotal = (
+        f'<span class="hp-cart__subtotal">{line.quantity} × {html.escape(format_price(line.unit_price))}</span>'
+        if line.quantity > 1 and line.unit_price is not None
+        else ""
+    )
+    return (
+        '<div class="hp-cart__line">'
+        f"{_thumb_html(product, missing_images, 'hp-cart__thumb')}"
+        f'<div class="hp-cart__info">{brand}<span class="hp-cart__title">{html.escape(product.title)}</span>'
+        f'<span class="hp-cart__price">{html.escape(format_price(line.line_total))}</span>{subtotal}</div></div>'
+    )
+
+
+def cart_total_html(view: CartView) -> str:
+    note = '<p class="hp-cart__note">Some prices are not listed and not included.</p>' if view.has_unpriced else ""
+    return (
+        '<div class="hp-cart__total"><span>Total</span>'
+        f'<span class="hp-cart__total-value">{html.escape(format_price(view.total))}</span></div>{note}'
+    )
+
+
+# Card state after the customer's decision (None: still open). "expired": a new message was sent instead.
+ConfirmationState = Literal["confirmed", "cancelled", "expired"] | None
+
+_CONFIRM_STATE_TEXT = {
+    ("add", "confirmed"): "Added to your cart",
+    ("remove", "confirmed"): "Removed from your cart",
+    ("add", "cancelled"): "Not added",
+    ("remove", "cancelled"): "Not removed",
+}
+
+
+def _confirmation_line_html(
+    confirmation: CartConfirmation, line: CartChangeLine, missing_images: frozenset[str]
+) -> str:
+    product = line.product
+    amount = str(line.quantity) if line.quantity is not None else (f"All {line.in_cart}" if line.in_cart > 1 else "1")
+    price = product.price if product else None
+    detail = f"{amount} × {format_price(price)}"
+    if price is not None and line.units > 1:
+        detail += f" = {format_price(round(price * line.units, 2))}"
+    in_cart = f"In your cart now: {line.in_cart} · after this change: {confirmation.after(line)}"
+    title = product.title if product else f"Product {line.product_id} (not in the catalog)"
+    return (
+        f'<li class="hp-confirm__body">{_thumb_html(product, missing_images, "hp-confirm__image")}'
+        f'<div class="hp-confirm__info"><span class="hp-confirm__title">{html.escape(title)}</span>'
+        f'<span class="hp-confirm__detail">{html.escape(detail)}</span>'
+        f'<span class="hp-confirm__cart">{html.escape(in_cart)}</span></div></li>'
+    )
+
+
+def confirm_button_label(confirmation: CartConfirmation) -> str:
+    count = len(confirmation.lines)
+    if confirmation.action == "add":
+        return "Add to cart" if count == 1 else f"Add {count} products"
+    return "Remove" if count == 1 else f"Remove {count} products"
+
+
+def cart_confirmation_html(
+    confirmation: CartConfirmation, state: ConfirmationState = None, missing_images: frozenset[str] = frozenset()
+) -> str:
+    """The change the advisor proposes (one or more products, confirmed together), from catalog data only;
+    the buttons are rendered below it."""
+    adding = confirmation.action == "add"
+    count = len(confirmation.lines)
+    eyebrow = ("Add to cart" if adding else "Remove from cart") + (f" · {count} products" if count > 1 else "")
+    lines = "".join(_confirmation_line_html(confirmation, line, missing_images) for line in confirmation.lines)
+    total = ""
+    if count > 1 and confirmation.total is not None:
+        sign = "+" if adding else "−"
+        total = (
+            '<p class="hp-confirm__total"><span>Change total</span>'
+            f'<span class="hp-confirm__total-value">{sign}{html.escape(format_price(confirmation.total))}</span></p>'
+        )
+    if state is None:
+        status = ""
+    elif state == "expired":
+        status = '<span class="hp-confirm__state hp-confirm__state--expired">Not confirmed</span>'
+    else:
+        text = _CONFIRM_STATE_TEXT[(confirmation.action, state)]
+        status = f'<span class="hp-confirm__state hp-confirm__state--{state}">{html.escape(text)}</span>'
+    modifier = "add" if adding else "remove"
+    return (
+        f'<section class="hp-confirm hp-confirm--{modifier}{" hp-confirm--done" if state else ""}">'
+        f'<p class="hp-eyebrow">{eyebrow}</p><ul class="hp-confirm__lines">{lines}</ul>{total}{status}</section>'
+    )
+
+
+def confirmation_lead_html(count: int) -> str:
+    text = "Please confirm this change to your cart." if count == 1 else "Please confirm these changes to your cart."
+    return f'<p class="hp-confirm-lead">{text}</p>'
+
+
+def decision_html(confirmed: int, cancelled: int) -> str:
+    """The customer's side of a confirmation turn in the history (no free text was typed)."""
+    parts = []
+    if confirmed:
+        parts.append(f"Confirmed {confirmed} change{'s' if confirmed != 1 else ''}")
+    if cancelled:
+        parts.append(f"Cancelled {cancelled} change{'s' if cancelled != 1 else ''}")
+    return f'<p class="hp-decision">{html.escape(" · ".join(parts))}</p>'

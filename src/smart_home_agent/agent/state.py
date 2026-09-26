@@ -6,6 +6,7 @@ from typing import Any, Protocol
 from google.adk.sessions.state import State
 from pydantic import BaseModel, Field
 
+from smart_home_agent.models.cart import CartItem
 from smart_home_agent.models.recommendation import UpsellSuggestion
 
 STATE_KEY = "homepilot"
@@ -15,6 +16,8 @@ TURN_LANGUAGE_KEY = "homepilot_turn_language"
 GUARDRAIL_KEY = "homepilot_guardrail"
 # Last deterministic guardrail reply of the session, so the next one picks a different variant.
 GUARDRAIL_LAST_REPLY_KEY = "homepilot_guardrail_last_reply"
+# Cart bookkeeping of SessionState: the model reads the cart through view_cart, never through the prompt.
+CART_FIELDS = frozenset({"cart", "cart_checked", "cart_changed_by_user"})
 
 
 class SessionState(BaseModel):
@@ -30,6 +33,9 @@ class SessionState(BaseModel):
     selected_products: list[str] = Field(default_factory=list)
     comparison_products: list[str] = Field(default_factory=list)
     last_upsell: UpsellSuggestion | None = None  # latest recommend_products upsell, the only valid <upgrade/>
+    cart: list[CartItem] = Field(default_factory=list)  # ids and quantities only; data comes from PostgreSQL
+    cart_checked: bool = False  # a cart tool ran in this conversation
+    cart_changed_by_user: bool = False  # edited in the interface since the last cart tool call
 
     @property
     def must_support(self) -> list[str]:

@@ -1,7 +1,11 @@
+from collections.abc import Callable
+from typing import Any
+
 import pytest
 from google.adk.tools import FunctionTool
 
-from smart_home_agent.agent.state import STATE_KEY, read_state
+from smart_home_agent.agent.state import STATE_KEY, SessionState, read_state
+from smart_home_agent.models.cart import CartItem
 from smart_home_agent.tools import build_tools
 from tests.fakes import FakeToolContext, fact, product, requirement, services_for
 
@@ -12,9 +16,13 @@ PRODUCTS = [
 ]
 
 
+def by_name(tools: list[FunctionTool]) -> dict[str, Callable[..., dict[str, Any]]]:
+    return {tool.name: tool.func for tool in tools}
+
+
 @pytest.fixture
 def tools():
-    return {FunctionTool(tool).name: tool for tool in build_tools(services_for(PRODUCTS))}
+    return by_name(build_tools(services_for(PRODUCTS)))
 
 
 def test_every_tool_has_a_valid_adk_declaration(tools):
@@ -27,6 +35,9 @@ def test_every_tool_has_a_valid_adk_declaration(tools):
         "compare_products",
         "get_evidence",
         "remember_preferences",
+        "view_cart",
+        "add_to_cart",
+        "remove_from_cart",
     }
     for tool in tools.values():
         declaration = FunctionTool(tool)._get_declaration()
@@ -34,6 +45,11 @@ def test_every_tool_has_a_valid_adk_declaration(tools):
         properties = (declaration.parameters_json_schema or {}).get("properties", {})
         assert declaration.description
         assert "tool_context" not in properties  # injected by ADK, not visible to the model
+
+
+def test_only_cart_changes_require_confirmation():
+    confirmed = {tool.name for tool in build_tools(services_for(PRODUCTS)) if tool._require_confirmation}
+    assert confirmed == {"add_to_cart", "remove_from_cart"}
 
 
 def test_recommend_products_output_and_state(tools):
@@ -58,7 +74,7 @@ def test_recommended_accessories_are_known_to_the_session():
     thermostat = product(
         "bosch", price=70.0, facts=[fact("google_home")], requirements=[requirement("bosch_smart_home_controller")]
     )
-    recommend = {FunctionTool(t).name: t for t in build_tools(services_for([thermostat, hub]))}["recommend_products"]
+    recommend = by_name(build_tools(services_for([thermostat, hub])))["recommend_products"]
     context = FakeToolContext()
     result = recommend("thermostat", context, category="heating_control", must_support=["Google Home"])
     assert [a["product_id"] for a in result["accessories"]] == ["hub"]
@@ -138,3 +154,95 @@ def test_remember_preferences_classifies_by_dimension(tools):
     assert session.user_protocols == ["zigbee"]
     assert session.owned_devices == ["philips_hue_bridge"]
     assert STATE_KEY in context.state
+
+
+def cart_context(*pairs: tuple[str, int], changed: bool = False) -> FakeToolContext:
+    session = SessionState(
+        cart=[CartItem(product_id=pid, quantity=q) for pid, q in pairs], cart_changed_by_user=changed
+    )
+    return FakeToolContext({STATE_KEY: session.model_dump(mode="json")})
+
+
+def test_view_cart_syncs_the_flags(tools):
+    context = cart_context(("t1", 2), changed=True)
+    result = tools["view_cart"](context)
+    assert result["status"] == "ok"
+    assert result["item_count"] == 2 and result["cart_total"] == 110.0
+    assert result["items"][0]["title"] == "Product t1"
+    session = read_state(context.state)
+    assert session.cart_checked and not session.cart_changed_by_user
+    assert tools["view_cart"](cart_context())["note"] == "the cart is empty"
+
+
+def by_product(result: dict) -> dict[str, dict]:
+    return {change["product_id"]: change for change in result["changes"]}
+
+
+def test_add_to_cart_reports_what_is_left(tools):
+    context = cart_context(("t2", 1))
+    result = tools["add_to_cart"](["t1"], context, quantities=[2])
+    assert (result["status"], result["action"]) == ("ok", "add")
+    change = by_product(result)["t1"]
+    assert (change["quantity_changed"], change["remaining_of_product"]) == (2, 2)
+    assert change["title"] == "Product t1" and "note" not in change
+    assert [(i["product_id"], i["quantity"]) for i in result["remaining_items"]] == [("t2", 1), ("t1", 2)]
+    assert "note" not in result
+    assert read_state(context.state).cart_checked
+
+
+def test_add_several_products_in_one_change(tools):
+    context = cart_context(("t1", 1))
+    result = tools["add_to_cart"](["t1", "t2", "t3"], context, quantities=[1, 2, 1])
+    assert result["status"] == "ok"
+    changes = by_product(result)
+    assert {pid: (c["quantity_changed"], c["remaining_of_product"]) for pid, c in changes.items()} == {
+        "t1": (1, 2),
+        "t2": (2, 2),
+        "t3": (1, 1),
+    }
+    assert result["cart_total"] == 2 * 55.0 + 2 * 120.0 + 60.0
+    default = tools["add_to_cart"](["t3", "t3"], cart_context())  # no quantities: 1 each, repeats merged
+    assert by_product(default)["t3"]["remaining_of_product"] == 2
+
+
+def test_remove_from_cart_partial_and_complete(tools):
+    context = cart_context(("t1", 3), ("t2", 1))
+    partial = by_product(tools["remove_from_cart"](["t1"], context, quantities=[1]))["t1"]
+    assert (partial["quantity_changed"], partial["remaining_of_product"]) == (1, 2)
+    complete = tools["remove_from_cart"](["t1"], context)
+    assert (by_product(complete)["t1"]["quantity_changed"], by_product(complete)["t1"]["remaining_of_product"]) == (
+        2,
+        0,
+    )
+    assert by_product(complete)["t1"]["note"] == "none of this product left in the cart"
+    assert [i["product_id"] for i in complete["remaining_items"]] == ["t2"]
+    last = tools["remove_from_cart"](["t2"], context)
+    assert last["remaining_items"] == [] and last["note"] == "the cart is empty"
+
+
+def test_remove_several_products_with_zero_meaning_all(tools):
+    context = cart_context(("t1", 3), ("t2", 2), ("t3", 1))
+    result = tools["remove_from_cart"](["t1", "t2"], context, quantities=[1, 0])
+    assert result["status"] == "ok"
+    assert {pid: c["remaining_of_product"] for pid, c in by_product(result).items()} == {"t1": 2, "t2": 0}
+    assert [(i["product_id"], i["quantity"]) for i in result["remaining_items"]] == [("t1", 2), ("t3", 1)]
+
+
+def test_a_change_is_all_or_nothing(tools):
+    context = cart_context(("t1", 1))
+    unknown = tools["add_to_cart"](["t2", "404"], context)
+    assert unknown["status"] == "not_found"
+    assert unknown["errors"] == [{"product_id": "404", "status": "not_found", "message": "not in the catalog"}]
+    assert {pid: c["quantity_changed"] for pid, c in by_product(unknown).items()} == {"t2": 0, "404": 0}
+    assert "Nothing was changed" in unknown["message"]
+    missing = tools["remove_from_cart"](["t1", "t2"], context)
+    assert missing["status"] == "invalid_input" and missing["errors"][0]["product_id"] == "t2"
+    assert by_product(missing)["t1"]["remaining_of_product"] == 1
+    assert [i["product_id"] for i in missing["remaining_items"]] == ["t1"]
+    for bad in (
+        tools["add_to_cart"](["t1"], context, quantities=[500]),
+        tools["add_to_cart"](["t1", "t2"], context, quantities=[1]),
+        tools["add_to_cart"]([], context),
+    ):
+        assert bad["status"] == "invalid_input"
+    assert read_state(context.state).cart == [CartItem(product_id="t1", quantity=1)]

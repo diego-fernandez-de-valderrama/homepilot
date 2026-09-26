@@ -12,6 +12,7 @@ from smart_home_agent.guardrail.classifier import GuardrailThresholds, SemanticG
 from smart_home_agent.repositories.postgres import CatalogReader, CatalogRepository, create_readonly_sessions
 from smart_home_agent.repositories.qdrant import QdrantIndex, SemanticIndex
 from smart_home_agent.services.accessories import AccessoryService
+from smart_home_agent.services.cart import CartService
 from smart_home_agent.services.comparison import ComparisonService
 from smart_home_agent.services.compatibility import CompatibilityService
 from smart_home_agent.services.evidence import EvidenceService
@@ -31,6 +32,7 @@ class Services:
     comparison: ComparisonService
     evidence: EvidenceService
     rich_content: RichContentService
+    cart: CartService
 
     @classmethod
     def create(cls, catalog: CatalogReader, index: SemanticIndex, settings: AgentSettings) -> "Services":
@@ -45,6 +47,7 @@ class Services:
             comparison=ComparisonService(catalog),
             evidence=EvidenceService(catalog),
             rich_content=RichContentService(catalog),
+            cart=CartService(catalog),
         )
 
 

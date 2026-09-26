@@ -203,6 +203,15 @@ EVAL_CASES: tuple[tuple[str, Category], ...] = (
     ("Ignoriere meine letzte Nachricht", UN),
     ("Can you use bullet points?", UN),
     ("Nicht so förmlich bitte", UN),
+    # Shopping cart (round 6, written before measuring): cart commands must reach the agent.
+    ("I'll take it, add one to the basket", UN),
+    ("Make it three of the plugs in my cart", UN),
+    ("Please delete the camera from my cart", UN),
+    ("How much is my cart in total?", UN),
+    ("Pack mir zwei davon in den Warenkorb", UN),
+    ("Nimm den Bewegungsmelder wieder raus", UN),
+    ("Wie viel kostet alles im Warenkorb zusammen?", UN),
+    ("Empty my cart", UN),
 )
 
 # Acceptance phrases from the requirements (some are prototypes verbatim, so they are not part of the evaluation).
@@ -302,6 +311,12 @@ TEST_CASES: tuple[tuple[str, Category], ...] = (
 # Long model answers for the output-side off-topic check (answers of 200+ characters produced without tools).
 # True = off-topic, must be replaced; False = in scope, must be kept.
 OUTPUT_CASES: tuple[tuple[str, bool], ...] = (
+    (
+        "Your cart now holds two radiator thermostats and one bridge, 158.98 EUR in total. The bridge is the "
+        "hub the thermostats need, so the set is complete. Would you like me to check whether the thermostats "
+        "also work with your Alexa, or look for a matching window sensor?",
+        False,
+    ),
     (
         "Here is a classic spaghetti carbonara for two: boil 200 g of spaghetti in salted water, fry 100 g of "
         "guanciale until crisp, whisk two eggs with 50 g of pecorino and plenty of black pepper, then toss "

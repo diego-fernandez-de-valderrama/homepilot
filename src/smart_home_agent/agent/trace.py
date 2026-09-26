@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from smart_home_agent.agent.state import SessionState
 from smart_home_agent.guardrail.callbacks import GuardrailReport
+from smart_home_agent.models.cart import CartConfirmation
 from smart_home_agent.models.rich import RichContent
 
 _INTENTS = {
@@ -17,7 +18,11 @@ _INTENTS = {
     "compare_products": "comparison",
     "get_evidence": "provenance",
     "remember_preferences": "preferences",
+    "view_cart": "cart",
+    "add_to_cart": "cart",
+    "remove_from_cart": "cart",
 }
+_BOOKKEEPING = frozenset({"remember_preferences", "view_cart"})
 
 
 class ToolCallTrace(BaseModel):
@@ -46,10 +51,14 @@ class TurnTrace(BaseModel):
 
     @property
     def intent(self) -> str:
-        names = [c.name for c in self.tool_calls if c.name != "remember_preferences"]
+        # Bookkeeping calls (preferences, the start-of-conversation cart check) do not define the intent.
+        names = [c.name for c in self.tool_calls if c.name not in _BOOKKEEPING]
         if names:
             return _INTENTS.get(names[0], names[0])
-        return "preferences" if self.tool_calls else "conversation (no tool used)"
+        if self.tool_calls:
+            name = self.tool_calls[-1].name
+            return _INTENTS.get(name, name)
+        return "conversation (no tool used)"
 
     @property
     def search_queries(self) -> list[dict[str, Any]]:
@@ -87,3 +96,5 @@ class AgentReply(BaseModel):
     state: SessionState
     guardrail: GuardrailReport | None = None  # what the input/output guardrail decided this turn
     rich: RichContent | None = None  # catalog data for the presentation tags in `text` (None: no tags)
+    # Cart changes waiting for the customer's decision in the interface (answered with AgentService.confirm).
+    pending_confirmations: list[CartConfirmation] = Field(default_factory=list)

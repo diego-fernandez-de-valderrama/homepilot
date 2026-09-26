@@ -1195,11 +1195,368 @@
   color: var(--hp-ink);
 }
 
+/* ---------- Shopping cart: masthead badge, sidebar panel, confirmation card ---------- */
+
+.hp-cart-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hp-s1);
+  padding: var(--hp-s1) var(--hp-s2);
+  border: 1px solid var(--hp-rule);
+  color: var(--hp-grey-4);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.hp-cart-badge--filled {
+  border-color: var(--hp-ink);
+  color: var(--hp-ink);
+  box-shadow: inset 0 -2px 0 var(--hp-red);
+}
+
+.hp-cart-badge__icon {
+  font-family: "Material Symbols Rounded";
+  font-size: 18px;
+  font-feature-settings: "liga";
+}
+
+/* Sidebar panel (dark rail): one ruled block per line, the stepper row sits under its line. */
+
+.hp-cart__label {
+  display: flex;
+  align-items: center;
+  gap: var(--hp-s2);
+}
+
+.hp-cart__count {
+  min-width: 18px;
+  padding: 1px 5px;
+  font-size: 0.6875rem;
+  letter-spacing: 0;
+  text-align: center;
+  color: #fff;
+  background: var(--hp-red);
+  border-radius: var(--hp-radius);
+}
+
+.hp-cart__empty {
+  margin-top: var(--hp-s2) !important;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: #b8b8b2;
+}
+
+[class*="st-key-hp-cart-line-"] {
+  gap: 0;
+  padding-top: var(--hp-s2);
+  border-top: 1px solid #3a3a3a;
+}
+
+.hp-cart__line {
+  display: flex;
+  gap: var(--hp-s3);
+  align-items: flex-start;
+}
+
+.hp-cart__thumb {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  object-fit: contain;
+  background: #fff;
+  border-radius: var(--hp-radius);
+}
+
+/* Placeholder thumbnail: a package glyph on a soft tile, with the red accent of the rail's chips. */
+.hp-cart__thumb--empty,
+.hp-confirm__image--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.hp-cart__thumb--empty {
+  background: linear-gradient(145deg, #34342f 0%, #262626 100%);
+  border: 1px solid #3f3f3b;
+  border-left: 2px solid var(--hp-red);
+  color: #b8b8b2;
+}
+
+.hp-thumb-glyph {
+  font-family: "Material Symbols Rounded";
+  font-feature-settings: "liga";
+  font-variation-settings: "FILL" 0, "wght" 300;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.hp-cart__line--gone .hp-cart__thumb--empty {
+  border-left-color: #4a4a47;
+  color: #6b6b66;
+}
+
+.hp-cart__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hp-cart__brand {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9a9a94;
+}
+
+.hp-cart__title {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: #f2f2ef;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hp-cart__price {
+  font-family: var(--hp-heading);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: #fff;
+}
+
+.hp-cart__subtotal,
+.hp-cart__note {
+  font-size: 0.6875rem;
+  color: #9a9a94;
+}
+
+.hp-cart__line--gone .hp-cart__title {
+  color: #9a9a94;
+  text-decoration: line-through;
+}
+
+[class*="st-key-hp-cart-step-"] {
+  padding-left: calc(44px + var(--hp-s3));
+}
+
+[class*="st-key-hp-cart-step-"] button {
+  min-height: 28px;
+  padding: 0 var(--hp-s1);
+  color: #d8d8d3;
+  border: 1px solid #4a4a47;
+  border-radius: var(--hp-radius);
+}
+
+[class*="st-key-hp-cart-step-"] button:not(:disabled):hover {
+  color: #fff;
+  border-color: var(--hp-red);
+}
+
+[class*="st-key-hp-cart-step-"] button:disabled {
+  opacity: 0.35;
+}
+
+/* Remove stays apart from the stepper, so it is never hit by accident. */
+[class*="st-key-hp-cart-remove-"] {
+  margin-left: auto;
+}
+
+.hp-cart__qty {
+  display: inline-block;
+  min-width: 24px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #fff;
+}
+
+.hp-cart__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-top: var(--hp-s2);
+  border-top: 2px solid #f2f2ef;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #9a9a94;
+}
+
+.hp-cart__total-value {
+  font-family: var(--hp-heading);
+  font-size: 1.25rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #fff;
+}
+
+/* Confirmation card in the answer: nothing changes until the customer decides. */
+
+.hp-confirm-lead {
+  margin: var(--hp-s2) 0 !important;
+  font-size: 0.875rem;
+  color: var(--hp-graphite);
+}
+
+.hp-confirm {
+  margin: var(--hp-s2) 0 0;
+  padding: var(--hp-s3) var(--hp-s4);
+  border: 1px solid var(--hp-rule);
+  border-left: 3px solid var(--hp-red);
+  border-radius: var(--hp-radius);
+  background: #fff;
+}
+
+.hp-confirm--remove {
+  border-left-color: var(--hp-ink);
+}
+
+.hp-confirm--done {
+  background: var(--hp-grey-0);
+  border-left-color: var(--hp-grey-3);
+}
+
+.hp-confirm__lines {
+  list-style: none;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.hp-confirm__body {
+  display: flex;
+  gap: var(--hp-s3);
+  align-items: center;
+  margin: var(--hp-s2) 0 0 !important;
+  padding: 0 !important;
+}
+
+/* Several products in one change: ruled rows, like the lines of a receipt. */
+.hp-confirm__body + .hp-confirm__body {
+  padding-top: var(--hp-s2) !important;
+  border-top: 1px solid var(--hp-grey-2);
+}
+
+.hp-confirm__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: var(--hp-s3) !important;
+  padding-top: var(--hp-s2);
+  border-top: 2px solid var(--hp-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--hp-grey-4);
+}
+
+.hp-confirm__total-value {
+  font-family: var(--hp-heading);
+  font-size: 1.125rem;
+  letter-spacing: 0;
+  color: var(--hp-ink);
+}
+
+.hp-confirm__image {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  object-fit: contain;
+  background: var(--hp-grey-0);
+}
+
+.hp-confirm__image--empty {
+  background: linear-gradient(145deg, #fff 0%, var(--hp-grey-1) 100%);
+  border: 1px solid var(--hp-grey-2);
+  border-left: 2px solid var(--hp-red);
+  color: var(--hp-grey-3);
+}
+
+.hp-confirm__image--empty .hp-thumb-glyph {
+  font-size: 30px;
+}
+
+.hp-confirm__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hp-confirm__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--hp-ink);
+}
+
+.hp-confirm__detail {
+  font-family: var(--hp-heading);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--hp-ink);
+}
+
+.hp-confirm__cart {
+  font-size: 0.75rem;
+  color: var(--hp-grey-4);
+}
+
+.hp-confirm__state {
+  display: inline-block;
+  margin-top: var(--hp-s3);
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--hp-grey-2);
+  border-radius: var(--hp-radius);
+  color: var(--hp-grey-4);
+}
+
+.hp-confirm__state--confirmed {
+  color: #1f6f3a;
+  border-left: 2px solid #1f6f3a;
+}
+
+.hp-confirm__state--expired {
+  border-style: dashed;
+}
+
+[class*="st-key-hp-confirm-actions-"] {
+  padding: 0 var(--hp-s4) var(--hp-s3);
+  border: 1px solid var(--hp-rule);
+  border-top: 0;
+  border-left: 3px solid var(--hp-red);
+  margin-top: calc(-1 * var(--hp-s4));
+  background: #fff;
+}
+
+[class*="st-key-hp-confirm-"]:has(.hp-confirm--remove) [class*="st-key-hp-confirm-actions-"] {
+  border-left-color: var(--hp-ink);
+}
+
+/* The customer's decision, in place of a typed message. */
+.hp-decision {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--hp-graphite);
+}
+
 /* ---------- Small screens ---------- */
 
 @media (max-width: 640px) {
   .hp-masthead__meta {
     display: none;
+  }
+
+  .hp-cart-badge {
+    margin-left: auto;
   }
 
   .hp-intro__title {

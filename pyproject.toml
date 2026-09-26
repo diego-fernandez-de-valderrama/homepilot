@@ -31,7 +31,10 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes ar
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["integration: needs running PostgreSQL/Qdrant (auto-skipped when unreachable)"]
-filterwarnings = ["ignore:.*EXPERIMENTAL.*JSON_SCHEMA_FOR_FUNC_DECL:UserWarning"]
+filterwarnings = [
+    "ignore:.*EXPERIMENTAL.*JSON_SCHEMA_FOR_FUNC_DECL:UserWarning",
+    "ignore:.*EXPERIMENTAL.*TOOL_CONFIRMATION:UserWarning",
+]
 
 [tool.uv.sources]
 catalog-ingestion = { path = "../catalog-ingestion", editable = true }

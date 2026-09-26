@@ -121,6 +121,14 @@ PROTOTYPES: dict[Category, tuple[str, ...]] = {
         "Vergiss das mit Alexa, ich nutze jetzt Google Home",
         "Ignoriere bitte meine vorherige Anfrage",
         "Streich das, ich habe es mir anders überlegt",
+        # Shopping cart (the customer can only fill it through the agent)
+        "Add it to my cart",
+        "Put two of those in the cart",
+        "Take the bridge out of my cart",
+        "What's in my shopping cart?",
+        "Leg das Thermostat in den Warenkorb",
+        "Entferne die Steckdose aus dem Warenkorb",
+        "Was liegt in meinem Warenkorb?",
     ),
     Category.ELECTRICAL: (
         "How do I wire this thermostat?",

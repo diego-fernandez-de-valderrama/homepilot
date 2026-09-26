@@ -137,7 +137,12 @@ def make_output_callback(
         if not text:
             return None
         session = read_state(callback_context.state)
-        known = [*session.selected_products, *session.comparison_products, *session.candidate_products]
+        known = [
+            *session.selected_products,
+            *session.comparison_products,
+            *session.candidate_products,
+            *(item.product_id for item in session.cart),
+        ]
         violations = await asyncio.to_thread(validator.validate, text, _tool_responses(callback_context), known)
         if not violations:
             return None

@@ -4,15 +4,23 @@ from catalog_ingestion.domain.enums import FactStatus
 from streamlit.testing.v1 import AppTest
 
 from smart_home_agent.agent.state import SessionState
+from smart_home_agent.models.cart import CartChangeLine, CartConfirmation, CartItem
+from smart_home_agent.services.cart import CartService
 from smart_home_agent.services.comparison import compare
 from smart_home_agent.services.rich_content import product_compatibility
 from smart_home_agent.ui import streamlit_app
 from smart_home_agent.ui.components import (
     Suggestion,
     answer_markdown,
+    cart_confirmation_html,
+    cart_header_html,
+    cart_line_html,
+    cart_total_html,
     comparison_html,
     compatibility_html,
+    confirm_button_label,
     item_chip_html,
+    masthead_html,
     product_cards_html,
     setup_panel_html,
     suggestion_tile_html,
@@ -20,7 +28,7 @@ from smart_home_agent.ui.components import (
     tool_status_label,
     upgrade_html,
 )
-from tests.fakes import fact, product
+from tests.fakes import FakeCatalog, fact, product
 from tests.unit.test_rich import BASIC, PRO, UPSELL
 
 APP = Path(streamlit_app.__file__)
@@ -174,3 +182,102 @@ def test_hover_card_flip_script_and_styles_agree():
     assert '"hp-item--below"' in script and ".hp-item--below .hp-item__card" in css
     assert ".hp-masthead" in script  # room is measured below the pinned masthead, not the window top
     assert "</script" not in script  # embedded in a <script> tag by inject_behaviour
+
+
+CART = CartService(FakeCatalog([product("a", title="<b>Thermo</b>", price=19.99), product("n", price=None)]))
+
+
+def test_cart_panel_states():
+    empty = CART.view([])
+    assert "Your cart is empty" in cart_header_html(empty)
+    view = CART.view([CartItem(product_id="a", quantity=2), CartItem(product_id="gone", quantity=1)])
+    assert "hp-cart__count" in cart_header_html(view) and ">3<" in cart_header_html(view)
+    line = cart_line_html(view.lines[0])
+    assert "<b>" not in line and "&lt;b&gt;Thermo" in line
+    assert "39.98 €" in line and "2 × 19.99 €" in line
+    assert "No longer available" in cart_line_html(view.lines[1])
+    # Without an image: a decorative package glyph instead of placeholder text.
+    assert "hp-thumb-glyph" in line and "No image" not in line
+    assert "hp-thumb-glyph" in cart_line_html(view.lines[1])
+    assert "39.98 €" in cart_total_html(view)
+    assert "not listed" in cart_total_html(CART.view([CartItem(product_id="n", quantity=1)]))
+
+
+def test_masthead_badge_counts_units():
+    assert ">0<" in masthead_html() and "hp-cart-badge--filled" not in masthead_html()
+    assert "hp-cart-badge--filled" in masthead_html(3) and "3 items in your cart" in masthead_html(3)
+    assert "1 item in your cart" in masthead_html(1)
+
+
+def test_confirmation_card_from_catalog_data():
+    add = CART.describe("r1", "add", {"product_ids": ["a"], "quantities": [2]}, [])
+    card = cart_confirmation_html(add)
+    assert "Add to cart" in card and "&lt;b&gt;Thermo" in card and "products" not in card
+    assert "2 × 19.99 € = 39.98 €" in card and "after this change: 2" in card
+    assert "hp-confirm__total" not in card  # a single product needs no change total
+    assert "hp-confirm__state" not in card  # open: the buttons are rendered below it
+    assert confirm_button_label(add) == "Add to cart"
+    assert "Added to your cart" in cart_confirmation_html(add, "confirmed")
+    assert "Not added" in cart_confirmation_html(add, "cancelled")
+    assert "Not confirmed" in cart_confirmation_html(add, "expired")
+    remove_all = CART.describe("r2", "remove", {"product_ids": ["a"]}, [CartItem(product_id="a", quantity=3)])
+    removal = cart_confirmation_html(remove_all)
+    assert "Remove from cart" in removal and "All 3" in removal and "after this change: 0" in removal
+    unknown = CartConfirmation(
+        request_id="r3",
+        action="add",
+        lines=[CartChangeLine(product_id="99", quantity=1, product=None)],
+    )
+    assert "not in the catalog" in cart_confirmation_html(unknown)
+
+
+def test_confirmation_card_for_several_products():
+    batch = CART.describe("r1", "add", {"product_ids": ["a", "n"], "quantities": [2, 1]}, [])
+    card = cart_confirmation_html(batch)
+    assert "Add to cart · 2 products" in card
+    assert card.count('class="hp-confirm__body"') == 2
+    assert "hp-confirm__total" not in card  # one product has no listed price: no misleading total
+    priced = CART.describe("r2", "add", {"product_ids": ["a", "a"], "quantities": [1, 1]}, [])
+    assert len(priced.lines) == 1  # repeats are merged into one line
+    two = CartConfirmation(
+        request_id="r3",
+        action="remove",
+        lines=[
+            CartChangeLine(product_id="a", quantity=None, product=product("a", price=19.99), in_cart=2),
+            CartChangeLine(product_id="b", quantity=1, product=product("b", price=5.0), in_cart=1),
+        ],
+    )
+    removal = cart_confirmation_html(two)
+    assert "−44.98 €" in removal and "Change total" in removal
+    assert confirm_button_label(two) == "Remove 2 products" and confirm_button_label(batch) == "Add 2 products"
+
+
+def _confirmation_script(decided: bool) -> None:
+    import streamlit as st
+
+    from smart_home_agent.models.cart import CartChangeLine, CartConfirmation
+    from smart_home_agent.ui.streamlit_app import render_confirmations
+
+    st.session_state.setdefault("expired", set())
+    st.session_state.setdefault("decisions", {"r1": True} if decided else {})
+    line = CartChangeLine(product_id="a", quantity=1, product=None)
+    change = CartConfirmation(request_id="r1", action="add", lines=[line])
+    render_confirmations([change], interactive=True)
+
+
+def _slot_keys(app: AppTest) -> tuple[list[int], list[int]]:
+    """Positions of the top-level slots and of the slots inside the card container."""
+    top = sorted(app.main.children)
+    card = app.main.children[top[-1]]
+    return top, sorted(card.children)
+
+
+def test_deciding_a_change_keeps_every_element_in_place():
+    """Regression: the lead line and the buttons disappeared on click, the card moved up one slot and the
+    previous run's card stayed visible as a faded duplicate while the confirmation turn ran."""
+    open_app = AppTest.from_function(_confirmation_script, args=(False,)).run()
+    decided_app = AppTest.from_function(_confirmation_script, args=(True,)).run()
+    assert not open_app.exception and not decided_app.exception
+    assert [b.label for b in open_app.button] == ["Add to cart", "Cancel"]
+    assert list(decided_app.button) == []
+    assert _slot_keys(open_app) == _slot_keys(decided_app)

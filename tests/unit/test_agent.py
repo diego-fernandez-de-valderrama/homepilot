@@ -29,7 +29,7 @@ def test_agent_builds_offline_with_all_tools():
     agent = build_agent(services_for([product("1")]), _settings())
     assert isinstance(agent.model, BaseLlm)
     assert agent.model.model == "gemini-test"
-    assert len(agent.tools) == 8
+    assert len(agent.tools) == 11
     AgentService(agent, "test-app")  # runner + in-memory sessions, no network
 
 
@@ -46,6 +46,17 @@ def test_instruction_contains_rules_vocabulary_and_session():
     assert "Every catalog product you mention must be shown through a tag" in text
     assert "otherwise, mention it with <item" in text
     assert "do not add\n    an <item/> for it" in text
+    assert "The interface asks the customer to confirm every add and remove" in text
+
+
+def test_instruction_keeps_the_cart_out_of_the_prompt():
+    cart = {"cart": [{"product_id": "41234567", "quantity": 2}], "cart_checked": True}
+    text = build_instruction(SimpleNamespace(state={STATE_KEY: cart}))
+    assert "41234567" not in text
+    assert "# Cart status" not in text
+    changed = build_instruction(SimpleNamespace(state={STATE_KEY: {**cart, "cart_changed_by_user": True}}))
+    assert "changed the cart in the interface" in changed
+    assert "call view_cart once" in build_instruction(SimpleNamespace(state={}))
 
 
 def test_instruction_without_state():

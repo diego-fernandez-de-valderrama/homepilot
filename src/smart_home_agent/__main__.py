@@ -11,11 +11,16 @@ import argparse
 import json
 import sys
 import uuid
+from typing import TYPE_CHECKING
 
 from smart_home_agent.config import get_settings
 from smart_home_agent.container import build_container
+from smart_home_agent.models.cart import CartConfirmation
 from smart_home_agent.models.recommendation import RecommendationRequest
 from smart_home_agent.models.rich import to_plain
+
+if TYPE_CHECKING:
+    from smart_home_agent.agent.trace import AgentReply
 
 
 def check() -> int:
@@ -56,20 +61,40 @@ def chat() -> int:
     settings = get_settings()
     container = build_container(settings)
     agent = build_agent(container.services, settings, container.guardrail)
-    service = AgentService(agent, settings.agent.app_name, container.services.rich_content)
+    service = AgentService(agent, settings.agent.app_name, container.services.rich_content, container.services.cart)
     session_id = str(uuid.uuid4())
     print("HomePilot (Ctrl-D to quit)")
     for line in sys.stdin:
         if not line.strip():
             continue
         reply = service.chat(session_id, line.strip())
-        tools = ", ".join(c.name for c in reply.trace.tool_calls) or "none"
-        guardrail = reply.guardrail
-        verdict = guardrail.input.category if guardrail and guardrail.input else "n/a"
-        replaced = f", reply: {guardrail.response_type}" if guardrail and guardrail.response_type else ""
-        text = to_plain(reply.text, reply.rich.titles() if reply.rich else {})
-        print(f"\n{text}\n  [tools: {tools}] [guardrail: {verdict}{replaced}]\n")
+        _print_reply(reply)
+        # Cart changes wait for an explicit yes, like the confirmation card in the web UI.
+        while reply.pending_confirmations:
+            decisions = {c.request_id: _ask(c) for c in reply.pending_confirmations}
+            reply = service.confirm(session_id, decisions)
+            _print_reply(reply)
     return 0
+
+
+def _print_reply(reply: "AgentReply") -> None:
+    tools = ", ".join(c.name for c in reply.trace.tool_calls) or "none"
+    guardrail = reply.guardrail
+    verdict = guardrail.input.category if guardrail and guardrail.input else "n/a"
+    replaced = f", reply: {guardrail.response_type}" if guardrail and guardrail.response_type else ""
+    text = to_plain(reply.text, reply.rich.titles() if reply.rich else {})
+    print(f"\n{text}\n  [tools: {tools}] [guardrail: {verdict}{replaced}]\n")
+
+
+def _ask(change: CartConfirmation) -> bool:
+    verb = "Add to" if change.action == "add" else "Remove from"
+    print(f"{verb} the cart:")
+    for line in change.lines:
+        title = line.product.title if line.product else f"product {line.product_id} (not in the catalog)"
+        amount = "all units of" if line.quantity is None else f"{line.quantity} x"
+        print(f"  - {amount} {title}")
+    answer = input("Confirm? [y/N] ")
+    return answer.strip().lower() in {"y", "yes", "j", "ja"}
 
 
 def guardrail_eval(sweep: bool, record: bool) -> int:

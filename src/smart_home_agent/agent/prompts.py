@@ -1,6 +1,6 @@
 """System instruction of the HomePilot agent (guardrails live here, at prompt level)."""
 
-from smart_home_agent.agent.state import TURN_LANGUAGE_KEY, StateHolder, read_state
+from smart_home_agent.agent.state import CART_FIELDS, TURN_LANGUAGE_KEY, SessionState, StateHolder, read_state
 from smart_home_agent.services.vocabulary import vocabulary_overview
 
 BASE_INSTRUCTION = """\
@@ -47,6 +47,24 @@ You help customers find, understand and compare smart home products from our cat
 - `unconfirmed` products may be mentioned only as "compatibility not confirmed", with the reason.
 - Never exceed the user's budget. Never recommend an incompatible product because it is more expensive.
 - Keep answers concise: usually 1-3 products with the key reasons. Offer to compare or give details.
+
+# Shopping cart
+- The customer has a shopping cart for this conversation. Products get into it only through you
+  (add_to_cart); the customer can change quantities or remove products in the interface.
+- Call add_to_cart only for products the customer asked to add or buy, or whose offer they accepted.
+  Use remove_from_cart when they ask to take something out. To change a quantity, add or remove the
+  difference (2 -> 3: add 1; 3 -> 1: remove 2).
+- Several products at once (for example a thermostat and the hub it needs): put them all in ONE
+  add_to_cart call (product_ids, with quantities in the same order), and all removals in one
+  remove_from_cart call, so the customer confirms them together. Never split one request into many calls.
+- The interface asks the customer to confirm every add and remove. Never ask for that confirmation in
+  your text, and never say a change was made unless the tool result status is "ok".
+- A change is applied all or nothing. If the status is "rejected", the customer cancelled: acknowledge it
+  briefly and do not call the tool again for that change. "not_found" or "invalid_input": nothing was
+  changed; explain what went wrong using `errors`.
+- After a change, briefly say what the cart contains now, from `remaining_items` (or that it is empty),
+  showing the products with <items ids="..."/> or <item id="..."/>.
+- For questions about the cart, rely on view_cart, never on memory.
 
 # Rich answer components
 The chat renders these self-closing tags as product components. They are presentation directives only:
@@ -102,7 +120,7 @@ def build_instruction(context: StateHolder) -> str:
     session = read_state(context.state)
     known = session.model_dump(
         mode="json",
-        exclude={"last_search", "candidate_products", "last_upsell"},
+        exclude={"last_search", "candidate_products", "last_upsell", *CART_FIELDS},
         exclude_none=True,
         exclude_defaults=True,
     )
@@ -120,4 +138,21 @@ def build_instruction(context: StateHolder) -> str:
     )
     if session.candidate_products:
         parts.append(f"# Products from the last search (ids, in order)\n{', '.join(session.candidate_products[:15])}")
+    if (cart_status := _cart_status(session)) is not None:
+        parts.append(cart_status)
     return "\n\n".join(parts)
+
+
+def _cart_status(session: SessionState) -> str | None:
+    """Tells the model when it has to look at the cart again (it only sees the cart through view_cart)."""
+    if not session.cart_checked:
+        return (
+            "# Cart status\nYou have not looked at the cart in this conversation yet: call view_cart once "
+            "before answering, then continue with the customer's request."
+        )
+    if session.cart_changed_by_user:
+        return (
+            "# Cart status\nThe customer changed the cart in the interface since your last cart tool call: "
+            "call view_cart before you talk about the cart or change it."
+        )
+    return None
