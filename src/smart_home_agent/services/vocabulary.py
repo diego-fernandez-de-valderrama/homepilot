@@ -138,6 +138,9 @@ def _key(value: str) -> str:
     return compatibility_vocabulary.normalize_alias(value)
 
 
+_TERMS_BY_LABEL: dict[str, str] = {_key(t.label): t.canonical for t in compatibility_vocabulary.TERMS}
+
+
 def _singular(value: str) -> list[str]:
     forms = [value]
     for suffix in ("en", "es", "s", "e"):
@@ -163,6 +166,8 @@ def resolve_term(value: str) -> ResolvedTerm:
     key = _TERM_SUFFIXES.sub("", _key(value)).strip()
     if compatibility_vocabulary.term_by_canonical(key):
         return term(key)
+    if key in _TERMS_BY_LABEL:  # the labels the tools return ("Apple Home (HomeKit)") must resolve back
+        return term(_TERMS_BY_LABEL[key])
     if key in _EXTRA_TERM_ALIASES:
         return term(_EXTRA_TERM_ALIASES[key])
     options = _AMBIGUOUS_TERMS.get(key)
