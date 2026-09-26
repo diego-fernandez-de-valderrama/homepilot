@@ -32,6 +32,11 @@
   background: transparent;
 }
 
+/* The running indicator would sit over the pinned masthead; each turn shows its own progress line. */
+[data-testid="stStatusWidget"] {
+  display: none;
+}
+
 [data-testid="stMainBlockContainer"] {
   max-width: 840px;
   padding-top: var(--hp-s6);
@@ -43,6 +48,16 @@
 }
 
 /* ---------- Masthead ---------- */
+
+/* The masthead stays pinned while the conversation scrolls beneath it. */
+[data-testid="stElementContainer"]:has(.hp-masthead) {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #fff;
+  padding-top: var(--hp-s3);
+  margin-top: calc(-1 * var(--hp-s3));
+}
 
 .hp-masthead {
   display: flex;
@@ -542,6 +557,77 @@
 [data-testid="stChatMessageContent"] [data-testid="stExpander"] [data-testid="stMarkdownContainer"] {
   font-size: 0.8125rem;
   color: var(--hp-graphite);
+}
+
+/* Progress inside a turn: neutral typing dots, then a compact status only for real tool calls. */
+
+.hp-typing {
+  display: flex;
+  gap: 5px;
+  padding: var(--hp-s2) 0;
+}
+
+.hp-typing span {
+  width: 7px;
+  height: 7px;
+  background: var(--hp-grey-3);
+  animation: hp-typing 1.2s ease-in-out infinite;
+}
+
+.hp-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.hp-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes hp-typing {
+  0%,
+  60%,
+  100% {
+    background: var(--hp-grey-3);
+    transform: translateY(0);
+  }
+  30% {
+    background: var(--hp-red);
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hp-typing span {
+    animation: none;
+  }
+}
+
+.hp-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--hp-s2);
+  padding: var(--hp-s1) 0;
+  font-size: 0.875rem;
+  color: var(--hp-graphite);
+}
+
+.hp-progress__spinner {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  background: var(--hp-red);
+  animation: hp-progress 1s linear infinite;
+}
+
+@keyframes hp-progress {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hp-progress__spinner {
+    animation: none;
+  }
 }
 
 /* Spinner and errors inside a turn */

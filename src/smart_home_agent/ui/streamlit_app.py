@@ -4,6 +4,8 @@ Run from the smart-home-agent directory (so `.env` is found):
     uv run streamlit run src/smart_home_agent/ui/streamlit_app.py
 """
 
+import queue
+import time
 import uuid
 
 import streamlit as st
@@ -16,6 +18,7 @@ from smart_home_agent.config import get_settings
 from smart_home_agent.container import build_container
 from smart_home_agent.ui.components import (
     ADVISOR_AVATAR,
+    TYPING_HTML,
     Suggestion,
     assistant_eyebrow_html,
     inject_styles,
@@ -23,6 +26,8 @@ from smart_home_agent.ui.components import (
     masthead_html,
     setup_panel_html,
     suggestion_tiles,
+    tool_progress_html,
+    tool_status_label,
 )
 
 SUGGESTIONS = [
@@ -34,11 +39,30 @@ SUGGESTIONS = [
 ]
 
 
-@st.cache_resource(show_spinner="Connecting to the catalog...")
+@st.cache_resource(show_spinner="Starting HomePilot...")
 def get_agent_service() -> AgentService:
     settings = get_settings()
     container = build_container(settings)
     return AgentService(build_agent(container.services, settings, container.guardrail), settings.agent.app_name)
+
+
+def run_turn(prompt: str, progress: DeltaGenerator) -> AgentReply:
+    """Runs one turn and shows real progress in `progress`: a neutral typing cue, then a status line only
+    for the tools the model actually calls (a plain "hi" never shows a catalog status). The caller then
+    writes the answer into the same slot, so the live message has the same layout as the history one."""
+    calls: queue.SimpleQueue[str] = queue.SimpleQueue()
+    future = get_agent_service().submit(st.session_state.session_id, prompt, on_tool_call=calls.put)
+    progress.html(TYPING_HTML)
+    shown = None
+    while not future.done():
+        label = shown
+        while not calls.empty():
+            label = tool_status_label(calls.get())
+        if label is not None and label != shown:
+            progress.html(tool_progress_html(label))
+            shown = label
+        time.sleep(0.15)
+    return future.result()
 
 
 def init_session() -> None:
@@ -52,12 +76,11 @@ def latest_state(messages: list[dict]) -> SessionState | None:
     return replies[-1].state if replies else None
 
 
-def render_sidebar() -> tuple[bool, DeltaGenerator]:
-    """Returns the developer toggle and the setup slot (refilled after a turn so it shows the new state)."""
+def render_sidebar() -> bool:
+    """Returns the developer toggle."""
     with st.sidebar:
         st.html('<p class="hp-rail-brand"><span class="hp-rail-brand__mark"></span>HomePilot</p>')
-        setup = st.empty()
-        setup.html(setup_panel_html(latest_state(st.session_state.messages)))
+        st.html(setup_panel_html(latest_state(st.session_state.messages)))
         st.html('<p class="hp-rail-label">Conversation</p>')
         if st.button("New conversation", icon=":material/refresh:", type="primary", width="stretch"):
             st.session_state.clear()
@@ -65,7 +88,7 @@ def render_sidebar() -> tuple[bool, DeltaGenerator]:
         st.html('<p class="hp-rail-label">Developer</p>')
         debug = st.toggle("Developer panel", value=False, help="Show language, tools, candidates and compatibility.")
         st.html('<p class="hp-rail-footer">Answers based on the HomePilot catalog · EN / DE</p>')
-    return debug, setup
+    return debug
 
 
 def render_debug(reply: AgentReply) -> None:
@@ -115,7 +138,7 @@ def main() -> None:
     st.set_page_config(page_title="HomePilot", page_icon=":material/home:", layout="centered")
     inject_styles()
     init_session()
-    debug, setup = render_sidebar()
+    debug = render_sidebar()
     st.html(masthead_html())
 
     for message in st.session_state.messages:
@@ -138,19 +161,19 @@ def main() -> None:
 
     with st.chat_message("assistant", avatar=ADVISOR_AVATAR):
         st.html(assistant_eyebrow_html())
+        answer = st.empty()  # progress first, then the answer, at the same position as in render_message
         try:
-            with st.spinner("Checking the catalog..."):
-                reply = get_agent_service().chat(st.session_state.session_id, prompt)
+            reply = run_turn(prompt, answer)
         except Exception as exc:  # the UI must survive backend failures (quota, network, database down)
-            st.error(f"Sorry, something went wrong: {type(exc).__name__}: {exc}")
+            answer.error(f"Sorry, something went wrong: {type(exc).__name__}: {exc}")
             st.session_state.messages.pop()
             return
         text = reply.text or "_(no answer)_"
-        st.markdown(text)
-        if debug:
-            render_debug(reply)
+        answer.markdown(text)
     st.session_state.messages.append({"role": "assistant", "content": text, "reply": reply})
-    setup.html(setup_panel_html(reply.state))
+    # Redraw from history (no agent call): the next turn then starts from exactly the layout it re-renders,
+    # so no element of this run is left behind as a faded duplicate while the next answer is computed.
+    st.rerun()
 
 
 main()

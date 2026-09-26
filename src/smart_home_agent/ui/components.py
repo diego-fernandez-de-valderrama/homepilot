@@ -19,6 +19,24 @@ ADVISOR_AVATAR = str(_UI_DIR / "assets" / "advisor.svg")
 
 _LANGUAGES = {"en": "English", "de": "Deutsch"}
 
+# Progress labels per tool. Shown only once the model really calls that tool in the current turn.
+_TOOL_LABELS = {
+    "recommend_products": "Finding matching products in the catalog",
+    "search_products": "Searching the catalog",
+    "filter_products": "Filtering the catalog",
+    "get_product": "Loading product details",
+    "check_compatibility": "Checking compatibility",
+    "compare_products": "Comparing products",
+    "get_evidence": "Looking up the sources",
+    "remember_preferences": "Noting your preferences",
+}
+
+# Neutral "the advisor is writing" cue: no text, so it never claims work that is not happening.
+TYPING_HTML = (
+    '<div class="hp-typing" role="status" aria-label="HomePilot is answering">'
+    "<span></span><span></span><span></span></div>"
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Suggestion:
@@ -81,6 +99,17 @@ def suggestion_tiles(suggestions: list[Suggestion]) -> str | None:
             if st.button(suggestion.title, key=f"hp-suggest-{i}", width="stretch"):
                 selected = suggestion.prompt
     return selected
+
+
+def tool_status_label(tool_name: str) -> str:
+    return _TOOL_LABELS.get(tool_name, "Working on your request")
+
+
+def tool_progress_html(label: str) -> str:
+    return (
+        '<div class="hp-progress" role="status"><span class="hp-progress__spinner"></span>'
+        f"<span>{html.escape(label)}</span></div>"
+    )
 
 
 def assistant_eyebrow_html() -> str:

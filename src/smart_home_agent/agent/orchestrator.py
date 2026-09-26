@@ -3,7 +3,8 @@
 import asyncio
 import logging
 import threading
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
+from concurrent.futures import Future
 from typing import Any
 
 from google.adk.agents import LlmAgent
@@ -90,10 +91,27 @@ class AgentService:
     def chat(self, session_id: str, text: str, user_id: str = DEFAULT_USER) -> AgentReply:
         return self._run(self.chat_async(session_id, text, user_id))
 
+    def submit(
+        self,
+        session_id: str,
+        text: str,
+        user_id: str = DEFAULT_USER,
+        on_tool_call: Callable[[str], None] | None = None,
+    ) -> Future[AgentReply]:
+        """Starts a turn without blocking. `on_tool_call` receives each tool name as the model calls it
+        (on the agent loop thread, so it must be thread-safe), which lets a UI show real progress."""
+        return asyncio.run_coroutine_threadsafe(self.chat_async(session_id, text, user_id, on_tool_call), self._loop)
+
     def state(self, session_id: str, user_id: str = DEFAULT_USER) -> SessionState:
         return self._run(self.state_async(session_id, user_id))
 
-    async def chat_async(self, session_id: str, text: str, user_id: str = DEFAULT_USER) -> AgentReply:
+    async def chat_async(
+        self,
+        session_id: str,
+        text: str,
+        user_id: str = DEFAULT_USER,
+        on_tool_call: Callable[[str], None] | None = None,
+    ) -> AgentReply:
         trace = TurnTrace()
         answer: list[str] = []
         language = detect_language(text)
@@ -107,6 +125,8 @@ class AgentService:
         async for event in events:
             for call in event.get_function_calls():
                 trace.add_call(call.id, call.name or "", dict(call.args or {}))
+                if on_tool_call is not None:
+                    on_tool_call(call.name or "")
             for response in event.get_function_responses():
                 trace.add_response(response.id, response.name or "", response.response)
             if event.is_final_response() and event.content and event.content.parts:

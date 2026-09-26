@@ -4,7 +4,13 @@ from streamlit.testing.v1 import AppTest
 
 from smart_home_agent.agent.state import SessionState
 from smart_home_agent.ui import streamlit_app
-from smart_home_agent.ui.components import Suggestion, setup_panel_html, suggestion_tile_html
+from smart_home_agent.ui.components import (
+    Suggestion,
+    setup_panel_html,
+    suggestion_tile_html,
+    tool_progress_html,
+    tool_status_label,
+)
 
 APP = Path(streamlit_app.__file__)
 
@@ -38,3 +44,9 @@ def test_dynamic_values_are_escaped():
     assert "<script>" not in panel
     tile = suggestion_tile_html(Suggestion("home", "Topic", "<b>Title</b>", "Say <hi>"))
     assert "<b>" not in tile and "&lt;hi&gt;" in tile
+
+
+def test_progress_labels_name_the_tool_actually_called():
+    assert tool_status_label("compare_products") == "Comparing products"
+    assert tool_status_label("some_new_tool") == "Working on your request"
+    assert "Checking compatibility" in tool_progress_html(tool_status_label("check_compatibility"))

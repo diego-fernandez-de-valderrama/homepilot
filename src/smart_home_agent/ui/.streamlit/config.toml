@@ -55,3 +55,7 @@ primaryColor = "#D2001E"
 codeBackgroundColor = "#2B2B2B"
 codeTextColor = "#EDEDEA"
 linkColor = "#FF6B7D"
+
+[client]
+# Viewer toolbar (app menu only): the "Deploy" button would overlap the pinned masthead.
+toolbarMode = "viewer"

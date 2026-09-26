@@ -270,3 +270,20 @@ def test_response_choice_is_deterministic_with_a_seeded_rng():
     first = pick_response(ResponseType.OFF_TOPIC, "de", None, random.Random(1))
     assert first == pick_response(ResponseType.OFF_TOPIC, "de", None, random.Random(1))
     assert pick_response(ResponseType.OFF_TOPIC, "fr") in pool(ResponseType.OFF_TOPIC, "en")
+
+
+def test_submit_reports_only_the_tools_really_called():
+    llm = ScriptedLlm(script=[call_response("get_product", product_id="t1"), text_response(MODEL_ANSWER)])
+    called: list[str] = []
+    reply = service(llm, None).submit("s1", "Tell me more about the Acme thermostat", on_tool_call=called.append)
+    assert reply.result(timeout=30).text == MODEL_ANSWER
+    assert called == ["get_product"]
+
+
+def test_submit_reports_no_tool_for_small_talk():
+    called: list[str] = []
+    reply = service(ScriptedLlm(script=[text_response("Hi! How can I help?")]), None).submit(
+        "s1", "hi", on_tool_call=called.append
+    )
+    assert reply.result(timeout=30).text == "Hi! How can I help?"
+    assert called == []
