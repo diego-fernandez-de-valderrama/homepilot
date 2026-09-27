@@ -44,7 +44,8 @@ and fills the two databases this agent reads. See
 ## Deep dives
 
 - [Upselling in HomePilot](upselling.md): the upgrade rules and how the business KPI is measured.
-- [Guardrail tuning study (PDF)](guardrail-tuning-study.pdf): how the safety net thresholds were chosen.
+- [How the safety check understands messages](guardrail-embeddings.md): embeddings, example sentences, and how
+  the safety net was tuned.
 - The project [README](../README.md): setup, configuration, tools and tests.
 
 ---

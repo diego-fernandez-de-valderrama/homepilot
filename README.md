@@ -408,7 +408,7 @@ Otherwise the decision is `UNCERTAIN` and the message is allowed. The values are
 
 ### Tuning study
 
-The full write-up, with all rounds, variants and numbers, is `docs/guardrail-tuning-study.pdf`. In short:
+A plain-language explanation with diagrams is [`docs/guardrail-embeddings.md`](docs/guardrail-embeddings.md). The rounds in short:
 
 1. **First calibration** (`SEMANTIC_SIMILARITY` task type):
    - The suggested thresholds (0.84-0.93) blocked almost nothing, so they were lowered to 0.80-0.85.

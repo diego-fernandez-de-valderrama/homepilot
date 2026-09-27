@@ -11,7 +11,7 @@ the answer check looks at the reply before the customer sees it. Both are fast a
 ## The input check
 
 The message is compared by meaning with a set of example messages for each kind of request. This takes one small
-calculation, not a conversation with an AI.
+calculation, not a conversation with an AI ([how that works](guardrail-embeddings.md)).
 
 - **Electrical work** ("how do I connect the thermostat to 230 V?"): the customer gets a fixed, friendly reply that
   recommends a qualified electrician. The AI is never asked.
@@ -44,8 +44,8 @@ fails (for example the connection to the embedding service drops), the conversat
 | Input check and example messages | `src/smart_home_agent/guardrail/input/` |
 | Fixed replies | `src/smart_home_agent/guardrail/replies/` |
 | Answer checks | `src/smart_home_agent/guardrail/output/` |
-| Measuring and tuning | `uv run python -m evals guardrail`, [tuning study (PDF)](guardrail-tuning-study.pdf) |
+| Measuring and tuning | `uv run python -m evals guardrail`, [how it was tuned](guardrail-embeddings.md#4-how-it-was-tuned) |
 
 ---
 
-[&larr; Customer memory](customer-memory.md) | [Overview](README.md)
+[&larr; Customer memory](customer-memory.md) | [Overview](README.md) | [Next: How the safety check understands messages &rarr;](guardrail-embeddings.md)
