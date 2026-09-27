@@ -1,5 +1,6 @@
 """Cell values of the comparison table. A missing value is `NOT_LISTED`, never a "no"."""
 
+import re
 from collections.abc import Callable, Sequence
 
 from catalog_ingestion.vocabulary import FactStatus
@@ -31,8 +32,17 @@ def status_text(product: Product, canonical: str) -> str:
 def spec_value(product: Product, name: str) -> str | None:
     for spec in product.specs:
         if spec.name.casefold() == name.casefold():
-            return f"{spec.value} {spec.unit}".strip() if spec.unit else spec.value
+            return with_unit(spec.value, spec.unit)
     return None
+
+
+def with_unit(value: str, unit: str | None) -> str:
+    """Appends the unit unless the value already ends with it (the enrichment often stores "87 mm" with unit
+    "mm"); a unit glued to a longer word ("50 mm" with unit "m") still gets appended."""
+    unit = (unit or "").strip()
+    if not unit or re.search(rf"(?<![^\W\d_]){re.escape(unit)}\s*$", value):
+        return value
+    return f"{value} {unit}".strip()
 
 
 def requirements(product: Product) -> str | None:

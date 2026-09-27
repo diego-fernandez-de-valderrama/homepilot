@@ -67,3 +67,24 @@ def test_service_validates_input():
     with pytest.raises(ProductNotFoundError):
         service.compare(["a", "404"])
     assert len(service.compare(["a", "b"]).products) == 2
+
+
+@pytest.mark.parametrize(
+    ("value", "unit", "expected"),
+    [
+        ("87", "mm", "87 mm"),  # bare number, separate unit
+        ("87 mm", "mm", "87 mm"),  # value already contains its unit
+        ("0 - 50", "°C", "0 - 50 °C"),
+        ("0 - 50 °C", "°C", "0 - 50 °C"),
+        ("80", "%", "80 %"),
+        ("80 %", "%", "80 %"),
+        ("80%", "%", "80%"),
+        ("M30 x 1,5 mm", "mm", "M30 x 1,5 mm"),
+        ("50 mm", "m", "50 mm m"),  # "m" inside "mm" is not the unit
+        ("Micro AAA", None, "Micro AAA"),
+    ],
+)
+def test_spec_values_show_their_unit_once(value, unit, expected):
+    left = product("l", specs=[Spec(name="Size", value=value, unit=unit)])
+    right = product("r", specs=[Spec(name="Size", value="1")])
+    assert _row(ProductComparer.compare([left, right]), "Size").values[0] == expected
