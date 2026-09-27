@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 import streamlit as st
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 from streamlit.testing.v1 import AppTest
 
 from smart_home_agent.config import get_settings

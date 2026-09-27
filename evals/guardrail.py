@@ -13,7 +13,7 @@ from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
-from catalog_ingestion.llm.client import GeminiClient
+from catalog_ingestion.core import GeminiClient
 from pydantic import BaseModel
 
 from evals.guardrail_cases import ACCEPTANCE_CASES, EVAL_CASES, OUTPUT_CASES, TEST_CASES

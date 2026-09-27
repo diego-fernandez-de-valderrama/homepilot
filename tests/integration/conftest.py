@@ -29,9 +29,9 @@ def catalog(settings: Settings) -> Iterator[CatalogRepository]:
 
 @pytest.fixture(scope="session")
 def qdrant(settings: Settings) -> QdrantClient:
-    from catalog_ingestion.storage.qdrant.collection import create_client
+    from catalog_ingestion.indexing import QdrantCollection
 
-    client = create_client(settings.qdrant)
+    client = QdrantCollection.create_client(settings.qdrant)
     try:
         if not client.collection_exists(settings.qdrant.collection):
             pytest.skip("Qdrant collection missing (run catalog-ingestion init + ingest)")

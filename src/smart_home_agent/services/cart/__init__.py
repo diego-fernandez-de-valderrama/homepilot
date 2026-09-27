@@ -3,7 +3,7 @@ prices and titles always come from PostgreSQL, never from the session.
 
 One add/remove call can cover several products. It is applied all or nothing: the customer confirmed the
 whole change, so a change with any invalid product leaves the cart untouched and reports every problem
-(`CartChangeError`).
+(`CartChangeError`). `CartService.problems` finds them before the change is shown to the customer.
 
 A central unit (`CentralUnit`) runs every device of a home, so an add that would put more than one of it into
 the cart is a likely mistake: `CartService.central_units_over_one` finds them, and the add tool asks the customer

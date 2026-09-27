@@ -2,8 +2,7 @@
 
 import re
 
-from catalog_ingestion.domain.enums import RequirementKind
-from catalog_ingestion.vocabulary import requirements as requirement_vocabulary
+from catalog_ingestion.vocabulary import RequirementKind, RequirementVocabulary
 
 from smart_home_agent.services.vocabulary._aliases import key
 from smart_home_agent.services.vocabulary.term_resolution_error import TermResolutionError
@@ -26,10 +25,10 @@ def resolve_owned_device(value: str) -> str:
     Generic hubs, other brands' access points or controllers and non-ownable items raise instead of
     guessing, so they never satisfy a product's hub requirement."""
     normalized = key(value)
-    if requirement_vocabulary.term_by_canonical(normalized) and normalized not in NOT_OWNABLE:
+    if RequirementVocabulary.term_by_canonical(normalized) and normalized not in NOT_OWNABLE:
         return normalized
     # "Hue-Bridge" is the usual German spelling of "Hue Bridge".
-    found = requirement_vocabulary.lookup(value) or requirement_vocabulary.lookup(value.replace("-", " "))
+    found = RequirementVocabulary.lookup(value) or RequirementVocabulary.lookup(value.replace("-", " "))
     if found is None or found.canonical in NOT_OWNABLE:
         raise TermResolutionError("owned device", value)
     brand = _OWNED_BRAND.get(found.canonical)
@@ -40,7 +39,7 @@ def resolve_owned_device(value: str) -> str:
 
 def is_hub(canonical: str) -> bool:
     """True for a specific hub, bridge or gateway (not the generic one, a network, a phone or a subscription)."""
-    found = requirement_vocabulary.term_by_canonical(canonical)
+    found = RequirementVocabulary.term_by_canonical(canonical)
     return (
         found is not None
         and found.kind in (RequirementKind.HUB, RequirementKind.GATEWAY)
@@ -49,12 +48,12 @@ def is_hub(canonical: str) -> bool:
 
 
 def requirement_label(canonical: str) -> str:
-    found = requirement_vocabulary.term_by_canonical(canonical)
+    found = RequirementVocabulary.term_by_canonical(canonical)
     if found:
         return found.label
     return "Stand-alone operation (no hub)" if canonical == "standalone" else canonical
 
 
 def mentions_requirement(canonical: str, normalized_text: str) -> bool:
-    found = requirement_vocabulary.term_by_canonical(canonical)
+    found = RequirementVocabulary.term_by_canonical(canonical)
     return found is not None and bool(found.pattern.search(normalized_text.replace("-", " ")))

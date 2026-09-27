@@ -1,4 +1,4 @@
-from catalog_ingestion.domain.enums import FactSource, Method
+from catalog_ingestion.vocabulary import FactSource, Method
 from pydantic import BaseModel
 
 

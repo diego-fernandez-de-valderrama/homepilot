@@ -1,4 +1,4 @@
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 from pydantic import BaseModel, Field
 
 from smart_home_agent.models.compatibility import TermCheck

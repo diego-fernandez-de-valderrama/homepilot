@@ -1,6 +1,6 @@
 from typing import Any
 
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 
 from smart_home_agent.models import RecommendationRequest
 from tests.fakes import fact, product, requirement, services_for

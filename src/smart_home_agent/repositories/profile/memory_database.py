@@ -4,7 +4,7 @@ from typing import ClassVar
 from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
-from catalog_ingestion.core.settings import PostgresSettings
+from catalog_ingestion.core import PostgresSettings
 from sqlalchemy import Engine, MetaData, create_engine, text
 from sqlalchemy.engine import URL
 

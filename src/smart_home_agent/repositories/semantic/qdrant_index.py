@@ -1,7 +1,6 @@
 from collections.abc import Sequence
 
-from catalog_ingestion.retrieval.embeddings import Embedder
-from catalog_ingestion.storage.qdrant.repository import point_id
+from catalog_ingestion.indexing import Embedder, QdrantRepository
 from qdrant_client import QdrantClient, models
 
 from smart_home_agent.models import SearchCandidate
@@ -41,7 +40,9 @@ class QdrantIndex:
             self._collection,
             query=vector,
             limit=len(product_ids),
-            query_filter=models.Filter(must=[models.HasIdCondition(has_id=[point_id(pid) for pid in product_ids])]),
+            query_filter=models.Filter(
+                must=[models.HasIdCondition(has_id=[QdrantRepository.point_id(pid) for pid in product_ids])]
+            ),
             with_payload=["product_id"],
         )
         return {str((p.payload or {}).get("product_id")): p.score for p in response.points}

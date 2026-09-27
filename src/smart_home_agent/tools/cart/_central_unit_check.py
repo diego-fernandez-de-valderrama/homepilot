@@ -7,7 +7,7 @@ from smart_home_agent.session import StateStore
 
 
 class CentralUnitCheck:
-    """Shared by `AddToCartTool` and `AddConfirmationRule`: an add refused because of several central units is
+    """Shared by `AddToCartTool` and `CartConfirmationRule`: an add refused because of several central units is
     answered at once and never shown to the customer for confirmation."""
 
     def __init__(self, services: Services) -> None:

@@ -6,7 +6,7 @@ import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
-from catalog_ingestion.storage.postgres.engine import create_session_factory
+from catalog_ingestion.database import CatalogDatabase
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 
@@ -50,7 +50,7 @@ def test_migrations_match_the_models(memory_engine: Engine):
 
 
 def test_repository_round_trip_through_the_service(memory_engine: Engine):
-    repository = ProfileRepository(create_session_factory(memory_engine))
+    repository = ProfileRepository(CatalogDatabase.session_factory(memory_engine))
     service = ProfileService(repository)
     service.remember(
         "anna", "s1", "I'm Anna and I use HomeKit", "I'm Anna and I use HomeKit", name="Anna", ecosystems=["HomeKit"]
@@ -71,7 +71,7 @@ def test_repository_round_trip_through_the_service(memory_engine: Engine):
 
 
 def test_one_active_fact_per_value(memory_engine: Engine):
-    repository = ProfileRepository(create_session_factory(memory_engine))
+    repository = ProfileRepository(CatalogDatabase.session_factory(memory_engine))
     fact = NewFact(kind=FactKind.ECOSYSTEM, value="apple_home", canonical="apple_home", label="HomeKit")
     [stored], _ = repository.apply("anna", "s1", "I use HomeKit", [fact], [])
     with pytest.raises(IntegrityError):
@@ -83,7 +83,7 @@ def test_one_active_fact_per_value(memory_engine: Engine):
 
 
 def test_customers_are_listed_most_recent_first_with_counts(memory_engine: Engine):
-    repository = ProfileRepository(create_session_factory(memory_engine))
+    repository = ProfileRepository(CatalogDatabase.session_factory(memory_engine))
     service = ProfileService(repository)
     service.remember(
         "anna", "s1", "I use HomeKit and Alexa", "I use HomeKit and Alexa", ecosystems=["HomeKit", "Alexa"]

@@ -4,7 +4,7 @@
 import re
 from collections.abc import Mapping, Sequence
 
-from catalog_ingestion.domain.enums import Dimension, FactStatus
+from catalog_ingestion.vocabulary import Dimension, FactStatus
 
 from smart_home_agent.guardrail.output._compatibility_terms import terms_in
 from smart_home_agent.guardrail.output.product_lookup import ProductLookup

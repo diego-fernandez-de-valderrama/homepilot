@@ -1,4 +1,4 @@
-from catalog_ingestion.domain.enums import Dimension
+from catalog_ingestion.vocabulary import Dimension
 from google.adk.tools import ToolContext
 
 from smart_home_agent.services import Vocabulary

@@ -83,14 +83,14 @@ There is a single agent (no multi-agent setup). The layers only call downward: t
 
 | Reused from `catalog_ingestion` | Used for |
 |---|---|
-| `storage.postgres.models` (`ProductRecord`, `CompatibilityRecord`, `RequirementRecord`) | The ORM. Migrations stay owned by catalog-ingestion (Alembic). |
-| `storage.postgres.engine.create_db_engine / create_session_factory` | Engine and sessions. The agent adds `postgresql_readonly=True`, so it cannot write. |
-| `core.settings.GeminiSettings / PostgresSettings / QdrantSettings` | Same env variables, no duplicates. |
-| `vocabulary.compatibility / categories / requirements` | Canonical ids (`apple_home`, `google_home`, `zigbee`, ...), aliases, labels, categories, hubs. |
-| `domain.enums` (`FactStatus`, `Dimension`, `FactSource`, ...) | Status/source/dimension values in the business models. |
-| `schemas.catalog_product.CatalogProductSchema` | Parses `products.document` (specs, features, provenance). |
-| `llm.client.GeminiClient` + `retrieval.embeddings.GeminiEmbedder` | Query embeddings with the **same** model, dimension, task type and L2 normalization as the indexed documents. |
-| `storage.qdrant.collection.create_client`, `storage.qdrant.repository.point_id` | Qdrant client and point ids. |
+| `database` (`ProductRecord`, `CompatibilityRecord`, `RequirementRecord`) | The ORM. Migrations stay owned by catalog-ingestion (Alembic). |
+| `database.CatalogDatabase.create_engine / session_factory` | Engine and sessions. The agent adds `postgresql_readonly=True`, so it cannot write. |
+| `core` (`GeminiSettings`, `PostgresSettings`, `QdrantSettings`) | Same env variables, no duplicates. |
+| `vocabulary` (`CompatibilityVocabulary`, `CategoryVocabulary`, `RequirementVocabulary`) | Canonical ids (`apple_home`, `google_home`, `zigbee`, ...), aliases, labels, categories, hubs. |
+| `vocabulary` enums (`FactStatus`, `Dimension`, `FactSource`, ...) | Status/source/dimension values in the business models. |
+| `models.CatalogProductSchema`, `models.RawProductSchema` | Parses `products.document` (specs, features, provenance) and the untouched `raw` JSON (variants). |
+| `core.GeminiClient` + `indexing.GeminiEmbedder` | Query embeddings with the **same** model, dimension, task type and L2 normalization as the indexed documents. |
+| `indexing.QdrantCollection.create_client`, `indexing.QdrantRepository.point_id` | Qdrant client and point ids. |
 
 Data used (read-only):
 - PostgreSQL tables: `products`, `product_compatibility`, `product_requirements`.
@@ -256,7 +256,7 @@ Retrieved text is never used for comparison.
 
 | Kind | Where | Purpose |
 |---|---|---|
-| SQLAlchemy ORM | `catalog_ingestion.storage.postgres.models` (reused) | Persistence only, used exclusively inside `repositories/catalog/` |
+| SQLAlchemy ORM | `catalog_ingestion.database` (reused) | Persistence only, used exclusively inside `repositories/catalog/` |
 | Pydantic `BaseModel` | `models/*`, `session/session_state.py`, `agent/reply/` | Business models and contracts: `Product`, `ProductSummary`, `CompatibilityFact`, `Evidence`, `ProductFilter`, `SearchResult`, `CompatibilityResult`, `ComparisonResult`, `RecommendationRequest`, `Recommendation`, `UpsellSuggestion`, `SessionState`, `AgentReply` |
 | `dataclass` | `SearchCandidate`, `RankingCandidate`, `ResolvedTerm`, `Services`, `Settings` | Internal processing and wiring, never exposed to the model |
 

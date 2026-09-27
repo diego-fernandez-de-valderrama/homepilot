@@ -129,6 +129,16 @@ def test_apply_is_all_or_nothing(cart):
     assert pairs(start) == [("a", 1)]
 
 
+def test_problems_name_unknown_products_and_removals_not_in_the_cart(cart):
+    start = items(("a", 1))
+    assert cart.problems(start, "add", cart.changes("add", ["a", "b"])) == []
+    assert cart.problems(start, "add", cart.changes("add", ["a", "nope"])) == [
+        {"product_id": "nope", "status": "not_found", "message": "not in the catalog"}
+    ]
+    assert cart.problems(start, "remove", cart.changes("remove", ["a"])) == []
+    assert [e["product_id"] for e in cart.problems(start, "remove", cart.changes("remove", ["a", "b"]))] == ["b"]
+
+
 def test_describe_a_pending_change(cart):
     change = cart.describe("r1", "remove", {"product_ids": ["a"]}, items(("a", 4)))
     [line] = change.lines

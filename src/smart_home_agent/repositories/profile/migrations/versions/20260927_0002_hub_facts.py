@@ -18,7 +18,7 @@ down_revision: str | None = "0001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# The specific hub and gateway ids of catalog_ingestion/vocabulary/requirements.py at this revision (a
+# The specific hub and gateway ids of catalog_ingestion/vocabulary/_requirement_terms.py at this revision (a
 # migration must not change with the vocabulary).
 _HUB_IDS = (
     "bosch_smart_home_controller",

@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Sequence
 
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 
 from smart_home_agent.models import NOT_LISTED, ComparisonRow, Product, RowGroup
 from smart_home_agent.services.compatibility import CompatibilityEvaluator

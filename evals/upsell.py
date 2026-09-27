@@ -17,7 +17,7 @@ import statistics
 from collections import Counter
 from collections.abc import Sequence
 
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 from pydantic import BaseModel
 
 from smart_home_agent.models import Recommendation, RecommendationRequest

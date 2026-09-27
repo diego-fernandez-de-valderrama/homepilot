@@ -1,6 +1,6 @@
 """Explanatory notes for an `unknown` term. They never change a status."""
 
-from catalog_ingestion.vocabulary.compatibility import surface_forms
+from catalog_ingestion.vocabulary import CompatibilityVocabulary
 
 from smart_home_agent.models import Product
 from smart_home_agent.services.vocabulary import ResolvedTerm, Vocabulary
@@ -17,7 +17,7 @@ def related_notes(product: Product, resolved: ResolvedTerm) -> list[str]:
 
 
 def unmapped_mentions(product: Product, resolved: ResolvedTerm) -> list[str]:
-    forms = surface_forms(resolved.canonical)
+    forms = CompatibilityVocabulary.surface_forms(resolved.canonical)
     return [
         f"Unmapped catalog mention {fact.raw_value!r} may refer to {resolved.label}; it is not a confirmation."
         for fact in product.compatibility

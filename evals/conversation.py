@@ -336,6 +336,16 @@ def no_cart_change() -> Check:
     return Check("no_cart_change", test)
 
 
+def pending_in_catalog() -> Check:
+    """Every product of a proposed cart change is a catalog product: a made-up id never reaches the customer."""
+
+    def test(ctx: TurnContext) -> str | None:
+        unknown = [line.product_id for c in ctx.reply.pending_confirmations for line in c.lines if not line.product]
+        return f"cart change proposed for unknown products: {', '.join(unknown)}" if unknown else None
+
+    return Check("pending_in_catalog", test)
+
+
 def adds_at_most(quantity: int) -> Check:
     """No proposed add puts more than `quantity` units of one product into the cart."""
 
@@ -649,9 +659,22 @@ CONVERSATIONS: tuple[Conversation, ...] = (
             "the prompt rule (2026-09-27); turn 5 (controller x6) is fixed by the central-unit guard of add_to_cart"
         ),
     ),
+    Conversation(
+        "hue_strip_replay",
+        "Replay of a reported live conversation (typos kept): the customer asks for everything needed for an 11 m "
+        "HomeKit RGB strip including the bridge. The model once added a made-up id for the bridge; the add must "
+        "only ever show catalog products to the customer (pending_in_catalog), retrying silently otherwise",
+        (
+            _say("Im looking for an home kit compatible rgb strip to fill a 11 meter gap", found_products()),
+            _say(
+                "i don't but it as well and give me whatever is needed for the 11 meters",
+                cart_change_pending("add"),
+            ),
+        ),
+    ),
 )
 
-_ALWAYS = (answered(), no_announced_action())
+_ALWAYS = (answered(), no_announced_action(), pending_in_catalog())
 
 
 # --- running and reporting ---

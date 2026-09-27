@@ -1,6 +1,6 @@
 """Versions of one product (same title: another color, size or pack) share one entry of the recommendation."""
 
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 
 from smart_home_agent.models import CompatibilityResult, Product, ProductFilter, VersionOption, VersionStatus
 from smart_home_agent.repositories import CatalogReader

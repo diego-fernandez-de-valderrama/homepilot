@@ -2,7 +2,7 @@
 
 import re
 
-from catalog_ingestion.vocabulary import compatibility as compatibility_vocabulary
+from catalog_ingestion.vocabulary import CompatibilityVocabulary
 
 # Conversational forms that are not in the ingestion alias list. Values are existing canonical ids.
 EXTRA_TERM_ALIASES: dict[str, str] = {
@@ -106,7 +106,7 @@ RELATED_NOT_EQUIVALENT: dict[str, tuple[str, ...]] = {
 
 
 def key(value: str) -> str:
-    return compatibility_vocabulary.normalize_alias(value)
+    return CompatibilityVocabulary.normalize_alias(value)
 
 
 def singulars(value: str) -> list[str]:

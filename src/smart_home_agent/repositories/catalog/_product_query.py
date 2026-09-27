@@ -1,5 +1,5 @@
-from catalog_ingestion.domain.enums import FactStatus
-from catalog_ingestion.storage.postgres.models import CompatibilityRecord, ProductRecord
+from catalog_ingestion.database import CompatibilityRecord, ProductRecord
+from catalog_ingestion.vocabulary import FactStatus
 from sqlalchemy import ColumnElement, ColumnExpressionArgument, Select, and_, exists, func, or_
 from sqlalchemy.orm import selectinload
 

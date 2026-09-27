@@ -1,6 +1,6 @@
 import html
 
-from catalog_ingestion.vocabulary import categories as category_vocabulary
+from catalog_ingestion.vocabulary import CategoryVocabulary
 
 from smart_home_agent.services import Vocabulary
 from smart_home_agent.session import SessionState
@@ -48,5 +48,5 @@ class SetupPanelHtml:
 
     @staticmethod
     def _category_label(key: str) -> str:
-        category = category_vocabulary.category_by_key(key)
+        category = CategoryVocabulary.by_key(key)
         return category.label_en if category else key

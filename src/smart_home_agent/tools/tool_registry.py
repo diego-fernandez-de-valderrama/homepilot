@@ -5,8 +5,8 @@ from google.adk.tools import FunctionTool
 from smart_home_agent.container import Services
 from smart_home_agent.tools.cart import (
     CONFIRMED_TOOLS,
-    AddConfirmationRule,
     AddToCartTool,
+    CartConfirmationRule,
     RemoveFromCartTool,
     ViewCartTool,
 )
@@ -47,8 +47,8 @@ class ToolRegistry:
         return [ThreadedFunctionTool(f, require_confirmation=self._confirmation(f.__name__)) for f in functions]
 
     def _confirmation(self, name: str) -> bool | Callable[..., bool]:
-        """The customer confirms every cart change in the interface before ADK runs the tool (an add refused at
-        once, see AddConfirmationRule, has nothing to confirm)."""
-        if name == "add_to_cart":
-            return AddConfirmationRule(self._services).needs_confirmation
-        return name in CONFIRMED_TOOLS
+        """The customer confirms every cart change in the interface before ADK runs the tool (a change refused
+        at once, see CartConfirmationRule, has nothing to confirm)."""
+        if action := CONFIRMED_TOOLS.get(name):
+            return CartConfirmationRule(self._services, action).needs_confirmation
+        return False

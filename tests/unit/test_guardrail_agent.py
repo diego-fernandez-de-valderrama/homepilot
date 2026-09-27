@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from catalog_ingestion.core.settings import GeminiSettings, PostgresSettings, QdrantSettings
+from catalog_ingestion.core import GeminiSettings, PostgresSettings, QdrantSettings
 from google.adk.models import BaseLlm, LlmRequest, LlmResponse
 from google.genai import types
 from pydantic import Field, SecretStr

@@ -5,8 +5,16 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
-from catalog_ingestion.domain.enums import Dimension, FactSource, FactStatus, Method, Necessity, RequirementKind
-from catalog_ingestion.vocabulary.compatibility import term_by_canonical
+from catalog_ingestion.vocabulary import (
+    CompatibilityVocabulary,
+    Dimension,
+    FactSource,
+    FactStatus,
+    Method,
+    Necessity,
+    RequirementKind,
+)
+from google.adk.tools.tool_confirmation import ToolConfirmation
 from google.genai import types
 
 from smart_home_agent.config import AgentSettings
@@ -33,7 +41,7 @@ def evidence(text: str = "catalog text", source: FactSource = FactSource.CATALOG
 
 
 def fact(canonical: str | None, status: FactStatus = FactStatus.SUPPORTED, raw: str | None = None) -> CompatibilityFact:
-    term = term_by_canonical(canonical)
+    term = CompatibilityVocabulary.term_by_canonical(canonical)
     return CompatibilityFact(
         dimension=term.dimension if term else Dimension.ECOSYSTEM,
         canonical_value=canonical,
@@ -264,3 +272,5 @@ class FakeToolContext:
         self.user_id = user_id
         self.session = SimpleNamespace(id="session-1")
         self.user_content = types.Content(role="user", parts=[types.Part(text=message)]) if message else None
+        # A cart tool called directly stands for a change the customer confirmed in the interface.
+        self.tool_confirmation = ToolConfirmation(confirmed=True)

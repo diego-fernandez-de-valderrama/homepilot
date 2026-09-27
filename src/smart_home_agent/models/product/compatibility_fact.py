@@ -1,4 +1,4 @@
-from catalog_ingestion.domain.enums import Dimension, FactStatus
+from catalog_ingestion.vocabulary import Dimension, FactStatus
 from pydantic import BaseModel
 
 from smart_home_agent.models.evidence import Evidence

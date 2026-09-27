@@ -1,10 +1,9 @@
 from collections.abc import Sequence
 from decimal import Decimal
 
-from catalog_ingestion.schemas.catalog_product import CatalogProductSchema
-from catalog_ingestion.schemas.raw_product import RawProductSchema
-from catalog_ingestion.storage.postgres.models import CompatibilityRecord, ProductRecord, RequirementRecord
-from catalog_ingestion.vocabulary.requirements import term_by_canonical
+from catalog_ingestion.database import CompatibilityRecord, ProductRecord, RequirementRecord
+from catalog_ingestion.models import CatalogProductSchema, RawProductSchema
+from catalog_ingestion.vocabulary import RequirementVocabulary
 
 from smart_home_agent.models import (
     CompatibilityFact,
@@ -97,7 +96,7 @@ class ProductMapper:
 
     @staticmethod
     def _requirement(record: RequirementRecord) -> ProductRequirement:
-        term = term_by_canonical(record.canonical_item)
+        term = RequirementVocabulary.term_by_canonical(record.canonical_item)
         return ProductRequirement(
             item=record.item,
             canonical_item=record.canonical_item,

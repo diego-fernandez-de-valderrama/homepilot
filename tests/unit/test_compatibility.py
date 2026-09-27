@@ -1,5 +1,5 @@
 import pytest
-from catalog_ingestion.domain.enums import FactStatus, Necessity, RequirementKind
+from catalog_ingestion.vocabulary import FactStatus, Necessity, RequirementKind
 
 from smart_home_agent.services import CompatibilityEvaluator, CompatibilityService, ProductNotFoundError, Vocabulary
 from tests.fakes import FakeCatalog, fact, product, requirement

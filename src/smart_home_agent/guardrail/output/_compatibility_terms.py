@@ -2,14 +2,14 @@
 
 import re
 
-from catalog_ingestion.vocabulary import compatibility as compatibility_vocabulary
+from catalog_ingestion.vocabulary import CompatibilityVocabulary
 
 
 def _surface_patterns() -> list[tuple[re.Pattern[str], str]]:
     """Word-boundary patterns for every surface form of every canonical term (longest first)."""
     forms: dict[str, str] = {}
-    for term in compatibility_vocabulary.TERMS:
-        for form in compatibility_vocabulary.surface_forms(term.canonical):
+    for term in CompatibilityVocabulary.TERMS:
+        for form in CompatibilityVocabulary.surface_forms(term.canonical):
             if len(form) >= 3:  # "lan", "hue" and longer; shorter forms are too ambiguous in prose
                 forms.setdefault(form, term.canonical)
     ordered = sorted(forms, key=len, reverse=True)

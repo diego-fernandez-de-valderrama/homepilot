@@ -3,10 +3,9 @@
 import logging
 from dataclasses import dataclass
 
-from catalog_ingestion.llm.client import GeminiClient
-from catalog_ingestion.retrieval.embeddings import GeminiEmbedder
-from catalog_ingestion.storage.postgres.engine import create_session_factory
-from catalog_ingestion.storage.qdrant.collection import create_client
+from catalog_ingestion.core import GeminiClient
+from catalog_ingestion.database import CatalogDatabase
+from catalog_ingestion.indexing import GeminiEmbedder, QdrantCollection
 
 from smart_home_agent.config import AgentSettings, Settings
 from smart_home_agent.guardrail import GuardrailThresholds, SemanticGuardrail, gemini_embed
@@ -98,7 +97,7 @@ def build_profile_store(settings: Settings, connect_timeout: int = 10) -> Profil
     if not settings.agent.memory_enabled:
         return None
     engine = MemoryDatabase(settings.postgres, settings.agent.memory_db).create_engine(connect_timeout)
-    return ProfileRepository(create_session_factory(engine))
+    return ProfileRepository(CatalogDatabase.session_factory(engine))
 
 
 def build_container(settings: Settings) -> Container:
@@ -106,7 +105,7 @@ def build_container(settings: Settings) -> Container:
     catalog = CatalogRepository(sessions)
     gemini = GeminiClient(settings.gemini)
     embedder = GeminiEmbedder(gemini, settings.gemini)
-    index = QdrantIndex(create_client(settings.qdrant), settings.qdrant.collection, embedder)
+    index = QdrantIndex(QdrantCollection.create_client(settings.qdrant), settings.qdrant.collection, embedder)
     mismatched = index.points_with_other_model()
     if mismatched:
         logger.warning(

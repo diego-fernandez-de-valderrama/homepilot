@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from catalog_ingestion.domain.enums import Dimension
+from catalog_ingestion.vocabulary import Dimension
 
 
 @dataclass(frozen=True, slots=True)

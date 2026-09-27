@@ -1,6 +1,6 @@
 from typing import cast
 
-from catalog_ingestion.retrieval.embeddings import Embedder
+from catalog_ingestion.indexing import Embedder
 from qdrant_client import QdrantClient, models
 
 from smart_home_agent.repositories import QdrantIndex

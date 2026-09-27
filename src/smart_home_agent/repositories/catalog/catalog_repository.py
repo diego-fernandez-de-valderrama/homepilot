@@ -1,8 +1,7 @@
 from collections.abc import Sequence
 
-from catalog_ingestion.core.settings import PostgresSettings
-from catalog_ingestion.storage.postgres.engine import create_db_engine, create_session_factory
-from catalog_ingestion.storage.postgres.models import ProductRecord
+from catalog_ingestion.core import PostgresSettings
+from catalog_ingestion.database import CatalogDatabase, ProductRecord
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -20,8 +19,8 @@ class CatalogRepository:
     @staticmethod
     def readonly_sessions(settings: PostgresSettings) -> tuple[Engine, sessionmaker[Session]]:
         """Engine whose transactions are READ ONLY: the agent can never modify the catalog."""
-        engine = create_db_engine(settings).execution_options(postgresql_readonly=True)
-        return engine, create_session_factory(engine)
+        engine = CatalogDatabase.create_engine(settings).execution_options(postgresql_readonly=True)
+        return engine, CatalogDatabase.session_factory(engine)
 
     def get_products(self, product_ids: Sequence[str]) -> list[Product]:
         """Active products for the given ids, in the order of `product_ids` (unknown ids are skipped)."""

@@ -1,6 +1,6 @@
 from typing import Any
 
-from catalog_ingestion.domain.enums import RequirementKind
+from catalog_ingestion.vocabulary import RequirementKind
 from google.adk.tools import ToolContext
 
 from smart_home_agent.container import Services

@@ -8,7 +8,7 @@ The connection comes from `config.attributes["connection"]` when migrations run 
 from logging.config import fileConfig
 
 from alembic import context
-from catalog_ingestion.core.settings import PostgresSettings
+from catalog_ingestion.core import PostgresSettings
 from sqlalchemy import Connection
 
 from smart_home_agent.config import AgentSettings

@@ -1,6 +1,5 @@
 import pytest
-from catalog_ingestion.domain.enums import Dimension
-from catalog_ingestion.vocabulary import compatibility as compatibility_vocabulary
+from catalog_ingestion.vocabulary import CompatibilityVocabulary, Dimension
 
 from smart_home_agent.services import TermResolutionError, Vocabulary
 
@@ -33,7 +32,7 @@ def test_terms_resolve_to_existing_canonical_ids(value, canonical, dimension):
 
 def test_every_label_resolves_back_to_its_term():
     # Tool results name terms by label; the model passes them back verbatim ("Apple Home (HomeKit)").
-    for known in compatibility_vocabulary.TERMS:
+    for known in CompatibilityVocabulary.TERMS:
         assert Vocabulary.resolve_term(known.label).canonical == known.canonical
 
 

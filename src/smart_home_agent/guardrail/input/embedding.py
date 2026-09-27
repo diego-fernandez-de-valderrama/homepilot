@@ -2,8 +2,8 @@
 
 from collections.abc import Callable, Sequence
 
-from catalog_ingestion.llm.client import GeminiClient
-from catalog_ingestion.retrieval.embeddings import BATCH_SIZE, l2_normalize
+from catalog_ingestion.core import GeminiClient
+from catalog_ingestion.indexing import GeminiEmbedder
 
 # Gemini's CLASSIFICATION task type separated the categories clearly better than SEMANTIC_SIMILARITY in the
 # tuning study (unseen test set: OFF_TOPIC 9/12 vs 0-5/12, no small talk with a blocking category on top).
@@ -17,9 +17,9 @@ def gemini_embed(client: GeminiClient, task_type: str = TASK_TYPE) -> EmbedFn:
 
     def embed(texts: Sequence[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
-        for start in range(0, len(texts), BATCH_SIZE):
-            batch = list(texts[start : start + BATCH_SIZE])
-            vectors.extend(l2_normalize(v) for v in client.embed(batch, task_type=task_type))
+        for start in range(0, len(texts), GeminiEmbedder.BATCH_SIZE):
+            batch = list(texts[start : start + GeminiEmbedder.BATCH_SIZE])
+            vectors.extend(GeminiEmbedder.l2_normalize(v) for v in client.embed(batch, task_type=task_type))
         return vectors
 
     return embed

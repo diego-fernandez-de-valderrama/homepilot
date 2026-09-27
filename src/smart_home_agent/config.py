@@ -1,14 +1,14 @@
 """Settings for the agent service.
 
 Infrastructure settings (Gemini, PostgreSQL, Qdrant) are the classes from
-`catalog_ingestion.core.settings`, so both services read the same GEMINI_*, POSTGRES_* and
+`catalog_ingestion.core`, so both services read the same GEMINI_*, POSTGRES_* and
 QDRANT_* variables. Only agent-specific options live here, under the AGENT_ prefix.
 """
 
 from dataclasses import dataclass
 from functools import lru_cache
 
-from catalog_ingestion.core.settings import GeminiSettings, PostgresSettings, QdrantSettings
+from catalog_ingestion.core import GeminiSettings, PostgresSettings, QdrantSettings
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

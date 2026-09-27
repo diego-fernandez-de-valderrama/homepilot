@@ -1,6 +1,6 @@
 """The tool arguments -> candidate facts, each resolved to a canonical id when that is safe."""
 
-from catalog_ingestion.domain.enums import Dimension
+from catalog_ingestion.vocabulary import Dimension
 
 from smart_home_agent.models import FactKind, NewFact, RejectedFact
 from smart_home_agent.services.profile._text import MAX_VALUE, normalize

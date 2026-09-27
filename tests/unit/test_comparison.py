@@ -1,5 +1,5 @@
 import pytest
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 
 from smart_home_agent.models import NOT_LISTED, Spec
 from smart_home_agent.services import ComparisonService, ProductComparer, ProductNotFoundError

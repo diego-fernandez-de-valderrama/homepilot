@@ -1,6 +1,6 @@
 """Answer tags: parsing, plain-text fallback and resolution to catalog data (no model, in-memory catalog)."""
 
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 
 from smart_home_agent.agent import AgentService, build_agent
 from smart_home_agent.answer_tags import (

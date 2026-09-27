@@ -1,4 +1,4 @@
-from catalog_ingestion.domain.enums import Dimension, FactStatus, RequirementKind
+from catalog_ingestion.vocabulary import Dimension, FactStatus, RequirementKind
 
 from smart_home_agent.models.evidence import FieldProvenance
 from smart_home_agent.models.product.compatibility_fact import CompatibilityFact

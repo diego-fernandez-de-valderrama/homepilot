@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from catalog_ingestion.domain.enums import FactStatus, Necessity, RequirementKind
+from catalog_ingestion.vocabulary import FactStatus, Necessity, RequirementKind
 
 from smart_home_agent.models import (
     CompatibilityResult,

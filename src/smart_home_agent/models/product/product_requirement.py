@@ -1,4 +1,4 @@
-from catalog_ingestion.domain.enums import Necessity, RequirementKind
+from catalog_ingestion.vocabulary import Necessity, RequirementKind
 from pydantic import BaseModel
 
 from smart_home_agent.models.evidence import Evidence

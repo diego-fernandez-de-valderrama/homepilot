@@ -1,7 +1,7 @@
 """Against the live catalog (read-only). These assert structure and rules, not exact catalog content."""
 
 import pytest
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 from sqlalchemy import text
 from sqlalchemy.exc import InternalError
 

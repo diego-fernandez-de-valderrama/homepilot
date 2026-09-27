@@ -148,18 +148,54 @@ def test_first_turn_asks_for_the_cart_check():
     assert "# Cart status" not in str(llm.requests[-1].config.system_instruction)
 
 
-def test_unknown_product_fails_with_the_cart_attached():
-    llm = ScriptedLlm(script=[call_response("add_to_cart", product_ids=["99999999"]), text_response("Not found.")])
-    agent = service(llm)
-    [confirmation] = agent.chat("s1", "add 99999999").pending_confirmations
-    assert confirmation.lines[0].product is None
-    agent.confirm("s1", {confirmation.request_id: True})
-    result = tool_responses(llm.requests[-1], "add_to_cart")[-1]
-    assert (result["status"], result["changes"][0]["quantity_changed"], result["remaining_items"]) == (
-        "not_found",
-        0,
-        [],
+def test_unknown_product_fails_at_once_so_the_model_retries_without_the_customer_seeing_it():
+    llm = ScriptedLlm(
+        script=[
+            call_response("add_to_cart", product_ids=["30173510", "90000001"], quantities=[8, 1]),
+            call_response("add_to_cart", product_ids=["30173510", "30387250"], quantities=[8, 1]),
+            text_response("Done, both are in your cart."),
+        ]
     )
+    agent = service(llm)
+    pending = agent.chat("s1", "Add eight thermostats and the bridge they need")
+    [confirmation] = pending.pending_confirmations  # only the retried call reaches the customer
+    assert [(line.product_id, line.quantity) for line in confirmation.lines] == [("30173510", 8), ("30387250", 1)]
+    assert agent.state("s1").cart == []
+    [result] = tool_responses(llm.requests[-1], "add_to_cart")
+    assert (result["status"], result["errors"][0]["product_id"]) == ("not_found", "90000001")
+    assert [c["quantity_changed"] for c in result["changes"]] == [0, 0]
+    assert "not shown this change" in result["message"] and "search_products" in result["message"]
+
+    reply = agent.confirm("s1", {confirmation.request_id: True})
+    assert reply.text == "Done, both are in your cart."
+    assert [(i.product_id, i.quantity) for i in agent.state("s1").cart] == [("30173510", 8), ("30387250", 1)]
+
+
+def test_remove_of_a_product_not_in_the_cart_fails_at_once():
+    llm = ScriptedLlm(
+        script=[call_response("remove_from_cart", product_ids=["30173510"]), text_response("It is not in your cart.")]
+    )
+    agent = service(llm)
+    reply = agent.chat("s1", "Remove the thermostat")
+    assert reply.pending_confirmations == []
+    [result] = tool_responses(llm.requests[-1], "remove_from_cart")
+    assert (result["status"], result["errors"][0]["message"]) == ("invalid_input", "not in the cart")
+    assert "view_cart" in result["message"]
+
+
+def test_invalid_arguments_fail_at_once():
+    llm = ScriptedLlm(
+        script=[
+            call_response("add_to_cart", product_ids=["30173510"], quantities=[1, 2]),
+            text_response("Something went wrong."),
+        ]
+    )
+    agent = service(llm)
+    assert agent.chat("s1", "Add the thermostat").pending_confirmations == []
+    [result] = tool_responses(llm.requests[-1], "add_to_cart")
+    assert result["status"] == "invalid_input"
+    assert result["message"].startswith("Nothing was changed: quantities must have one entry per product id")
+    assert agent.state("s1").cart == []
 
 
 def test_several_products_are_confirmed_together():

@@ -27,8 +27,10 @@ class CartResultCallback:
         confirmation = tool_context.tool_confirmation
         if action is None or (confirmation is not None and confirmation.confirmed):
             return None  # not a cart change, or the tool really ran and built its own result
-        if confirmation is None and tool_response.get("status") == "needs_clarification":
-            return None  # the add refused several central units at once, without asking the customer
+        if confirmation is None and "status" in tool_response:
+            # CartConfirmationRule let the tool refuse the change at once (the tool's results always carry a
+            # status; ADK's own answer to a call waiting for confirmation only an error)
+            return None
         session = CartTool.synced_state(tool_context)
         StateStore.save(tool_context, session)
         status, message = ("awaiting_confirmation", _AWAITING) if confirmation is None else ("rejected", _REJECTED)

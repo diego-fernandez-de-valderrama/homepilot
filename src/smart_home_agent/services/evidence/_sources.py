@@ -1,6 +1,6 @@
 """Evidence read straight from the catalog JSON (deterministic parsing, confidence 1.0)."""
 
-from catalog_ingestion.domain.enums import FactSource, Method
+from catalog_ingestion.vocabulary import FactSource, Method
 
 from smart_home_agent.models import Evidence, Product
 

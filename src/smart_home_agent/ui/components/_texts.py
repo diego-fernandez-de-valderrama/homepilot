@@ -1,6 +1,6 @@
 """Fixed customer-facing texts of the HTML components (English UI; the failure notice is localized)."""
 
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 
 LANGUAGES = {"en": "English", "de": "Deutsch"}
 

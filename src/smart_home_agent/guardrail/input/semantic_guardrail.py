@@ -9,7 +9,7 @@ single accidental near-duplicate than the plain maximum.
 import logging
 from collections.abc import Mapping, Sequence
 
-from catalog_ingestion.retrieval.embeddings import l2_normalize
+from catalog_ingestion.indexing import GeminiEmbedder
 
 from smart_home_agent.guardrail.input._decision_rule import decide
 from smart_home_agent.guardrail.input.category import Category
@@ -46,7 +46,7 @@ class SemanticGuardrail:
         vectors = embed([text for _, text in texts])
         cached: dict[Category, list[list[float]]] = {category: [] for category in prototypes}
         for (category, _), vector in zip(texts, vectors, strict=True):
-            cached[category].append(l2_normalize(vector))
+            cached[category].append(GeminiEmbedder.l2_normalize(vector))
         logger.info("guardrail: %d prototypes embedded for %d categories", len(texts), len(cached))
         return cls(embed, cached, thresholds)
 
@@ -55,7 +55,7 @@ class SemanticGuardrail:
         return self.classify_vector(self._embed([text])[0], len(text.split()))
 
     def classify_vector(self, vector: Sequence[float], words: int | None = None) -> GuardrailDecision:
-        return decide(self.scores(l2_normalize(list(vector))), self.thresholds, words)
+        return decide(self.scores(GeminiEmbedder.l2_normalize(list(vector))), self.thresholds, words)
 
     def scores(self, vector: Sequence[float]) -> dict[Category, float]:
         result = {}

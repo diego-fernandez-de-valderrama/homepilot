@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 import pytest
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 
 from smart_home_agent.guardrail import Category, GuardrailThresholds, OutputValidator, SemanticGuardrail
 from tests.fakes import FakeCatalog, fact, product

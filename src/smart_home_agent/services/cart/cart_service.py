@@ -51,7 +51,7 @@ class CartService:
             has_unpriced=any(line.available and line.unit_price is None for line in lines),
         )
 
-    # One add/remove tool call: changes -> (central_units_over_one) -> describe -> apply
+    # One add/remove tool call: changes -> problems, (central_units_over_one) -> describe -> apply
 
     @staticmethod
     def changes(
@@ -100,24 +100,28 @@ class CartService:
             ],
         )
 
-    def apply(self, items: Sequence[CartItem], action: CartAction, changes: Sequence[CartChange]) -> list[CartItem]:
-        """Applies every change, or none: raises CartChangeError listing each product that cannot be applied."""
-        errors: list[dict[str, str]] = []
+    def problems(
+        self, items: Sequence[CartItem], action: CartAction, changes: Sequence[CartChange]
+    ) -> list[dict[str, str]]:
+        """One entry per product that cannot be applied: an add of a product not in the catalog, a removal of a
+        product not in the cart. Empty when the whole change can be applied."""
         if action == "add":
             known = {p.id for p in self._catalog.get_products([c.product_id for c in changes])}
-            errors = [
+            return [
                 {"product_id": c.product_id, "status": "not_found", "message": "not in the catalog"}
                 for c in changes
                 if c.product_id not in known
             ]
-        else:
-            in_cart = {item.product_id for item in items}
-            errors = [
-                {"product_id": c.product_id, "status": "invalid_input", "message": "not in the cart"}
-                for c in changes
-                if c.product_id not in in_cart
-            ]
-        if errors:
+        in_cart = {item.product_id for item in items}
+        return [
+            {"product_id": c.product_id, "status": "invalid_input", "message": "not in the cart"}
+            for c in changes
+            if c.product_id not in in_cart
+        ]
+
+    def apply(self, items: Sequence[CartItem], action: CartAction, changes: Sequence[CartChange]) -> list[CartItem]:
+        """Applies every change, or none: raises CartChangeError listing each product that cannot be applied."""
+        if errors := self.problems(items, action, changes):
             raise CartChangeError(errors)
         updated = list(items)
         for change in changes:

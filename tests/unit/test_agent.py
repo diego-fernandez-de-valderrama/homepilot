@@ -14,7 +14,7 @@ from tests.fakes import product, services_for
 
 
 def _settings() -> Settings:
-    from catalog_ingestion.core.settings import GeminiSettings, PostgresSettings, QdrantSettings
+    from catalog_ingestion.core import GeminiSettings, PostgresSettings, QdrantSettings
 
     return Settings(
         agent=AgentSettings(model="gemini-test"),

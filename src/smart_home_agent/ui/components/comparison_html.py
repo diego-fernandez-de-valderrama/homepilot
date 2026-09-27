@@ -1,6 +1,6 @@
 import html
 
-from catalog_ingestion.domain.enums import FactStatus
+from catalog_ingestion.vocabulary import FactStatus
 
 from smart_home_agent.models import NOT_LISTED, ComparisonResult
 from smart_home_agent.ui.components._markup import Markup
