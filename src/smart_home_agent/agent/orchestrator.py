@@ -29,9 +29,10 @@ from smart_home_agent.agent.state import (
 from smart_home_agent.agent.trace import AgentReply, TurnTrace
 from smart_home_agent.config import Settings
 from smart_home_agent.container import Services
-from smart_home_agent.guardrail.callbacks import GuardrailReport, make_input_callback, make_output_callback
+from smart_home_agent.guardrail.callbacks import make_input_callback, make_output_callback
 from smart_home_agent.guardrail.classifier import SemanticGuardrail
 from smart_home_agent.guardrail.output_check import OutputValidator
+from smart_home_agent.guardrail.report import GuardrailReport
 from smart_home_agent.models.cart import CartConfirmation, CartView
 from smart_home_agent.models.profile import CustomerProfile
 from smart_home_agent.models.rich import RichContent

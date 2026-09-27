@@ -1,5 +1,6 @@
 """Customer memory: facts a customer stated about themself, kept per user id across conversations."""
 
+import re
 from datetime import datetime
 from enum import StrEnum
 
@@ -49,6 +50,18 @@ class NewFact(BaseModel):
     label: str
 
 
+_PROMPT_VALUE_CHARS = 120
+_MARKUP = re.compile(r"[#`<>*\[\]|]+")  # "_" stays: canonical ids such as apple_home
+
+
+def _inline(value: str) -> str:
+    """A stored value as one short line of data: no line breaks, headings or markup, so a stored "preference"
+    can never add sections or instructions to the system instruction."""
+    text = _MARKUP.sub(" ", " ".join(value.split())).replace('"', "'")
+    text = " ".join(text.split())
+    return text if len(text) <= _PROMPT_VALUE_CHARS else text[: _PROMPT_VALUE_CHARS - 3].rstrip() + "..."
+
+
 class CustomerProfile(BaseModel):
     user_id: str
     facts: list[CustomerFact] = Field(default_factory=list)
@@ -62,7 +75,8 @@ class CustomerProfile(BaseModel):
         retracted later ("I use HomeKit and have a Hue Bridge"), and the model would read it as current."""
         active = self.active()
         lines = [
-            f"- {f.kind.value}: {f.value}" + (f' ("{f.label}")' if f.label.casefold() != f.value.casefold() else "")
+            f"- {f.kind.value}: {_inline(f.value)}"
+            + (f' ("{_inline(f.label)}")' if f.label.casefold() != f.value.casefold() else "")
             for f in active
         ]
         current = {(f.kind, f.value) for f in active}
@@ -71,7 +85,9 @@ class CustomerProfile(BaseModel):
             for f in self.facts
             if not f.active and f.kind in _NO_LONGER and (f.kind, f.value) not in current
         )
-        lines += [f"- {_NO_LONGER[kind]}: {value} (the customer said so: do not assume it)" for kind, value in gone]
+        lines += [
+            f"- {_NO_LONGER[kind]}: {_inline(value)} (the customer said so: do not assume it)" for kind, value in gone
+        ]
         return lines
 
 

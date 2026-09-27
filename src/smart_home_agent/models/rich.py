@@ -30,10 +30,13 @@ _BLOCK = re.compile(
     rf'<(?P<list>items|compare)\s+ids="(?P<ids>{_IDS})"\s*/>'
     rf'|<compatibility\s+id="(?P<compat>{_ID})"\s*/>'
     rf'|<upgrade\s+from="(?P<from>{_ID})"\s+to="(?P<to>{_ID})"\s*/>'
+    rf'|<upgrade\s+to="(?P<to_first>{_ID})"\s+from="(?P<from_second>{_ID})"\s*/>'  # attribute order is free
 )
 _FENCE = re.compile(r"(```.*?(?:```|\Z))", re.DOTALL)  # capturing: re.split keeps the fences
 # Anything that looks like one of the tags (opening, closing, self-closing, or cut off at the line end).
 _TAG_LIKE = re.compile(r"</?\s*(?:items?|compare|compatibility|upgrade)\b[^<>\n]*(?:>|$)", re.IGNORECASE | re.MULTILINE)
+# A tag the model broke over several lines (`<items ids="1,\n2"/>`): joined into one line before parsing.
+_SPLIT_TAG = re.compile(r"<\s*(?:items?|compare|compatibility|upgrade)\b[^<>]{0,300}>", re.IGNORECASE)
 _REMOVED = "\x00"  # marks a removed tag, so a line that held only tags goes away entirely
 _COMPARE_SIZES = range(2, 5)  # services.comparison.MIN_PRODUCTS..MAX_PRODUCTS
 
@@ -79,12 +82,18 @@ def _block(match: re.Match[str]) -> Block:
         return CompareBlock(_split_ids(match["ids"]))
     if match["compat"]:
         return CompatibilityBlock(match["compat"])
-    return UpgradeBlock(match["from"], match["to"])
+    if match["from"]:
+        return UpgradeBlock(match["from"], match["to"])
+    return UpgradeBlock(match["from_second"], match["to_first"])
 
 
 def _outside_fences(text: str) -> list[tuple[str, bool]]:
-    """(part, is_code) pairs in order."""
-    return [(part, i % 2 == 1) for i, part in enumerate(_FENCE.split(text)) if part]
+    """(part, is_code) pairs in order; outside code, tags split over several lines are joined into one."""
+    return [
+        (part if i % 2 else _SPLIT_TAG.sub(lambda m: re.sub(r"\s+", " ", m[0]), part), i % 2 == 1)
+        for i, part in enumerate(_FENCE.split(text))
+        if part
+    ]
 
 
 def parse(text: str) -> list[Segment]:
@@ -183,7 +192,13 @@ def strip_echoed_titles(text: str, titles: Mapping[str, str]) -> str:
         tag = rf'<item\s+id="{pid}"\s*/>'
         text = re.sub(rf"({tag})[ \t]*[:,-]?[ \t]*{name}", r"\1", text, flags=re.IGNORECASE)
         text = re.sub(rf"({tag})[ \t]*\({bare}[ \t]+(?=[^)\s])", r"\1 (", text, flags=re.IGNORECASE)
-        text = re.sub(rf"{name}[ \t]*[:,-]?[ \t]*\(?({tag})\)?", r"\1", text, flags=re.IGNORECASE)
+        # "Title (<item/>)" and "Title <item/>": the parentheses go only as a pair, never one of them alone.
+        text = re.sub(
+            rf"{name}[ \t]*[:,-]?[ \t]*(?:\(({tag})\)|({tag}))",
+            lambda m: m[1] or m[2],
+            text,
+            flags=re.IGNORECASE,
+        )
     return text
 
 

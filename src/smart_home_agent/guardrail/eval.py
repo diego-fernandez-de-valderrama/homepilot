@@ -19,7 +19,13 @@ from pydantic import BaseModel
 from smart_home_agent.config import Settings
 from smart_home_agent.container import guardrail_thresholds
 from smart_home_agent.guardrail.categories import BLOCKING, Category, GuardrailDecision
-from smart_home_agent.guardrail.classifier import TASK_TYPE, GuardrailThresholds, SemanticGuardrail, gemini_embed
+from smart_home_agent.guardrail.classifier import (
+    TASK_TYPE,
+    GuardrailThresholds,
+    SemanticGuardrail,
+    blocked_categories,
+    gemini_embed,
+)
 from smart_home_agent.guardrail.eval_set import ACCEPTANCE_CASES, EVAL_CASES, OUTPUT_CASES, TEST_CASES
 from smart_home_agent.guardrail.prototypes import PROTOTYPES
 
@@ -62,8 +68,8 @@ def evaluate(
 
 
 def blockable(thresholds: GuardrailThresholds) -> frozenset[Category]:
-    """Categories that are blocked at input with these settings."""
-    return BLOCKING if thresholds.block_off_topic else BLOCKING - {Category.OFF_TOPIC}
+    """Categories that are blocked at input with these settings (the classifier's own rule)."""
+    return blocked_categories(thresholds)
 
 
 def report(

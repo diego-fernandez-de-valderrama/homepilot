@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from smart_home_agent.agent.state import SessionState
-from smart_home_agent.guardrail.callbacks import GuardrailReport
+from smart_home_agent.guardrail.report import GuardrailReport
 from smart_home_agent.models.cart import CartConfirmation
 from smart_home_agent.models.profile import CustomerProfile
 from smart_home_agent.models.rich import RichContent

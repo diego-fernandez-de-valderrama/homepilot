@@ -21,26 +21,16 @@ from typing import Any
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmResponse
 from google.genai import types
-from pydantic import BaseModel, Field
 
 from smart_home_agent.agent.language import detect_language
 from smart_home_agent.agent.state import GUARDRAIL_KEY, GUARDRAIL_LAST_REPLY_KEY, TURN_LANGUAGE_KEY, read_state
-from smart_home_agent.guardrail.categories import GuardrailDecision
 from smart_home_agent.guardrail.classifier import SemanticGuardrail
 from smart_home_agent.guardrail.output_check import OutputValidator, Violation
+from smart_home_agent.guardrail.report import GuardrailReport
 from smart_home_agent.guardrail.responses import ResponseType, pick_response
 from smart_home_agent.models import rich
 
 logger = logging.getLogger(__name__)
-
-
-class GuardrailReport(BaseModel):
-    """What the guardrail did in one turn (developer panel and logs only)."""
-
-    input: GuardrailDecision | None = None
-    input_error: str | None = None  # embedding failed: the message was allowed (fail-open)
-    output_violations: list[Violation] = Field(default_factory=list)
-    response_type: ResponseType | None = None  # set when a deterministic reply was returned
 
 
 def _text(content: types.Content | None) -> str:

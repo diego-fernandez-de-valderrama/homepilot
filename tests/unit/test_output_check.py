@@ -153,3 +153,42 @@ def test_claim_about_a_product_from_the_session_is_checked_without_tools():
     text = "Yes, the Acme Smart Radiator Thermostat works with Apple HomeKit."
     assert [v.kind for v in validator().validate(text, [], ["30173510"])] == ["unsupported_compatibility"]
     assert validator().validate("Yes, the Acme Smart Radiator Thermostat works with Alexa.", [], ["30173510"]) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Connect the bulb to the app during the pairing phase.",
+        "Verbinden Sie den Sensor mit der App, die Klemme hält ihn am Fenster.",
+        "Connect the sensor to your Hue Bridge; it supports three-phase heating systems.",
+    ],
+)
+def test_pairing_text_with_everyday_words_is_not_electrical(text):
+    assert "electrical" not in kinds(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Connect the brown wire to terminal L and do not touch the blue wire.",
+        "Connect the live wire to terminal L; if unsure, ask an electrician.",
+        "Klemmen Sie den Außenleiter an die Lüsterklemme, niemals den Schutzleiter.",
+    ],
+)
+def test_incidental_negations_do_not_hide_wiring_instructions(text):
+    assert "electrical" in kinds(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I can't give wiring instructions: the brown wire and terminal L must be connected by an electrician.",
+        "Das Anschließen der Adern an die Klemmen muss eine Elektrofachkraft übernehmen.",
+    ],
+)
+def test_real_refusals_mentioning_wires_are_allowed(text):
+    assert "electrical" not in kinds(text)
+
+
+def test_longer_numbers_are_not_product_ids():
+    assert "unknown_product" not in kinds("The EAN is 123456789, hotline 0800 123456789.")

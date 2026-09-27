@@ -76,6 +76,11 @@ def word_count(text: str) -> int:
     return len(text.split())
 
 
+def blocked_categories(thresholds: GuardrailThresholds) -> frozenset[Category]:
+    """Categories that are blocked at input with these settings (off-topic only when enabled)."""
+    return BLOCKING if thresholds.block_off_topic else BLOCKING - {Category.OFF_TOPIC}
+
+
 def decide(
     scores: Mapping[Category, float], thresholds: GuardrailThresholds, words: int | None = None
 ) -> GuardrailDecision:
@@ -87,10 +92,9 @@ def decide(
     if top is Category.OFF_TOPIC and words is not None and words < thresholds.off_topic_min_words:
         confident = False
     category = top if confident else Category.UNCERTAIN
-    blocking = BLOCKING if thresholds.block_off_topic else BLOCKING - {Category.OFF_TOPIC}
     return GuardrailDecision(
         category=category,
-        blocked=category in blocking,
+        blocked=category in blocked_categories(thresholds),
         top_category=top,
         score=round(top_score, 4),
         margin=round(margin, 4),

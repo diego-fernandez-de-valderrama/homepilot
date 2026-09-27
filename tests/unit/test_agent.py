@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 
+import pytest
 from google.adk.models import BaseLlm
 from pydantic import SecretStr
 
@@ -101,3 +102,17 @@ def test_trace_matches_calls_and_responses():
     assert trace.search_queries == [{"need": "thermostat"}]
     assert trace.compatibility == [{"product_id": "1", "overall": "supported", "group": "confirmed"}]
     assert TurnTrace().intent == "conversation (no tool used)"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Is the Fenster- und Türkontakt any good?", "en"),
+        ("Hi, I am Jürgen", "en"),
+        ("nein danke", "de"),
+        ("ja bitte", "de"),
+        ("Welche Lampe ist gut für die Küche?", "de"),
+    ],
+)
+def test_language_is_not_decided_by_a_single_umlaut(text, expected):
+    assert detect_language(text) == expected

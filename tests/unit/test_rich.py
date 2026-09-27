@@ -190,3 +190,25 @@ def test_answer_of_only_invalid_tags_is_replaced_by_the_fallback():
     llm = ScriptedLlm(script=[text_response('<items ids="hue_bridge"/>')])
     reply = AgentService(build_agent(services_for([BASIC]), settings(), model=llm), "test-app").chat("s1", "Hi")
     assert reply.text and "<" not in reply.text
+
+
+def test_upgrade_attributes_in_either_order_are_kept():
+    text = 'Better: <upgrade to="22222222" from="11111111"/>'
+    assert rich.strip_invalid_tags(text, ("11111111", "22222222")) == text
+    assert rich.parse(text)[-1] == rich.UpgradeBlock("11111111", "22222222")
+
+
+def test_a_tag_split_over_lines_is_joined_not_left_as_raw_text():
+    text = 'Options:\n<items ids="11111111,\n22222222"/>\nDone.'
+    stripped = rich.strip_invalid_tags(text)
+    assert '<items ids="11111111, 22222222"/>' in stripped
+    assert rich.ItemsBlock(("11111111", "22222222")) in rich.parse(text)
+
+
+def test_echoed_title_keeps_the_parenthesis_of_the_surrounding_text():
+    titles = {"11111111": "Acme Thermostat"}
+    text = 'Two options (the Acme Thermostat <item id="11111111"/>) fit.'
+    assert rich.strip_echoed_titles(text, titles) == 'Two options (the <item id="11111111"/>) fit.'
+    assert rich.strip_echoed_titles('Acme Thermostat (<item id="11111111"/>) fits.', titles) == (
+        '<item id="11111111"/> fits.'
+    )

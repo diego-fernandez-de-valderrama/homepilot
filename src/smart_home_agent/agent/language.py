@@ -74,6 +74,10 @@ _GERMAN = frozenset(
         "zeige",
         "zeig",
         "gib",
+        "ja",
+        "nein",
+        "gerne",
+        "hallo",
     ]
 )
 _ENGLISH = frozenset(
@@ -128,6 +132,22 @@ _ENGLISH = frozenset(
         "show",
         "give",
         "tell",
+        "any",
+        "good",
+        "it",
+        "this",
+        "that",
+        "of",
+        "be",
+        "will",
+        "would",
+        "hi",
+        "hello",
+        "yes",
+        "ok",
+        "okay",
+        "thank",
+        "about",
     ]
 )
 MIN_EVIDENCE = 2
@@ -135,7 +155,11 @@ MIN_EVIDENCE = 2
 
 def detect_language(text: str) -> str | None:
     words = _WORDS.findall(text.casefold())
-    german = sum(w in _GERMAN for w in words) + 2 * sum(ch in "äöüß" for ch in text.casefold())
+    german_words = sum(w in _GERMAN for w in words)
+    # Umlauts count once per word, and only next to a German function word: an English question about a German
+    # product ("Is the Fenster- und Türkontakt any good?") or a name ("I am Jürgen") stays English.
+    umlauts = sum(any(ch in "äöüß" for ch in w) for w in words) if german_words else 0
+    german = german_words + umlauts
     english = sum(w in _ENGLISH for w in words)
     if max(german, english) < MIN_EVIDENCE or german == english:
         return None

@@ -5,9 +5,9 @@ from typing import Any
 from smart_home_agent import conversation_eval as ev
 from smart_home_agent.agent.state import SessionState
 from smart_home_agent.agent.trace import AgentReply, TurnTrace
-from smart_home_agent.guardrail.callbacks import GuardrailReport
 from smart_home_agent.guardrail.categories import Category, GuardrailDecision
 from smart_home_agent.guardrail.output_check import Violation
+from smart_home_agent.guardrail.report import GuardrailReport
 from smart_home_agent.models.cart import CartChangeLine, CartConfirmation, CartItem
 from smart_home_agent.models.profile import CustomerFact, CustomerProfile, FactKind
 from smart_home_agent.models.rich import RichContent
