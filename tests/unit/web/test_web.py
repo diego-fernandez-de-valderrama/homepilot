@@ -1,7 +1,11 @@
+import dataclasses
+from datetime import UTC, datetime
+
 import httpx
 from google.genai import types
 
 from catalog_ingestion.core.settings import WebSettings
+from catalog_ingestion.domain.enrichment import WebPage
 from catalog_ingestion.web.fetchers import FetchResult, GeminiUrlContextFetcher, HttpxFetcher
 from catalog_ingestion.web.html_text import html_to_text
 from catalog_ingestion.web.retriever import WebRetriever
@@ -107,3 +111,47 @@ def test_url_context_requires_successful_retrieval_metadata():
     # Text without retrieval metadata could come from the model's prior knowledge: rejected.
     assert not _fetch(None).ok
     assert not _fetch(types.UrlRetrievalStatus.URL_RETRIEVAL_STATUS_ERROR).ok
+
+
+def test_url_context_without_retrieval_metadata_is_transient():
+    assert _fetch(None).transient  # the model did not open the page: retried in a later run
+    assert not _fetch(types.UrlRetrievalStatus.URL_RETRIEVAL_STATUS_ERROR).transient
+
+
+def test_httpx_fetcher_rejects_a_redirect_to_another_page():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/p/1"):
+            return httpx.Response(301, headers={"Location": "https://www.bauhaus.info/led-lampen/c/10000"})
+        return httpx.Response(200, text=PAGE)
+
+    fetcher = HttpxFetcher(
+        WebSettings(), client=httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+    )
+    result = fetcher.fetch(URL)
+    assert not result.ok and "redirected" in (result.error or "")
+
+    def to_https(request: httpx.Request) -> httpx.Response:
+        if request.url.scheme == "http":
+            return httpx.Response(301, headers={"Location": str(request.url.copy_with(scheme="https"))})
+        return httpx.Response(200, text=PAGE)
+
+    same_page = HttpxFetcher(
+        WebSettings(), client=httpx.Client(transport=httpx.MockTransport(to_https), follow_redirects=True)
+    )
+    assert same_page.fetch(URL.replace("https://", "http://")).ok
+
+
+def test_cached_api_errors_of_the_last_fetcher_are_retried():
+    http = StaticFetcher("http", FetchResult(ok=False, method="http", http_status=403, error="HTTP 403"))
+    gemini = StaticFetcher("gemini_url_context", RuntimeError("placeholder"))
+    retriever = WebRetriever([http, gemini])
+    api_error = WebPage(
+        URL, False, "gemini_url_context", None, "",
+        "http: HTTP 403; gemini_url_context: ClientError: 404 NOT_FOUND. {'error': ...}",
+        datetime(2026, 9, 26, tzinfo=UTC),
+    )  # fmt: skip
+    definitive = dataclasses.replace(
+        api_error, error="http: HTTP 403; gemini_url_context: url_context retrieval failed: URL_RETRIEVAL_STATUS_ERROR"
+    )
+    assert retriever.should_retry(api_error)
+    assert not retriever.should_retry(definitive)

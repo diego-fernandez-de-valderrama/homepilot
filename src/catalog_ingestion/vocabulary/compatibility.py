@@ -226,3 +226,19 @@ _EXTRA_SURFACE_FORMS: dict[str, tuple[str, ...]] = {
     "ethernet": ("lan", "ethernet"),
     "ledvance_smart_plus": ("smart+",),
 }
+
+
+def find_terms(text: str, dimension: Dimension) -> tuple[tuple[CompatibilityTerm, str], ...]:
+    """Terms of one dimension named as whole words inside free text, with the matched text
+    ("über Sprachsteuerung wie Google Assistant & Amazon Alexa" -> Google Assistant, Amazon Alexa)."""
+    found: dict[str, tuple[CompatibilityTerm, str]] = {}
+    for term in TERMS:
+        if term.dimension is not dimension:
+            continue
+        for alias in sorted({normalize_alias(a) for a in (*term.aliases, term.label)}, key=len, reverse=True):
+            pattern = r"\s+".join(map(re.escape, alias.split()))
+            match = re.search(rf"(?<!\w){pattern}(?!\w)", text, re.IGNORECASE)
+            if match:
+                found.setdefault(term.canonical, (term, match.group(0)))
+                break
+    return tuple(found.values())

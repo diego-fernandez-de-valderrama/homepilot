@@ -49,6 +49,9 @@ def _attribute_facts(product: NormalizedProduct) -> list[CompatibilityFact]:
         evidence = Evidence(FactSource.CATALOG, f"{entry.key}: {entry.value}", field=f"attributes.{entry.key}")
         for value in _values(entry):
             term = vocab.lookup(value)
+            if term is None and default_dimension is Dimension.CONTROL:
+                # "Per Smartphone oder über Sprachsteuerung wie Google Assistant & Amazon Alexa"
+                facts.extend(_embedded_voice_assistants(value, evidence))
             if default_dimension is None and (term is None or term.dimension is not Dimension.MOBILE_OS):
                 continue
             dimension = term.dimension if term else default_dimension or Dimension.CONTROL
@@ -64,6 +67,21 @@ def _attribute_facts(product: NormalizedProduct) -> list[CompatibilityFact]:
                 )
             )
     return facts
+
+
+def _embedded_voice_assistants(value: str, evidence: Evidence) -> list[CompatibilityFact]:
+    return [
+        CompatibilityFact(
+            dimension=term.dimension,
+            raw_value=matched,
+            canonical_value=term.canonical,
+            status=FactStatus.SUPPORTED,
+            evidence=evidence,
+            confidence=ATTRIBUTE_CONFIDENCE,
+            method=Method.DETERMINISTIC,
+        )
+        for term, matched in vocab.find_terms(value, Dimension.VOICE_ASSISTANT)
+    ]
 
 
 def _badge_facts(product: NormalizedProduct) -> list[CompatibilityFact]:

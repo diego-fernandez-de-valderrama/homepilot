@@ -66,6 +66,25 @@ def parse_attributes(blob: str) -> ParsedAttributes:
 def split_values(value: str) -> tuple[str, ...]:
     """Split a list-valued attribute ("Amazon Alexa, Google Assistant").
 
-    Only `, ` (comma + space) separates items; decimal commas ("5,7 W") are kept.
+    Only `, ` (comma + space) separates items; decimal commas ("5,7 W") and commas inside
+    parentheses ("Nanoleaf-App (Mobiltelefon, Tablet oder Desktop)") are kept.
     """
-    return tuple(part.strip() for part in value.split(", ") if part.strip())
+    parts: list[str] = []
+    depth = 0
+    current: list[str] = []
+    index = 0
+    while index < len(value):
+        char = value[index]
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth = max(0, depth - 1)
+        if depth == 0 and value.startswith(", ", index):
+            parts.append("".join(current))
+            current = []
+            index += 2
+            continue
+        current.append(char)
+        index += 1
+    parts.append("".join(current))
+    return tuple(part.strip() for part in parts if part.strip())

@@ -42,3 +42,11 @@ def test_repeated_section_is_supported():
 def test_split_values_keeps_decimal_commas():
     assert split_values("Amazon Alexa, Google Assistant") == ("Amazon Alexa", "Google Assistant")
     assert split_values("5,7 W, RGBW") == ("5,7 W", "RGBW")
+
+
+def test_split_values_keeps_commas_inside_parentheses():
+    value = "Nanoleaf-App (Mobiltelefon, Tablet oder Desktop) oder Schalter (bis zu 30 intelligente Leuchten), Siri"
+    assert split_values(value) == (
+        "Nanoleaf-App (Mobiltelefon, Tablet oder Desktop) oder Schalter (bis zu 30 intelligente Leuchten)",
+        "Siri",
+    )

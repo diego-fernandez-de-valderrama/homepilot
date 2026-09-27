@@ -1,6 +1,7 @@
 """Fetches a product page through a chain of fetchers, never raising."""
 
 import logging
+import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
@@ -9,6 +10,9 @@ from catalog_ingestion.domain.enrichment import WebPage
 from catalog_ingestion.web.fetchers import Fetcher, FetchResult
 
 logger = logging.getLogger(__name__)
+
+# "ClientError: 404 NOT_FOUND ..." as recorded by `retrieve` for a fetcher that raised.
+_EXCEPTION_ERROR = re.compile(r"^[A-Z]\w*(Error|Exception|Timeout): ")
 
 
 class WebRetriever:
@@ -20,9 +24,15 @@ class WebRetriever:
         return tuple(fetcher.method for fetcher in self._fetchers)
 
     def should_retry(self, cached: WebPage) -> bool:
-        """A cached failure is retried when the chain now has a fetcher it never reached
-        (e.g. the Gemini fallback after GEMINI_API_KEY was configured)."""
-        return not cached.ok and bool(self._fetchers) and cached.method != self._fetchers[-1].method
+        """A cached failure is retried when the chain now has a fetcher it never reached (e.g. the Gemini
+        fallback after GEMINI_API_KEY was configured), or when its last error was an exception (API error,
+        timeout): those say nothing about the page and are no longer cached, but older runs cached them."""
+        if cached.ok or not self._fetchers:
+            return False
+        if cached.method != self._fetchers[-1].method:
+            return True
+        last_error = (cached.error or "").rsplit("; ", 1)[-1]
+        return bool(_EXCEPTION_ERROR.match(last_error.split(": ", 1)[-1]))
 
     def retrieve(self, url: str) -> WebPage:
         errors: list[str] = []

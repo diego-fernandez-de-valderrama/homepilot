@@ -15,11 +15,23 @@ Schema changes go through Alembic: edit these models, then
 
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any, ClassVar
 
-from sqlalchemy import REAL, BigInteger, ForeignKey, Index, MetaData, Numeric, Text, func, text
+from sqlalchemy import REAL, BigInteger, CheckConstraint, ForeignKey, Index, MetaData, Numeric, Text, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from catalog_ingestion.domain.enums import (
+    CompletenessLevel,
+    Dimension,
+    FactSource,
+    FactStatus,
+    Method,
+    Necessity,
+    RequirementKind,
+    WebStatus,
+)
 
 # Matches PostgreSQL's default constraint names, so names are predictable in migrations.
 NAMING_CONVENTION = {
@@ -29,6 +41,12 @@ NAMING_CONVENTION = {
     "fk": "%(table_name)s_%(column_0_name)s_fkey",
     "pk": "%(table_name)s_pkey",
 }
+
+
+def _one_of(column: str, values: type[StrEnum]) -> CheckConstraint:
+    """The column may only hold the enum's values (e.g. "unknown stays unknown": no "Supported")."""
+    allowed = ", ".join(f"'{value.value}'" for value in values)
+    return CheckConstraint(f"{column} IN ({allowed})", name=column)
 
 
 class Base(DeclarativeBase):
@@ -84,6 +102,8 @@ class ProductRecord(Base):
     )
 
     __table_args__ = (
+        _one_of("completeness_level", CompletenessLevel),
+        _one_of("web_status", WebStatus),
         Index("products_category_idx", "category", postgresql_where=text("active")),
         Index("products_brand_idx", "brand", postgresql_where=text("active")),
         Index("products_price_idx", "price_value", postgresql_where=text("active")),
@@ -108,6 +128,11 @@ class CompatibilityRecord(Base):
     method: Mapped[str]  # deterministic | llm
 
     __table_args__ = (
+        _one_of("dimension", Dimension),
+        _one_of("status", FactStatus),
+        _one_of("source", FactSource),
+        _one_of("method", Method),
+        CheckConstraint("confidence BETWEEN 0 AND 1", name="confidence"),
         Index("product_compatibility_lookup_idx", "dimension", "canonical_value", "status"),
         Index("product_compatibility_product_idx", "product_id"),
     )
@@ -131,6 +156,11 @@ class RequirementRecord(Base):
     method: Mapped[str]
 
     __table_args__ = (
+        _one_of("kind", RequirementKind),
+        _one_of("necessity", Necessity),
+        _one_of("source", FactSource),
+        _one_of("method", Method),
+        CheckConstraint("confidence BETWEEN 0 AND 1", name="confidence"),
         Index("product_requirements_product_idx", "product_id"),
         Index("product_requirements_item_idx", "canonical_item"),
     )

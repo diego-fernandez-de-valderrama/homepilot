@@ -4,10 +4,16 @@ import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import inspect
+from sqlalchemy import CheckConstraint, inspect, text
+from sqlalchemy.exc import IntegrityError
 
-from catalog_ingestion.storage.postgres.engine import alembic_config, upgrade_to_head
+from catalog_ingestion.domain.enums import WebStatus
+from catalog_ingestion.pipeline.stages import prepare
+from catalog_ingestion.storage.postgres.engine import alembic_config, create_session_factory, upgrade_to_head
 from catalog_ingestion.storage.postgres.models import Base
+from catalog_ingestion.storage.postgres.repository import PostgresRepository
+from catalog_ingestion.validation.validator import Validator
+from tests.conftest import BOSCH_CONTROLLER, load_raw
 
 pytestmark = pytest.mark.integration
 
@@ -42,3 +48,38 @@ def test_upgrade_is_idempotent_and_downgrade_works(empty_database):
 
     upgrade_to_head(empty_database)
     assert set(inspect(empty_database).get_table_names()) >= TABLES
+
+
+def test_check_constraints_match_the_models(empty_database):
+    upgrade_to_head(empty_database)
+    inspector = inspect(empty_database)
+    for table in Base.metadata.sorted_tables:
+        expected = {
+            str(constraint.name)
+            for constraint in table.constraints
+            if isinstance(constraint, CheckConstraint) and constraint.name
+        }
+        actual = {c["name"] for c in inspector.get_check_constraints(table.name)}
+        assert expected <= actual, table.name
+
+
+@pytest.mark.parametrize(
+    ("table", "column", "value", "constraint"),
+    [
+        ("products", "completeness_level", "Rich", "products_completeness_level_check"),
+        ("product_compatibility", "status", "Supported", "product_compatibility_status_check"),
+        ("product_compatibility", "confidence", "1.5", "product_compatibility_confidence_check"),
+    ],
+)
+def test_enum_columns_reject_unknown_values(empty_database, table, column, value, constraint):
+    upgrade_to_head(empty_database)
+    prepared = prepare(load_raw(BOSCH_CONTROLLER))
+    enriched = Validator().validate(
+        prepared.product, prepared.completeness, prepared.facts, prepared.requirements,
+        WebStatus.NOT_NEEDED, None, None, None, None,
+    )  # fmt: skip
+    PostgresRepository(create_session_factory(empty_database)).upsert_product(
+        enriched, prepared.raw, prepared.raw_hash, None, None
+    )
+    with pytest.raises(IntegrityError, match=constraint), empty_database.begin() as connection:
+        connection.execute(text(f"UPDATE {table} SET {column} = :value"), {"value": value})

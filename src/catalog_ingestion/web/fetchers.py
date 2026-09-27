@@ -32,6 +32,10 @@ class Fetcher(Protocol):
     def fetch(self, url: str) -> FetchResult: ...
 
 
+def _path(url: str) -> str:
+    return httpx.URL(url).path.rstrip("/")
+
+
 class HttpxFetcher:
     """Plain HTTP GET. bauhaus.info currently answers 403 (bot protection) to this."""
 
@@ -54,6 +58,14 @@ class HttpxFetcher:
             response = self._client.get(url)
         except httpx.HTTPError as exc:
             return FetchResult(ok=False, method=self.method, error=f"{type(exc).__name__}: {exc}", transient=True)
+        if response.history and _path(str(response.url)) != _path(url):
+            # A discontinued product usually redirects to a category page: that text is not this product.
+            return FetchResult(
+                ok=False,
+                method=self.method,
+                http_status=response.status_code,
+                error=f"redirected to another page: {response.url}",
+            )
         if response.status_code != 200:
             return FetchResult(
                 ok=False,
@@ -84,6 +96,9 @@ Rules:
 - Do not add anything that is not on the page. Do not use prior knowledge.
 - If the page cannot be opened or shows no product information, answer exactly: NO_CONTENT
 """
+
+
+_INCONCLUSIVE_STATUSES = frozenset({types.UrlRetrievalStatus.URL_RETRIEVAL_STATUS_UNSPECIFIED})
 
 
 class GeminiUrlContextFetcher:
@@ -120,7 +135,12 @@ class GeminiUrlContextFetcher:
         ]
         if types.UrlRetrievalStatus.URL_RETRIEVAL_STATUS_SUCCESS not in statuses:
             status = statuses[0].value if statuses else "no_retrieval_metadata"
-            return FetchResult(ok=False, method=self.method, error=f"url_context retrieval failed: {status}")
+            # Only a definitive answer about the page is cached; the model not calling the tool at all
+            # (no metadata) or an unspecified status says nothing about the page, so it is retried later.
+            definitive = bool(statuses) and statuses[0] not in _INCONCLUSIVE_STATUSES
+            return FetchResult(
+                ok=False, method=self.method, error=f"url_context retrieval failed: {status}", transient=not definitive
+            )
 
         text = (response.text or "").strip()
         if not text or text.startswith("NO_CONTENT") or len(text) < _MIN_USEFUL_CHARS:

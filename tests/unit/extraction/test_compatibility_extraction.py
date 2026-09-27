@@ -1,4 +1,7 @@
+import dataclasses
+
 from catalog_ingestion.domain.enums import Dimension, FactSource, FactStatus, Method
+from catalog_ingestion.domain.product import AttributeEntry, ParsedAttributes
 from catalog_ingestion.extraction.compatibility import extract_compatibility
 from tests.conftest import (
     AQARA_THREAD,
@@ -63,3 +66,17 @@ def test_no_unsupported_facts_from_absence():
     for product_id in (SPARSE_MATTER, HUE_BRIDGE, BOSCH_CONTROLLER):
         facts = extract_compatibility(load_normalized(product_id))
         assert all(f.status is FactStatus.SUPPORTED for f in facts)
+
+
+def test_voice_assistants_named_inside_a_control_value_become_facts():
+    product = load_normalized(SPARSE_MATTER)
+    value = "Per Smartphone oder über Sprachsteuerung wie Google Assistant & Amazon Alexa"
+    attributes = ParsedAttributes(
+        badges=(), entries=(AttributeEntry("Technik", "Smarte Steuerung", value),), unparsed_lines=()
+    )
+    facts = extract_compatibility(dataclasses.replace(product, attributes=attributes))
+    voice = {f.canonical_value: f for f in facts if f.dimension is Dimension.VOICE_ASSISTANT}
+    assert set(voice) == {"google_assistant", "amazon_alexa"}
+    assert voice["amazon_alexa"].raw_value == "Amazon Alexa"
+    assert voice["amazon_alexa"].evidence.text == f"Smarte Steuerung: {value}"
+    assert "google_home" not in {f.canonical_value for f in facts}  # the assistant is not the ecosystem
