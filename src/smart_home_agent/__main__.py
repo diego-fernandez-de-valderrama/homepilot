@@ -35,6 +35,7 @@ def check() -> int:
     print(f"Qdrant points              : {container.index.count()} ({settings.qdrant.collection})")
     print(f"Indexed embedding model    : {container.index.indexed_embedding_model()}")
     print(f"Query embedding model      : {container.index.query_embedding_model}")
+    print(f"Points with another model  : {container.index.points_with_other_model()}")
     print(f"Agent model                : {settings.agent.model}")
     print(f"Input guardrail            : {'on' if container.guardrail else 'off'}")
     print(f"Output check               : {'on' if settings.agent.guardrail_output_check else 'off'}")

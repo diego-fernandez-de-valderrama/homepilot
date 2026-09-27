@@ -99,12 +99,12 @@ def build_container(settings: Settings) -> Container:
     gemini = GeminiClient(settings.gemini)
     embedder = GeminiEmbedder(gemini, settings.gemini)
     index = QdrantIndex(create_client(settings.qdrant), settings.qdrant.collection, embedder)
-    indexed_model = index.indexed_embedding_model()
-    if indexed_model and indexed_model != index.query_embedding_model:
+    mismatched = index.points_with_other_model()
+    if mismatched:
         logger.warning(
-            "Qdrant vectors were built with %s but queries use %s; semantic scores will be meaningless. "
+            "%d Qdrant vectors were not built with the query model %s; their semantic scores are meaningless. "
             "Align GEMINI_EMBEDDING_MODEL/GEMINI_EMBEDDING_DIM or run `catalog-ingestion reindex`.",
-            indexed_model,
+            mismatched,
             index.query_embedding_model,
         )
     profiles = build_profile_store(settings)

@@ -68,6 +68,15 @@ class QdrantIndex:
         points, _ = self._client.scroll(self._collection, limit=1, with_payload=["embedding_model"])
         return (points[0].payload or {}).get("embedding_model") if points else None
 
+    def points_with_other_model(self) -> int:
+        """Points not embedded with the query embedding model (all of them are checked, not a sample)."""
+        other = models.Filter(
+            must_not=[
+                models.FieldCondition(key="embedding_model", match=models.MatchValue(value=self.query_embedding_model))
+            ]
+        )
+        return self._client.count(self._collection, count_filter=other, exact=True).count
+
     @property
     def query_embedding_model(self) -> str:
         return self._embedder.model_id
