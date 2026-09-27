@@ -1,5 +1,6 @@
 """End-to-end pipeline runs with in-memory Qdrant, an in-memory PostgreSQL fake,
-fake Gemini components and real fixtures. No network, no Docker."""
+fake Gemini components and real fixtures. No network, no Docker (so not marked `integration`);
+test_pipeline_postgres.py repeats the key cases against the real PostgresRepository."""
 
 import json
 from datetime import UTC, datetime
