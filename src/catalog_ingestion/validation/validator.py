@@ -34,14 +34,21 @@ def _clean_list(values: tuple[str, ...], limit: int) -> tuple[str, ...]:
     return tuple(dict.fromkeys(value for value in cleaned if value))[:limit]
 
 
+def _number_pattern(number: str, unit: str | None) -> re.Pattern[str]:
+    # Whole numbers only ("4" is not found in "2,4 GHz"); a unit must follow the number.
+    unit_part = rf"\s*{re.escape(normalize_text(unit))}(?!\w)" if unit and unit.strip() else ""
+    return re.compile(rf"(?<![\d.,]){re.escape(number)}(?![\d]|[.,]\d){unit_part}")
+
+
 def _spec_supported(spec: Spec, sources: SourceTexts) -> bool:
-    """A spec is kept when its value (or all of its numbers) appear in a source."""
+    """A spec is kept when its value appears in a source, or when each of its numbers appears there as a
+    whole number (followed by the spec's unit, when it has one)."""
     combined = f"{sources.catalog}\n{sources.web}"
     value = normalize_text(spec.value)
-    if value and value in combined:
+    if value and re.search(rf"(?<![\w.,]){re.escape(value)}(?![\w]|[.,]\d)", combined):
         return True
     numbers = _NUMBER.findall(spec.value)
-    return bool(numbers) and all(number in combined for number in numbers)
+    return bool(numbers) and all(_number_pattern(number, spec.unit).search(combined) for number in numbers)
 
 
 def _optional_text(value: str | None) -> str | None:

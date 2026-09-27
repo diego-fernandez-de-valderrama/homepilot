@@ -168,16 +168,20 @@ TERMS: tuple[CompatibilityTerm, ...] = (
     CompatibilityTerm("android", Dimension.MOBILE_OS, "Android", ("android",)),
 )
 
-_BY_CANONICAL = {term.canonical: term for term in TERMS}
-# Canonical ids that are valid in several dimensions do not exist; alias keys are unique per dimension.
-_BY_ALIAS: dict[str, CompatibilityTerm] = {alias: term for term in TERMS for alias in (*term.aliases, term.canonical)}
-
 # Version suffixes on mobile OS values ("iOS 8.0 oder höher") are dropped for lookup.
 _OS_VERSION = re.compile(r"\s+\d+(\.\d+)*\s*(oder höher|or later|\+)?$", re.IGNORECASE)
 
 
 def normalize_alias(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip().casefold().replace("™", "").replace("®", "").strip()
+
+
+_BY_CANONICAL = {term.canonical: term for term in TERMS}
+# Canonical ids that are valid in several dimensions do not exist; alias keys are unique per dimension.
+# Keys are normalized like lookups, so aliases written with "®" or "™" still match.
+_BY_ALIAS: dict[str, CompatibilityTerm] = {
+    normalize_alias(alias): term for term in TERMS for alias in (*term.aliases, term.canonical)
+}
 
 
 def lookup(value: str) -> CompatibilityTerm | None:

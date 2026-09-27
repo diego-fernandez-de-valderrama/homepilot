@@ -49,3 +49,42 @@ def test_slugs_are_unique_and_brand_pages_unmapped():
     slugs = [slug for category in CATEGORIES for slug in category.slugs]
     assert len(slugs) == len(set(slugs))
     assert all(category_for_slug(slug) is None for slug in BRAND_PAGE_SLUGS)
+
+
+def test_aliases_with_trademark_signs_are_reachable():
+    from catalog_ingestion.vocabulary.compatibility import _BY_ALIAS, TERMS, normalize_alias
+
+    for term in TERMS:
+        for alias in term.aliases:
+            assert normalize_alias(alias) in _BY_ALIAS, alias
+
+
+def test_no_surface_form_matches_another_concept_as_a_word():
+    from catalog_ingestion.validation.evidence import mentions_any
+    from catalog_ingestion.vocabulary.compatibility import TERMS, surface_forms
+
+    for term in TERMS:
+        for other in TERMS:
+            if other.canonical == term.canonical:
+                continue
+            for alias in (*other.aliases, other.label):
+                # Allowed only when the form is made of whole words of the other alias; this guards
+                # against in-word matches such as "lan" inside "wlan".
+                if mentions_any(alias, surface_forms(term.canonical)):
+                    words = set(alias.casefold().replace("-", " ").split())
+                    forms = {form.casefold() for form in surface_forms(term.canonical)}
+                    assert any(set(form.split()) <= words for form in forms), (
+                        f"{term.canonical} matches inside {other.canonical} alias {alias!r}"
+                    )
+
+
+def test_mentions_any_uses_whole_words():
+    from catalog_ingestion.validation.evidence import mentions_any
+    from catalog_ingestion.vocabulary.compatibility import surface_forms
+
+    assert not mentions_any("Steuerung per WLAN", surface_forms("ethernet"))
+    assert mentions_any("Anschluss per LAN-Kabel", surface_forms("ethernet"))
+    assert not mentions_any("Radios", surface_forms("ios"))
+    assert not mentions_any("matter Oberfläche", surface_forms("matter"))
+    assert mentions_any("Über Matter kompatibel", surface_forms("matter"))
+    assert not mentions_any("geringer Verbrauch", surface_forms("ring"))

@@ -91,7 +91,8 @@ def test_catalog_fact_wins_over_conflicting_llm_claim():
     alexa = [f for f in enriched.compatibility if f.canonical_value == "amazon_alexa"]
     assert len(alexa) == 1
     assert alexa[0].status is FactStatus.SUPPORTED and alexa[0].method is Method.DETERMINISTIC
-    assert any(note.startswith("conflict") for note in enriched.validation_notes)
+    # The quote has no negation, so the "unsupported" claim is already dropped before the merge.
+    assert any("explicit negative evidence" in note for note in enriched.validation_notes)
 
 
 def test_wrong_dimension_is_reassigned_by_vocabulary():
@@ -145,3 +146,103 @@ def test_quote_matching_is_whitespace_and_case_insensitive():
     assert quote_found("Amazon   ALEXA", "unterstützte sprachsteuerung: amazon alexa")
     assert quote_found("Amazon Alexa ... Apple Siri", "amazon alexa, google, apple siri")
     assert not quote_found("ab", "ab")  # too short to be evidence
+
+
+def _hub_claim(item: str, quote: str, alternatives: tuple[str, ...] = ()) -> RequirementClaim:
+    return RequirementClaim(item, RequirementKind.HUB, Necessity.REQUIRED, alternatives, FactSource.WEB, quote)
+
+
+def _with_page(text: str, method: str = "http") -> WebPage:
+    return dataclasses.replace(WEB_PAGE, text=text, method=method)
+
+
+def test_negated_hub_requirements_are_rejected():
+    cases = [
+        ("Funktioniert ganz ohne Gateway (Hub) direkt per WLAN.", "Gateway", "Gateway (Hub)"),
+        ("Kein HUB erforderlich. Einfach einschalten.", "Hub", "HUB erforderlich"),
+        ("Keine zusätzliche Bridge erforderlich.", "Bridge", "Bridge erforderlich"),
+        ("Works without a hub, straight over Wi-Fi.", "Hub", "a hub"),
+    ]
+    for text, item, quote in cases:
+        enriched = _validate(SPARSE_MATTER, empty_llm(requirement_claims=(_hub_claim(item, quote),)), _with_page(text))
+        assert all(r.method is not Method.LLM for r in enriched.requirements), text
+        assert any("negates" in note for note in enriched.validation_notes), text
+
+
+def test_negation_in_an_earlier_sentence_does_not_leak():
+    text = "Nicht im Lieferumfang enthalten: Batterien. Philips Hue Bridge erforderlich."
+    enriched = _validate(
+        SPARSE_MATTER,
+        empty_llm(requirement_claims=(_requirement("Philips Hue Bridge erforderlich"),)),
+        _with_page(text),
+    )
+    assert any(r.canonical_item == "philips_hue_bridge" for r in enriched.requirements)
+
+
+def test_negated_supported_claim_is_rejected_and_unsupported_needs_negation():
+    page = _with_page("Dieses Gerät ist nicht kompatibel mit Apple HomeKit. Funk 868 MHz.")
+    supported = _claim("Apple HomeKit", "kompatibel mit Apple HomeKit", source=FactSource.WEB)
+    enriched = _validate(SPARSE_MATTER, empty_llm(compatibility_claims=(supported,)), page)
+    assert all(f.canonical_value != "apple_home" for f in enriched.compatibility)
+
+    unsupported = _claim(
+        "Apple HomeKit", "nicht kompatibel mit Apple HomeKit", status=FactStatus.UNSUPPORTED, source=FactSource.WEB
+    )
+    enriched = _validate(SPARSE_MATTER, empty_llm(compatibility_claims=(unsupported,)), page)
+    fact = next(f for f in enriched.compatibility if f.canonical_value == "apple_home")
+    assert fact.status is FactStatus.UNSUPPORTED
+
+    bare = _claim("Matter", "Über Matter kompatibel", status=FactStatus.UNSUPPORTED, source=FactSource.WEB)
+    enriched = _validate(SPARSE_MATTER, empty_llm(compatibility_claims=(bare,)), web_page=WEB_PAGE)
+    assert all(f.status is not FactStatus.UNSUPPORTED for f in enriched.compatibility)
+
+
+def test_requirement_alternatives_must_be_named_in_the_evidence():
+    page = _with_page("Philips Hue Bridge erforderlich. Steuerung per App.")
+    claim = _hub_claim("Philips Hue Bridge", "Philips Hue Bridge erforderlich", ("standalone", "Amazon Echo"))
+    enriched = _validate(SPARSE_MATTER, empty_llm(requirement_claims=(claim,)), page)
+    requirement = next(r for r in enriched.requirements if r.canonical_item == "philips_hue_bridge")
+    assert requirement.alternatives == ("philips_hue_bridge",)
+    assert any("dropped alternatives" in note for note in enriched.validation_notes)
+
+    page = _with_page("Homematic IP Access Point oder Zentrale CCU3 notwendig.")
+    claim = _hub_claim("Access Point", "Homematic IP Access Point", ("CCU3",))
+    enriched = _validate(SPARSE_MATTER, empty_llm(requirement_claims=(claim,)), page)
+    requirement = next(r for r in enriched.requirements if r.canonical_item == "homematic_ip_access_point")
+    assert requirement.alternatives == ("homematic_ip_access_point", "homematic_ccu3")
+
+
+def test_substring_matches_do_not_cross_concepts():
+    page = _with_page("Steuerung per WLAN. Langlebige Batterie, geringer Stromverbrauch, Radios. Matter Lack.")
+    claims = (
+        _claim("LAN", "Steuerung per WLAN", dimension=Dimension.PROTOCOL, source=FactSource.WEB),
+        _claim("Ring", "geringer Stromverbrauch", source=FactSource.WEB),
+        _claim("iOS", "Radios", dimension=Dimension.MOBILE_OS, source=FactSource.WEB),
+    )
+    enriched = _validate(SPARSE_MATTER, empty_llm(compatibility_claims=claims), page)
+    assert {f.canonical_value for f in enriched.compatibility if f.method is Method.LLM} == set()
+
+
+def test_url_context_web_evidence_is_tagged_with_lower_confidence():
+    claim = _claim("Apple Home", "Über Matter kompatibel mit Apple Home", source=FactSource.WEB)
+    generated = dataclasses.replace(WEB_PAGE, method="gemini_url_context")
+    enriched = _validate(SPARSE_MATTER, empty_llm(compatibility_claims=(claim,)), web_page=generated)
+    fact = next(f for f in enriched.compatibility if f.canonical_value == "apple_home")
+    assert fact.evidence.field == "web_page:url_context"
+    assert fact.confidence == 0.6
+
+    enriched = _validate(SPARSE_MATTER, empty_llm(compatibility_claims=(claim,)), web_page=WEB_PAGE)
+    fact = next(f for f in enriched.compatibility if f.canonical_value == "apple_home")
+    assert (fact.evidence.field, fact.confidence) == ("web_page", 0.8)
+
+
+def test_spec_numbers_must_match_whole_numbers_and_units():
+    page = _with_page("Funkfrequenz 2,4 GHz. Reichweite 30 m.")
+    specs = (
+        Spec("Battery life", "2 years", None),
+        Spec("Range", "4", "m"),
+        Spec("Frequency", "2,4", "GHz"),
+        Spec("Range", "30", "m"),
+    )
+    enriched = _validate(SPARSE_MATTER, empty_llm(specs=specs), page)
+    assert [(s.name, s.value) for s in enriched.specs] == [("Frequency", "2,4"), ("Range", "30")]

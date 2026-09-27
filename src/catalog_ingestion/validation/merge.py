@@ -4,12 +4,14 @@ import re
 from dataclasses import dataclass
 
 from catalog_ingestion.domain.enrichment import CompatibilityClaim, RequirementClaim
-from catalog_ingestion.domain.enums import FactSource, Method
+from catalog_ingestion.domain.enums import FactSource, FactStatus, Method
 from catalog_ingestion.domain.facts import CompatibilityFact, Evidence, Requirement
 from catalog_ingestion.validation.evidence import (
     SourceTexts,
     mentions_any,
+    negation_near,
     normalize_text,
+    quote_sentence,
 )
 from catalog_ingestion.vocabulary import compatibility as compat_vocab
 from catalog_ingestion.vocabulary import requirements as req_vocab
@@ -17,7 +19,10 @@ from catalog_ingestion.vocabulary import requirements as req_vocab
 # Confidence is assigned by rule, never taken from the model.
 CONFIDENCE_LLM_FROM_CATALOG = 0.9
 CONFIDENCE_LLM_FROM_WEB = 0.8
+# Page text read through Gemini url_context is itself model output, not a verbatim page copy.
+CONFIDENCE_LLM_FROM_GENERATED_WEB = 0.6
 CONFIDENCE_LLM_DERIVED = 0.6
+GENERATED_WEB_METHOD = "gemini_url_context"
 
 _WORD = re.compile(r"[\wäöüß+-]{4,}", re.IGNORECASE)
 
@@ -28,13 +33,16 @@ class Outcome[T]:
     note: str | None = None
 
 
-def _confidence(source: FactSource) -> float:
-    return CONFIDENCE_LLM_FROM_WEB if source is FactSource.WEB else CONFIDENCE_LLM_FROM_CATALOG
+def _confidence(source: FactSource, sources: SourceTexts) -> float:
+    if source is not FactSource.WEB:
+        return CONFIDENCE_LLM_FROM_CATALOG
+    return CONFIDENCE_LLM_FROM_GENERATED_WEB if sources.web_method == GENERATED_WEB_METHOD else CONFIDENCE_LLM_FROM_WEB
 
 
 def _evidence(source: FactSource, quote: str, sources: SourceTexts) -> Evidence:
     if source is FactSource.WEB:
-        return Evidence(FactSource.WEB, quote, field="web_page", url=sources.web_url)
+        field = "web_page:url_context" if sources.web_method == GENERATED_WEB_METHOD else "web_page"
+        return Evidence(FactSource.WEB, quote, field=field, url=sources.web_url)
     return Evidence(FactSource.CATALOG, quote, field="catalog_text")
 
 
@@ -54,6 +62,12 @@ def compatibility_from_claim(claim: CompatibilityClaim, sources: SourceTexts) ->
             return Outcome(None, f"dropped {label}: evidence does not mention the value")
         dimension, canonical = claim.dimension, None
 
+    negated = negation_near(claim.evidence_quote, sources.text_for(source))
+    if claim.status is FactStatus.SUPPORTED and negated:
+        return Outcome(None, f"dropped {label}: the evidence negates it")
+    if claim.status is FactStatus.UNSUPPORTED and not negated:
+        return Outcome(None, f"dropped {label}: 'unsupported' needs explicit negative evidence")
+
     note = None
     if dimension is not claim.dimension:
         note = f"reassigned {label} to dimension {dimension.value}"
@@ -64,7 +78,7 @@ def compatibility_from_claim(claim: CompatibilityClaim, sources: SourceTexts) ->
             canonical_value=canonical,
             status=claim.status,
             evidence=_evidence(source, claim.evidence_quote, sources),
-            confidence=_confidence(source),
+            confidence=_confidence(source, sources),
             method=Method.LLM,
         ),
         note,
@@ -91,8 +105,15 @@ def requirement_from_claim(claim: RequirementClaim, sources: SourceTexts) -> Out
         if words and not any(word in normalize_text(claim.evidence_quote) for word in words):
             return Outcome(None, f"dropped {label}: evidence does not mention the item")
 
+    if negation_near(claim.evidence_quote, sources.text_for(source)):
+        return Outcome(None, f"dropped {label}: the evidence negates it")
+
+    sentence = quote_sentence(claim.evidence_quote, sources.text_for(source)) or ""
+    context = f"{normalize_text(claim.evidence_quote)}\n{sentence}"
+    verified = [alt for alt in claim.alternatives if alt.strip() and _mentioned(alt, context)]
+    dropped = [alt for alt in claim.alternatives if alt.strip() and alt not in verified]
     primary = term.canonical if term else None
-    alternatives = tuple(dict.fromkeys([primary or claim.item.strip(), *map(_canonical_or_raw, claim.alternatives)]))
+    alternatives = tuple(dict.fromkeys([primary or claim.item.strip(), *map(_canonical_or_raw, verified)]))
     return Outcome(
         Requirement(
             item=claim.item,
@@ -101,10 +122,20 @@ def requirement_from_claim(claim: RequirementClaim, sources: SourceTexts) -> Out
             necessity=claim.necessity,
             alternatives=alternatives,
             evidence=_evidence(source, claim.evidence_quote, sources),
-            confidence=_confidence(source),
+            confidence=_confidence(source, sources),
             method=Method.LLM,
-        )
+        ),
+        f"dropped alternatives of {label} not named in the evidence: {', '.join(dropped)}" if dropped else None,
     )
+
+
+def _mentioned(item: str, normalized_context: str) -> bool:
+    """An alternative is kept only when the evidence sentence names it (its vocabulary pattern or its words)."""
+    term = req_vocab.term_by_canonical(item.strip()) or req_vocab.lookup(item)
+    if term is not None:
+        return bool(term.pattern.search(normalized_context))
+    words = {word.casefold() for word in _WORD.findall(item)}
+    return bool(words) and all(re.search(rf"(?<!\w){re.escape(word)}(?!\w)", normalized_context) for word in words)
 
 
 def merge_facts(
