@@ -1,8 +1,10 @@
 """Customer memory rules, enforced in code (the prompt only asks the model to follow them):
 
-- a fact is stored only with a verbatim quote from the customer's current message, so cart contents, tool
-  results and the model's own guesses can never become facts;
-- quotes about other people (a friend, family, a gift) are rejected: only the customer's own facts are kept;
+- a fact is stored only with a verbatim quote (whole words) from the customer's current message, and each value
+  must be stated in that quote or in another clause of the message that is not about someone else, so cart
+  contents, tool results and the model's own guesses can never become facts;
+- quotes whose clause is about other people (a friend, family, a gift, "sie hat ...") are rejected: only the
+  customer's own facts are kept;
 - ecosystems and voice assistants resolve to canonical ids (ambiguous input raises, as everywhere);
 - hubs (bridges, gateways, access points, connectors) map to a canonical hub id only when that is safe,
   otherwise they keep the customer's wording. Owned hardware that maps to a hub is stored as a hub too, so
@@ -31,18 +33,70 @@ from smart_home_agent.services.vocabulary import TermResolutionError
 _MAX_EVIDENCE = 500
 _MAX_VALUE = 200
 
-# Words that show a quote is about someone else (EN/DE), matched as whole words on the quote only, so
-# "I'm buying it for my friend, I use Alexa myself" can still be stored with the quote "I use Alexa myself".
-# Plain pronouns are not listed ("I have Hue lights, they work great" is the customer's own fact).
+# Words that show a clause is about someone else (EN/DE), matched as whole words on the casefolded clause of the
+# customer's message that contains the quote ("ß" is then "ss"). So "I'm buying it for my friend, I use Alexa
+# myself" can still be stored with the quote "I use Alexa myself", while "My sister uses Alexa" cannot be stored
+# as "uses Alexa".
+# Plain plural pronouns are not listed ("I have Hue lights, they work great" is the customer's own fact).
 _THIRD_PARTY = re.compile(
     r"\b("
     r"friends?|girlfriend|boyfriend|gifts?|mum|mom|mother|dad|father|parents?|brother|sister|wife|husband|"
-    r"partner|son|daughter|kids?|children|grand\w*|uncle|aunt|cousin|neighbou?rs?|colleagues?|boss|"
-    r"roommate|flatmate|for (him|her|them)|"
-    r"freund\w*|geschenk\w*|mutter|mama|vater|papa|eltern|bruder|schwester|frau|mann|sohn|tochter|kinder?|"
-    r"oma|opa|onkel|tante|nachbar\w*|kolleg\w*|chef\w*|mitbewohner\w*|für (ihn|sie|ihre?n?)"
+    r"partner|son|daughter|kids?|children|grand\w*|uncle|aunt|cousin|nephew|niece|fianc\w*|in-laws?|"
+    r"neighbou?rs?|colleagues?|boss|roommate|flatmate|relatives?|for (him|her|them)|"
+    r"freund\w*|geschenk\w*|mama|papa|eltern|kind(er)?|enkel\w*|oma|opa|onkel|tante|nichte|neffe|"
+    r"schwieger\w*|gro(ß|ss)(eltern|mutter|vater)|ehe(mann|frau|partner\w*)|verwandte[nr]?|bekannte[nr]?|nachbar\w*|"
+    r"kolleg\w*|chef\w*|mitbewohner\w*|für (ihn|sie|ihre?n?)|"
+    r"\w*(mutter|vater|bruder|schwester|sohn|tochter|eltern)|"
+    r"(mein|meine|meinem|meinen|meiner|sein|seine|ihr|ihre|unser|unsere)\s+(frau|mann)"
     r")\b",
     re.IGNORECASE,
+)
+# A clause whose subject is another person ("Für meine Mutter: sie hat Alexa", "Er nutzt HomeKit").
+_THIRD_PERSON_SUBJECT = re.compile(
+    r"^(he|she|er|sie)\s+(has|uses|owns|likes|wants|prefers|hat|nutzt|benutzt|verwendet|besitzt|mag|will|möchte)\b",
+    re.IGNORECASE,
+)
+_CLAUSE_BOUNDARY = re.compile(r"[.!?;:\n]+|,\s")
+_MIN_EVIDENCE = 3
+_LANGUAGE_WORDS = {
+    "en": re.compile(r"\b(english|englisch)\b", re.IGNORECASE),
+    "de": re.compile(r"\b(german|deutsch)\b", re.IGNORECASE),
+}
+_WORD = re.compile(r"[^\W_]+")
+# Words that never back a value on their own ("my", "the", "mein", ...).
+_FILLER = frozenset(
+    [
+        "the",
+        "and",
+        "for",
+        "with",
+        "my",
+        "a",
+        "an",
+        "of",
+        "in",
+        "on",
+        "to",
+        "use",
+        "have",
+        "own",
+        "ich",
+        "mein",
+        "meine",
+        "meinen",
+        "einen",
+        "eine",
+        "ein",
+        "der",
+        "die",
+        "das",
+        "und",
+        "mit",
+        "habe",
+        "hab",
+        "nutze",
+        "benutze",
+    ]
 )
 
 _SPACES = re.compile(r"\s+")
@@ -51,6 +105,26 @@ _QUOTES = str.maketrans({"“": '"', "”": '"', "„": '"', "‘": "'", "’": 
 
 def _normalize(text: str) -> str:
     return _SPACES.sub(" ", text.translate(_QUOTES)).strip().casefold()
+
+
+def _about_someone_else(clause: str) -> bool:
+    return bool(_THIRD_PARTY.search(clause) or _THIRD_PERSON_SUBJECT.match(clause))
+
+
+def _own_clauses(message: str) -> list[str]:
+    return [clause for clause in _clauses(message, 0, len(message)) if not _about_someone_else(clause)]
+
+
+def _clauses(message: str, start: int, end: int) -> list[str]:
+    """The clauses of the (normalized) message that overlap the quote at [start, end)."""
+    clauses: list[str] = []
+    position = 0
+    for boundary in [*_CLAUSE_BOUNDARY.finditer(message), None]:
+        clause_end = boundary.start() if boundary else len(message)
+        if position < end and clause_end > start:
+            clauses.append(message[position:clause_end].strip())
+        position = boundary.end() if boundary else len(message)
+    return [clause for clause in clauses if clause]
 
 
 def _clean(values: list[str] | None) -> list[str]:
@@ -122,6 +196,12 @@ class ProfileService:
         new += [self._hub(value) for value in _clean(hubs)]
         new += [self._device(value) for value in _clean(owned_devices)]
         new += [NewFact(kind=FactKind.PREFERENCE, value=_normalize(p), label=p) for p in _clean(preferences)]
+        own_words = "\n".join([_normalize(quote), *_own_clauses(_normalize(user_message or ""))])
+        unbacked = [fact for fact in new if not self._backed_by(fact, own_words)]
+        rejected += [
+            RejectedFact(kind=f.kind, value=f.label, reason="the evidence quote does not state it") for f in unbacked
+        ]
+        new = [fact for fact in new if fact not in unbacked]
 
         retractions = [_Retraction((FactKind.ECOSYSTEM,), v) for v in _clean(no_longer_used)]
         retractions += [_Retraction(_OWNED, v) for v in _clean(no_longer_owned)]
@@ -154,20 +234,40 @@ class ProfileService:
     @staticmethod
     def _check_evidence(user_message: str | None, evidence: str) -> str:
         quote = _SPACES.sub(" ", evidence.translate(_QUOTES)).strip().strip("\"'").strip()
-        if not quote:
+        if len(quote) < _MIN_EVIDENCE:
             raise MemoryRuleError("evidence is required: quote the customer's own words from their latest message")
         if len(quote) > _MAX_EVIDENCE:
             raise MemoryRuleError("evidence is too long: quote only the sentence that states the fact")
-        if not user_message or _normalize(quote) not in _normalize(user_message):
+        message = _normalize(user_message or "")
+        # Whole words only: a fragment such as "e" inside "use" is not a quote.
+        span = re.search(rf"(?<!\w){re.escape(_normalize(quote))}(?!\w)", message)
+        if span is None:
             raise MemoryRuleError(
                 "evidence is not a verbatim quote of the customer's latest message: only facts the customer stated "
                 "in this message can be remembered (never the cart, a tool result or an assumption)"
             )
-        if _THIRD_PARTY.search(quote):
+        if any(_about_someone_else(clause) for clause in _clauses(message, *span.span())):
             raise MemoryRuleError(
                 "the quote is about someone else (friend, family, gift): facts about other people are never stored"
             )
         return quote
+
+    @staticmethod
+    def _backed_by(fact: NewFact, text: str) -> bool:
+        """The customer's own words state the value (`text`: the quote plus the message's clauses that are not
+        about someone else), so the model cannot attach a guess, a cart line or a tool result to a quote."""
+        if fact.kind is FactKind.LANGUAGE:
+            return bool(_LANGUAGE_WORDS[fact.value].search(text))
+        if fact.kind is FactKind.ECOSYSTEM and fact.canonical and vocabulary.mentioned_term(fact.canonical, text):
+            return True
+        if fact.kind in _OWNED and fact.canonical and vocabulary.mentioned_requirement(fact.canonical, text):
+            return True
+        min_length = 4 if fact.kind is FactKind.PREFERENCE else 2
+        words = [w for w in _WORD.findall(_normalize(fact.label)) if len(w) >= min_length and w not in _FILLER]
+        # Preferences may be inflected ("günstige" for "günstig"): a shared stem of 5 letters counts.
+        return any(
+            re.search(rf"(?<!\w){re.escape(w[:5] if fact.kind is FactKind.PREFERENCE else w)}", text) for w in words
+        )
 
     @staticmethod
     def _ecosystems(values: list[str], rejected: list[RejectedFact]) -> list[NewFact]:

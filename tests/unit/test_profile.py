@@ -214,3 +214,71 @@ def test_a_fact_stated_again_is_not_listed_as_gone(service):
     remember(service, "I stopped using Alexa", no_longer_used=["Alexa"])
     remember(service, "back on Alexa", ecosystems=["Alexa"])
     assert service.profile("anna", include_retracted=True).prompt_lines() == ['- ecosystem: amazon_alexa ("Alexa")']
+
+
+@pytest.mark.parametrize(
+    ("message", "quote"),
+    [
+        ("My sister uses Alexa at home.", "uses Alexa"),
+        ("Für meine Mutter: sie hat Alexa", "sie hat Alexa"),
+        ("Ich suche ein Geschenk. Er nutzt Alexa.", "Er nutzt Alexa"),
+        ("Mein Kind nutzt Alexa", "Mein Kind nutzt Alexa"),
+        ("Meine Schwiegermutter hat Alexa", "Meine Schwiegermutter hat Alexa"),
+        ("Mein Ehemann nutzt Alexa", "Mein Ehemann nutzt Alexa"),
+        ("Mein Enkel hat Alexa", "Mein Enkel hat Alexa"),
+        ("Meine Großeltern haben Alexa", "Meine Großeltern haben Alexa"),
+        ("My nephew uses Alexa", "My nephew uses Alexa"),
+        ("My fiancée has Alexa", "My fiancée has Alexa"),
+    ],
+)
+def test_third_party_check_covers_the_whole_clause_and_more_relatives(service, store, message, quote):
+    with pytest.raises(MemoryRuleError, match="someone else"):
+        remember(service, message, quote, ecosystems=["Alexa"])
+    assert store.facts == []
+
+
+def test_a_title_is_not_a_third_party(service):
+    remember(service, "Ich bin Frau Schmidt", name="Frau Schmidt")
+    assert active(service) == {("name", "Frau Schmidt")}
+
+
+def test_fragments_inside_words_are_not_quotes(service, store):
+    with pytest.raises(MemoryRuleError, match="verbatim"):
+        remember(service, "I use Alexa", "se Alex", ecosystems=["Alexa"])
+    assert store.facts == []
+
+
+def test_values_must_be_stated_by_the_customer(service):
+    update = remember(
+        service,
+        "Hallo, ich suche eine Steckdose",
+        "Hallo",
+        ecosystems=["HomeKit"],
+        owned_devices=["Acme Thermostat"],
+        preferences=["budget options"],
+        language="English",
+    )
+    assert update.added == []
+    assert {r.value for r in update.rejected} == {"HomeKit", "Acme Thermostat", "budget options", "English"}
+
+
+def test_values_about_someone_else_in_the_same_message_are_rejected(service):
+    update = remember(service, "My sister uses HomeKit, I use Alexa", "I use Alexa", ecosystems=["Alexa", "HomeKit"])
+    assert active(service) == {("ecosystem", "amazon_alexa")}
+    assert [r.value for r in update.rejected] == ["HomeKit"]
+
+
+def test_stated_values_in_other_words_are_accepted(service):
+    remember(
+        service,
+        "Bitte auf Deutsch. Ich nutze Apple HomeKit und mag günstige Geräte",
+        language="de",
+        ecosystems=["HomeKit"],
+        preferences=["günstig"],
+    )
+    assert active(service) == {("language", "de"), ("ecosystem", "apple_home"), ("preference", "günstig")}
+
+
+def test_a_generic_access_point_is_not_stored_as_a_homematic_hub(service):
+    remember(service, "I have a WLAN Access Point", hubs=["WLAN Access Point"])
+    assert active(service) == {("hub", "wlan access point")}

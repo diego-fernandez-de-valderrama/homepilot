@@ -110,3 +110,35 @@ def test_vocabulary_overview_lists_canonical_ids():
         "heating_control",
     ):
         assert canonical in text
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Fritz!Box Access Point",
+        "Ubiquiti UniFi access point",
+        "WLAN Access Point",
+        "Aqara smart home controller",
+        "Homey Pro Smart Home Controller",
+        "smart_hub",
+        "standalone",
+        "Stand-alone",
+        "third_party_partner_solution",
+    ],
+)
+def test_owned_devices_never_guess_a_specific_hub(value):
+    with pytest.raises(TermResolutionError):
+        vocabulary.resolve_owned_device(value)
+
+
+def test_owned_devices_with_the_brand_still_resolve():
+    assert vocabulary.resolve_owned_device("Homematic Access Point") == "homematic_ip_access_point"
+    assert vocabulary.resolve_owned_device("HmIP Access Point") == "homematic_ip_access_point"
+    assert vocabulary.resolve_owned_device("Bosch Smart Home Controller II") == "bosch_smart_home_controller"
+    assert vocabulary.resolve_owned_device("CCU3") == "homematic_ccu3"
+    assert vocabulary.resolve_owned_device("smartphone") == "smartphone"  # a non-hub device the customer owns
+
+
+def test_vocabulary_overview_does_not_offer_the_generic_hub():
+    hubs_line = next(line for line in vocabulary.vocabulary_overview().splitlines() if line.startswith("Hubs"))
+    assert "smart_hub" not in hubs_line and "philips_hue_bridge" in hubs_line

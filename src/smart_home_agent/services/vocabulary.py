@@ -202,14 +202,32 @@ def resolve_category(value: str) -> str:
     raise TermResolutionError("category", value, [])
 
 
+# Requirement ids a customer cannot "own": generic or non-device items. Owning "a hub" says nothing about
+# which hub a product needs, and "standalone" is a product property, not a device.
+_NOT_OWNABLE = frozenset({"smart_hub", "standalone", "third_party_partner_solution", "professional_installation"})
+# The catalog patterns of these hubs are written for product text, where the brand is implied
+# ("Access Point" on a Homematic product). In what a customer says, the brand must be named:
+# a "WLAN Access Point" or an "Aqara smart home controller" is not one of them.
+_OWNED_BRAND = {
+    "homematic_ip_access_point": re.compile(r"homematic|hmip", re.IGNORECASE),
+    "bosch_smart_home_controller": re.compile(r"bosch", re.IGNORECASE),
+}
+
+
 def resolve_owned_device(value: str) -> str:
-    """Hub/gateway the user owns ("Hue Bridge", "Homematic Access Point") -> canonical requirement id."""
+    """Hub/gateway or device the user owns ("Hue Bridge", "Homematic Access Point") -> canonical requirement id.
+
+    Generic hubs, other brands' access points or controllers and non-ownable items raise instead of
+    guessing, so they never satisfy a product's hub requirement."""
     key = _key(value)
-    if requirement_vocabulary.term_by_canonical(key):
+    if requirement_vocabulary.term_by_canonical(key) and key not in _NOT_OWNABLE:
         return key
     # "Hue-Bridge" is the usual German spelling of "Hue Bridge".
     found = requirement_vocabulary.lookup(value) or requirement_vocabulary.lookup(value.replace("-", " "))
-    if found is None or found.canonical == "smart_hub":
+    if found is None or found.canonical in _NOT_OWNABLE:
+        raise TermResolutionError("owned device", value)
+    brand = _OWNED_BRAND.get(found.canonical)
+    if brand is not None and not brand.search(value):
         raise TermResolutionError("owned device", value)
     return found.canonical
 
@@ -242,7 +260,22 @@ def vocabulary_overview() -> str:
     lines.append("Categories (key: English / German):")
     lines.extend(f"- {c.key}: {c.label_en} / {c.label_de}" for c in category_vocabulary.CATEGORIES)
     hubs = ", ".join(
-        f"{t.canonical}: {t.label}" for t in requirement_vocabulary.TERMS if t.kind.value in ("hub", "gateway")
+        f"{t.canonical}: {t.label}"
+        for t in requirement_vocabulary.TERMS
+        if t.kind.value in ("hub", "gateway") and t.canonical not in _NOT_OWNABLE
     )
     lines.append(f"Hubs and gateways a user may own: {hubs}")
     return "\n".join(lines)
+
+
+def mentioned_term(canonical: str, normalized_text: str) -> bool:
+    """True when the text names the compatibility term (an ingestion surface form or a conversational alias)."""
+    term = compatibility_vocabulary.term_by_canonical(canonical)
+    forms = set(compatibility_vocabulary.surface_forms(canonical)) if term else set()
+    forms |= {alias for alias, target in _EXTRA_TERM_ALIASES.items() if target == canonical}
+    return any(re.search(rf"(?<!\w){re.escape(form)}(?!\w)", normalized_text) for form in forms if form)
+
+
+def mentioned_requirement(canonical: str, normalized_text: str) -> bool:
+    term = requirement_vocabulary.term_by_canonical(canonical)
+    return term is not None and bool(term.pattern.search(normalized_text.replace("-", " ")))
