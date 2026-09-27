@@ -246,3 +246,82 @@ def test_spec_numbers_must_match_whole_numbers_and_units():
     )
     enriched = _validate(SPARSE_MATTER, empty_llm(specs=specs), page)
     assert [(s.name, s.value) for s in enriched.specs] == [("Frequency", "2,4"), ("Range", "30")]
+
+
+def test_negation_is_scoped_to_the_claimed_term():
+    kept = [
+        (
+            "Hinweise: Für manche Funktionen kann ein Abonnement bei Ring (nicht enthalten) notwendig sein.",
+            RequirementClaim(
+                "Abonnement bei Ring",
+                RequirementKind.SUBSCRIPTION,
+                Necessity.REQUIRED_FOR_SOME_FEATURES,
+                (),
+                FactSource.WEB,
+                "Für manche Funktionen kann ein Abonnement bei Ring (nicht enthalten) notwendig sein",
+            ),
+        ),
+        (
+            "Die Datenübertragung erfolgt über das heimische WLAN-Netz, wodurch kein weiterer Hub nötig ist.",
+            RequirementClaim(
+                "WLAN-Netz",
+                RequirementKind.NETWORK,
+                Necessity.REQUIRED,
+                (),
+                FactSource.WEB,
+                "Die Datenübertragung erfolgt über das heimische WLAN-Netz",
+            ),
+        ),
+        (
+            "Die Kamera lässt sich ohne Hub in Ihr WLAN-Netzwerk integrieren.",
+            RequirementClaim(
+                "WLAN-Netzwerk",
+                RequirementKind.NETWORK,
+                Necessity.REQUIRED,
+                (),
+                FactSource.WEB,
+                "ohne Hub in Ihr WLAN-Netzwerk integrieren",
+            ),
+        ),
+    ]
+    for text, claim in kept:
+        enriched = _validate(SPARSE_MATTER, empty_llm(requirement_claims=(claim,)), _with_page(text))
+        assert any(r.method is Method.LLM for r in enriched.requirements), text
+
+
+def test_negation_does_not_leak_across_attribute_lines():
+    page = _with_page("Hub: nicht erforderlich\nProtokoll: Zigbee\nNotruf: Not- und Gefahrenfunktion")
+    claim = _claim("Zigbee", "Protokoll: Zigbee", dimension=Dimension.PROTOCOL, source=FactSource.WEB)
+    enriched = _validate(SPARSE_MATTER, empty_llm(compatibility_claims=(claim,)), page)
+    assert any(f.canonical_value == "zigbee" and f.method is Method.LLM for f in enriched.compatibility)
+
+
+def test_lowercase_matter_in_titles_counts_but_the_adjective_does_not():
+    from catalog_ingestion.validation.evidence import mentions_any
+    from catalog_ingestion.vocabulary.compatibility import surface_forms
+
+    forms = surface_forms("matter")
+    assert mentions_any("Philips Hue Smart-LED-Lampe White 1100 matter", forms)
+    assert mentions_any("für jede matterkompatible App geeignet", forms)
+    assert mentions_any("Über Matter kompatibel", forms)
+    assert not mentions_any("Gehäuse mit matter Oberfläche", forms)
+
+
+def test_unsupported_accepts_a_negation_anywhere_earlier_in_the_clause():
+    page = _with_page("Hinweis: Nicht mehr kompatibel mit der Zentrale CCU2.")
+    claim = _claim("CCU2", "Nicht mehr kompatibel mit der Zentrale CCU2", status=FactStatus.UNSUPPORTED)
+    claim = dataclasses.replace(claim, source=FactSource.WEB)
+    enriched = _validate(SPARSE_MATTER, empty_llm(compatibility_claims=(claim,)), page)
+    assert any(f.raw_value == "CCU2" and f.status is FactStatus.UNSUPPORTED for f in enriched.compatibility)
+
+
+def test_unsupported_value_spanning_clauses_is_kept():
+    page = _with_page("Hinweis: Nicht kompatibel mit der Stick Up Cam (1. Generation).")
+    claim = _claim(
+        "Stick Up Cam (1. Generation)",
+        "Nicht kompatibel mit der Stick Up Cam (1. Generation).",
+        status=FactStatus.UNSUPPORTED,
+        source=FactSource.WEB,
+    )
+    enriched = _validate(SPARSE_MATTER, empty_llm(compatibility_claims=(claim,)), page)
+    assert any(f.status is FactStatus.UNSUPPORTED for f in enriched.compatibility)

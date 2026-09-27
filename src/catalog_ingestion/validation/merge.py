@@ -8,8 +8,9 @@ from catalog_ingestion.domain.enums import FactSource, FactStatus, Method
 from catalog_ingestion.domain.facts import CompatibilityFact, Evidence, Requirement
 from catalog_ingestion.validation.evidence import (
     SourceTexts,
+    forms_pattern,
+    mention_negated,
     mentions_any,
-    negation_near,
     normalize_text,
     quote_sentence,
 )
@@ -25,6 +26,7 @@ CONFIDENCE_LLM_DERIVED = 0.6
 GENERATED_WEB_METHOD = "gemini_url_context"
 
 _WORD = re.compile(r"[\wäöüß+-]{4,}", re.IGNORECASE)
+_MENTION_WORD = re.compile(r"[\wäöüß+]{3,}", re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,18 +56,24 @@ def compatibility_from_claim(claim: CompatibilityClaim, sources: SourceTexts) ->
 
     term = compat_vocab.lookup(claim.value)
     if term is not None:
-        if not mentions_any(claim.evidence_quote, compat_vocab.surface_forms(term.canonical)):
+        forms = compat_vocab.surface_forms(term.canonical)
+        if not mentions_any(claim.evidence_quote, forms):
             return Outcome(None, f"dropped {label}: evidence does not mention {term.label}")
+        mention = forms_pattern(forms)
         dimension, canonical = term.dimension, term.canonical
     else:
         if normalize_text(claim.value) not in normalize_text(claim.evidence_quote):
             return Outcome(None, f"dropped {label}: evidence does not mention the value")
+        # By its words: a value such as "Stick Up Cam (1. Generation)" spans several clauses.
+        mention = _words_pattern(claim.value) or forms_pattern((claim.value,))
         dimension, canonical = claim.dimension, None
 
-    negated = negation_near(claim.evidence_quote, sources.text_for(source))
-    if claim.status is FactStatus.SUPPORTED and negated:
+    lines = sources.lines_for(source)
+    if claim.status is FactStatus.SUPPORTED and mention_negated(mention, claim.evidence_quote, lines):
         return Outcome(None, f"dropped {label}: the evidence negates it")
-    if claim.status is FactStatus.UNSUPPORTED and not negated:
+    if claim.status is FactStatus.UNSUPPORTED and not mention_negated(
+        mention, claim.evidence_quote, lines, max_words_before=None
+    ):
         return Outcome(None, f"dropped {label}: 'unsupported' needs explicit negative evidence")
 
     note = None
@@ -105,10 +113,11 @@ def requirement_from_claim(claim: RequirementClaim, sources: SourceTexts) -> Out
         if words and not any(word in normalize_text(claim.evidence_quote) for word in words):
             return Outcome(None, f"dropped {label}: evidence does not mention the item")
 
-    if negation_near(claim.evidence_quote, sources.text_for(source)):
+    mention = term.pattern if term is not None else _words_pattern(claim.item)
+    if mention is not None and mention_negated(mention, claim.evidence_quote, sources.lines_for(source)):
         return Outcome(None, f"dropped {label}: the evidence negates it")
 
-    sentence = quote_sentence(claim.evidence_quote, sources.text_for(source)) or ""
+    sentence = quote_sentence(claim.evidence_quote, sources.lines_for(source)) or ""
     context = f"{normalize_text(claim.evidence_quote)}\n{sentence}"
     verified = [alt for alt in claim.alternatives if alt.strip() and _mentioned(alt, context)]
     dropped = [alt for alt in claim.alternatives if alt.strip() and alt not in verified]
@@ -127,6 +136,12 @@ def requirement_from_claim(claim: RequirementClaim, sources: SourceTexts) -> Out
         ),
         f"dropped alternatives of {label} not named in the evidence: {', '.join(dropped)}" if dropped else None,
     )
+
+
+def _words_pattern(item: str) -> re.Pattern[str] | None:
+    """Mention of a free-text item by any of its words (3+ letters, so "Hub" counts)."""
+    words = sorted({word.casefold() for word in _MENTION_WORD.findall(item)}, key=len, reverse=True)
+    return re.compile(rf"(?<!\w)(?:{'|'.join(map(re.escape, words))})") if words else None
 
 
 def _mentioned(item: str, normalized_context: str) -> bool:

@@ -85,6 +85,6 @@ def test_mentions_any_uses_whole_words():
     assert not mentions_any("Steuerung per WLAN", surface_forms("ethernet"))
     assert mentions_any("Anschluss per LAN-Kabel", surface_forms("ethernet"))
     assert not mentions_any("Radios", surface_forms("ios"))
-    assert not mentions_any("matter Oberfläche", surface_forms("matter"))
+    assert not mentions_any("mit matter Oberfläche", surface_forms("matter"))
     assert mentions_any("Über Matter kompatibel", surface_forms("matter"))
     assert not mentions_any("geringer Verbrauch", surface_forms("ring"))
