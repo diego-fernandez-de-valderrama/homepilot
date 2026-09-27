@@ -8,6 +8,7 @@ from decimal import Decimal
 from types import MappingProxyType
 from typing import Any
 
+from catalog_ingestion.core.hashing import sha256_json
 from catalog_ingestion.domain.enrichment import (
     CompatibilityClaim,
     EnrichedProduct,
@@ -331,7 +332,7 @@ _HUB_KINDS = {RequirementKind.HUB, RequirementKind.GATEWAY}
 def payload_from_enriched(enriched: EnrichedProduct, doc_hash: str, embedding_model: str) -> QdrantPayloadSchema:
     product = enriched.product
     required = [r for r in enriched.requirements if r.necessity is Necessity.REQUIRED]
-    return QdrantPayloadSchema(
+    payload = QdrantPayloadSchema(
         product_id=product.id,
         title=product.title,
         brand=enriched.brand,
@@ -352,3 +353,4 @@ def payload_from_enriched(enriched: EnrichedProduct, doc_hash: str, embedding_mo
         doc_hash=doc_hash,
         embedding_model=embedding_model,
     )
+    return payload.model_copy(update={"payload_hash": sha256_json(payload.model_dump(mode="json"))})

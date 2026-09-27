@@ -11,8 +11,8 @@ from qdrant_client import QdrantClient
 from catalog_ingestion.domain.enrichment import WebPage
 from catalog_ingestion.llm.errors import QuotaExhaustedError
 from catalog_ingestion.llm.prompts import PROMPT_VERSION
-from catalog_ingestion.pipeline.orchestrator import IngestionPipeline, IngestOptions
-from catalog_ingestion.pipeline.stages import legacy_enrichment_hash, prepare
+from catalog_ingestion.pipeline.orchestrator import EmbeddingModelMismatchError, IngestionPipeline, IngestOptions
+from catalog_ingestion.pipeline.stages import legacy_enrichment_hash, prepare, previous_enrichment_hash
 from catalog_ingestion.schemas.mappers import raw_from_schema
 from catalog_ingestion.schemas.raw_product import RawProductSchema
 from catalog_ingestion.storage.postgres.repository import PostgresRepository
@@ -402,3 +402,83 @@ def test_a_storage_error_fails_only_that_product(env, monkeypatch):
     assert stats["failed"] == 1
     assert stats["qdrant_indexed"] == n - 1
     assert env["postgres"].runs[-1]["status"] == "partial"
+
+
+def _prepared_with_pages(env):
+    web_cache = env["postgres"].web_pages
+    for raw_json in env["products"]:
+        item = prepare(raw_from_schema(RawProductSchema.model_validate(raw_json), original=raw_json))
+        url = item.product.source_url
+        yield item, (web_cache.get(url) if item.completeness.needs_web and url else None)
+
+
+def test_results_stored_with_the_previous_cache_key_are_reused_and_upgraded(env):
+    n = len(env["products"])
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    for item, page in _prepared_with_pages(env):
+        env["postgres"].products[item.product.id]["enrichment_hash"] = previous_enrichment_hash(
+            item, page, PROMPT_VERSION
+        )
+    env["pipeline"]._enricher = FakeEnricher()
+    stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()
+    assert stats["llm_cached"] == n and env["pipeline"]._enricher.calls == 0
+    assert stats["postgres_updated"] == n
+
+
+def test_a_changed_prompt_input_invalidates_the_cache(env, monkeypatch):
+    n = len(env["products"])
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    # A new allowed category changes what the model is shown, although no product changed.
+    monkeypatch.setattr("catalog_ingestion.llm.prompts._category_list", lambda: "- new_category: New")
+    env["pipeline"]._enricher = FakeEnricher()
+    assert env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()["llm_called"] == n
+
+
+def test_payload_only_changes_are_written_without_re_embedding(env):
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    embedded = len(env["embedder"].embedded_texts)
+    products = [dict(p) for p in env["products"]]
+    next(p for p in products if p["id"] == SPARSE_MATTER)["image"] = "https://example.com/new.jpg"
+    changed = build_zip(env["tmp"] / "image.zip", products)
+
+    stats = env["pipeline"].ingest(IngestOptions(input_path=changed)).as_dict()
+    assert stats["qdrant_payload_updated"] == 1
+    assert stats["qdrant_indexed"] == 0
+    assert len(env["embedder"].embedded_texts) == embedded
+    point = env["qdrant"]._client.retrieve("products", ids=[int(SPARSE_MATTER)], with_payload=True)[0]
+    assert (point.payload or {})["image_url"] == "https://example.com/new.jpg"
+
+
+def test_partial_runs_are_refused_after_an_embedding_model_change(env):
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    env["pipeline"]._embedder = FakeEmbedder(DIMENSION, model="other-model")
+    with pytest.raises(EmbeddingModelMismatchError):
+        env["pipeline"].ingest(IngestOptions(input_path=env["zip"], only_products=(SPARSE_MATTER,)))
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))  # a full run re-embeds everything
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"], only_products=(SPARSE_MATTER,)))
+
+
+class FailingEmbedder(FakeEmbedder):
+    def embed_documents(self, texts):
+        raise ConnectionError("quota")
+
+
+def test_reindex_recreate_keeps_the_collection_when_embedding_fails(env):
+    n = len(env["products"])
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    recreated: list[bool] = []
+
+    env["pipeline"]._embedder = FailingEmbedder(DIMENSION)
+    with pytest.raises(ConnectionError):
+        env["pipeline"].reindex(recreate=lambda: recreated.append(True))
+    assert recreated == [] and env["qdrant"].count() == n
+
+    env["pipeline"]._embedder = FakeEmbedder(DIMENSION)
+
+    def recreate():
+        recreated.append(True)
+        ensure_collection(env["qdrant"]._client, "products", DIMENSION, recreate=True)
+
+    stats = env["pipeline"].reindex(recreate=recreate).as_dict()
+    assert recreated == [True]
+    assert stats["qdrant_indexed"] == n and env["qdrant"].count() == n

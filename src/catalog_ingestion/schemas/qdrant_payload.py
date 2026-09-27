@@ -23,3 +23,5 @@ class QdrantPayloadSchema(BaseModel):
     source_url: str | None
     doc_hash: str
     embedding_model: str
+    # Hash of all other fields: a payload-only change (no re-embedding) is detected and overwritten.
+    payload_hash: str | None = None

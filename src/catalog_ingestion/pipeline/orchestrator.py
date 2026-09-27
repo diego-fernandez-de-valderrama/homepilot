@@ -9,6 +9,7 @@ A failure in one product is logged and counted, and the run continues.
 
 import logging
 import threading
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,11 +24,18 @@ from catalog_ingestion.ingestion.zip_loader import LoadResult, load_products
 from catalog_ingestion.llm.enricher import Enricher, LLMResult, from_cached_output
 from catalog_ingestion.llm.errors import QuotaExhaustedError
 from catalog_ingestion.llm.prompts import PROMPT_VERSION
-from catalog_ingestion.pipeline.stages import PreparedProduct, enrichment_hash, legacy_enrichment_hash, prepare
+from catalog_ingestion.pipeline.stages import (
+    PreparedProduct,
+    enrichment_hash,
+    legacy_enrichment_hash,
+    prepare,
+    previous_enrichment_hash,
+)
 from catalog_ingestion.pipeline.stats import NullProgress, ProgressSink, RunStats
 from catalog_ingestion.retrieval.documents import RetrievalDocument, build_document
 from catalog_ingestion.retrieval.embeddings import Embedder
 from catalog_ingestion.schemas.mappers import payload_from_enriched
+from catalog_ingestion.schemas.qdrant_payload import QdrantPayloadSchema
 from catalog_ingestion.storage.postgres.repository import (
     PostgresRepository,
     ProductState,
@@ -66,6 +74,13 @@ class ProductResult:
     llm_status: str  # called | cached | skipped | skipped_quota | failed
     error: str | None = None
     kept_previous_llm: bool = False  # no new result: the stored output was kept
+
+
+EMBED_BATCH = 50
+
+
+class EmbeddingModelMismatchError(RuntimeError):
+    pass
 
 
 class IngestionPipeline:
@@ -124,6 +139,7 @@ class IngestionPipeline:
 
     def _ingest(self, options: IngestOptions, stats: RunStats) -> None:
         self._llm_quota_exhausted.clear()  # a new run may have a fresh quota
+        self._check_index_model(options)
         loaded = load_products(options.input_path)
         stats.set("loaded", len(loaded.products))
         if loaded.errors:
@@ -324,7 +340,9 @@ class IngestionPipeline:
             return False
         if state.enrichment_hash == input_hash:
             return True
-        # Results stored with the older key format (which included the model) are still valid.
+        # Results stored with an older key format are still valid (and re-stored under the new key).
+        if state.enrichment_hash == previous_enrichment_hash(item, web_page, PROMPT_VERSION):
+            return True
         return state.enrichment_model is not None and state.enrichment_hash == legacy_enrichment_hash(
             item, web_page, state.enrichment_model, PROMPT_VERSION
         )
@@ -403,34 +421,30 @@ class IngestionPipeline:
             logger.warning("Embedding/Qdrant stage skipped: no embedder configured (GEMINI_API_KEY missing?)")
             return
         model_id = self._embedder.model_id
-        indexed = self._qdrant.indexed_states([doc.product_id for _, doc in documents])
-        pending = [
-            (enriched, doc)
-            for enriched, doc in documents
-            if force
-            or (state := indexed.get(doc.product_id)) is None
-            or state.doc_hash != doc.doc_hash
-            or state.embedding_model != model_id
-        ]
-        stats.set("qdrant_unchanged", len(documents) - len(pending))
+        indexed = {} if force else self._qdrant.indexed_states([doc.product_id for _, doc in documents])
+        pending: list[tuple[EnrichedProduct, RetrievalDocument]] = []
+        payload_only: list[QdrantPayloadSchema] = []
+        for enriched, doc in documents:
+            state = indexed.get(doc.product_id)
+            if state is None or state.doc_hash != doc.doc_hash or state.embedding_model != model_id:
+                pending.append((enriched, doc))
+                continue
+            payload = payload_from_enriched(enriched, doc.doc_hash, model_id)
+            if state.payload_hash != payload.payload_hash:
+                payload_only.append(payload)
+        stats.set("qdrant_unchanged", len(documents) - len(pending) - len(payload_only))
+        self._refresh_payloads(payload_only, stats)
         if not pending:
             stats.set("qdrant_indexed", 0)
             return
 
         self._progress.start("embed", len(pending))
         indexed_count = 0
-        batch_size = 50
-        for start in range(0, len(pending), batch_size):
-            batch = pending[start : start + batch_size]
+        for start in range(0, len(pending), EMBED_BATCH):
+            batch = pending[start : start + EMBED_BATCH]
             try:
                 vectors = self._embedder.embed_documents([doc.text for _, doc in batch])
-                self._qdrant.upsert(
-                    [
-                        (payload_from_enriched(enriched, doc.doc_hash, model_id), vector)
-                        for (enriched, doc), vector in zip(batch, vectors, strict=True)
-                    ]
-                )
-                self._pg.mark_indexed([doc for _, doc in batch], model_id)
+                self._store_vectors(batch, vectors, model_id)
                 indexed_count += len(batch)
             except Exception:
                 logger.exception("Embedding/Qdrant batch failed", extra=log_fields(batch_start=start, size=len(batch)))
@@ -439,15 +453,55 @@ class IngestionPipeline:
         self._progress.finish("embed")
         stats.set("qdrant_indexed", indexed_count)
 
+    def _refresh_payloads(self, payloads: list[QdrantPayloadSchema], stats: RunStats) -> None:
+        """Payload-only changes (e.g. completeness level, image URL) are written without re-embedding."""
+        if not payloads or self._qdrant is None:
+            return
+        try:
+            self._qdrant.overwrite_payloads(payloads)
+            stats.set("qdrant_payload_updated", len(payloads))
+        except Exception:
+            logger.exception("Qdrant payload update failed", extra=log_fields(size=len(payloads)))
+            stats.inc("qdrant_failed", len(payloads))
+
+    def _store_vectors(
+        self, batch: list[tuple[EnrichedProduct, RetrievalDocument]], vectors: list[list[float]], model_id: str
+    ) -> None:
+        assert self._qdrant is not None
+        self._qdrant.upsert(
+            [
+                (payload_from_enriched(enriched, doc.doc_hash, model_id), vector)
+                for (enriched, doc), vector in zip(batch, vectors, strict=True)
+            ]
+        )
+        self._pg.mark_indexed([doc for _, doc in batch], model_id)
+
+    def _check_index_model(self, options: IngestOptions) -> None:
+        """A partial run only re-embeds its own products, so after an embedding model change it would
+        leave vectors of two models in one collection: it is refused until `reindex` has run."""
+        if options.is_full_run or self._qdrant is None or self._embedder is None:
+            return
+        other = self._qdrant.count_other_models(self._embedder.model_id)
+        if other:
+            raise EmbeddingModelMismatchError(
+                f"{other} Qdrant points were embedded with another model than {self._embedder.model_id}. "
+                "Run `catalog-ingestion reindex` (or a full `ingest`) before a partial run."
+            )
+
     # --- reindex -------------------------------------------------------------------------
 
-    def reindex(self, force: bool = False) -> RunStats:
-        """Rebuild retrieval documents and embeddings from PostgreSQL (no web, no LLM)."""
+    def reindex(self, force: bool = False, recreate: Callable[[], None] | None = None) -> RunStats:
+        """Rebuild retrieval documents and embeddings from PostgreSQL (no web, no LLM).
+
+        With `recreate`, every document is embedded first and the collection is only recreated
+        (through the callback) once all embeddings succeeded, so a failure never leaves it empty.
+        """
         stats = RunStats()
-        run_id = self._pg.start_run({"command": "reindex", "force": force})
+        run_id = self._pg.start_run({"command": "reindex", "force": force, "recreate": recreate is not None})
         status = "failed"
         try:
-            self._delete_inactive_from_index(stats)
+            if recreate is None:
+                self._delete_inactive_from_index(stats)
             products = self._pg.load_enriched()
             stats.set("loaded_from_postgres", len(products))
             documents = []
@@ -455,8 +509,30 @@ class IngestionPipeline:
                 document = build_document(enriched)
                 self._pg.save_document(document)
                 documents.append((enriched, document))
-            self._index(documents, force=force, stats=stats)
+            if recreate is None:
+                self._index(documents, force=force, stats=stats)
+            else:
+                self._rebuild(documents, recreate, stats)
             status = "partial" if stats.get("qdrant_failed") or stats.get("qdrant_delete_failed") else "succeeded"
         finally:
             self._pg.finish_run(run_id, status, stats.as_dict())
         return stats
+
+    def _rebuild(
+        self, documents: list[tuple[EnrichedProduct, RetrievalDocument]], recreate: Callable[[], None], stats: RunStats
+    ) -> None:
+        if self._qdrant is None or self._embedder is None:
+            raise RuntimeError("reindex --recreate needs Qdrant and an embedder")
+        model_id = self._embedder.model_id
+        self._progress.start("embed", len(documents))
+        vectors: list[list[float]] = []
+        for start in range(0, len(documents), EMBED_BATCH):
+            batch = documents[start : start + EMBED_BATCH]
+            vectors.extend(self._embedder.embed_documents([doc.text for _, doc in batch]))  # any error aborts
+            self._progress.advance("embed", len(batch))
+        self._progress.finish("embed")
+        recreate()
+        self._pg.clear_indexed([doc.product_id for _, doc in documents])
+        for start in range(0, len(documents), EMBED_BATCH):
+            self._store_vectors(documents[start : start + EMBED_BATCH], vectors[start : start + EMBED_BATCH], model_id)
+        stats.set("qdrant_indexed", len(documents))

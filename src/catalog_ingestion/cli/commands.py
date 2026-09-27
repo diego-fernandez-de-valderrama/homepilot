@@ -16,7 +16,7 @@ from catalog_ingestion.core.logging import configure_logging
 from catalog_ingestion.core.settings import AppSettings, get_settings
 from catalog_ingestion.llm.client import GeminiClient, GeminiModelNotFoundError
 from catalog_ingestion.llm.enricher import LLMEnricher
-from catalog_ingestion.pipeline.orchestrator import IngestionPipeline, IngestOptions
+from catalog_ingestion.pipeline.orchestrator import EmbeddingModelMismatchError, IngestionPipeline, IngestOptions
 from catalog_ingestion.quality.profile import profile_dataset
 from catalog_ingestion.retrieval.embeddings import GeminiEmbedder
 from catalog_ingestion.storage.postgres.engine import create_db_engine, create_session_factory, upgrade_to_head
@@ -44,9 +44,9 @@ def _gemini(settings: AppSettings) -> GeminiClient | None:
     return GeminiClient(settings.gemini)
 
 
-def _qdrant(settings: AppSettings, recreate: bool = False) -> QdrantRepository:
+def _qdrant(settings: AppSettings) -> QdrantRepository:
     client = create_client(settings.qdrant)
-    ensure_collection(client, settings.qdrant.collection, settings.gemini.embedding_dim, recreate=recreate)
+    ensure_collection(client, settings.qdrant.collection, settings.gemini.embedding_dim)
     return QdrantRepository(client, settings.qdrant.collection)
 
 
@@ -138,6 +138,9 @@ def ingest(
         )
         try:
             stats = pipeline.ingest(options)
+        except EmbeddingModelMismatchError as exc:
+            console.print(f"[red]Index error:[/] {exc}")
+            raise typer.Exit(code=2) from exc
         except KeyboardInterrupt:
             if gemini is not None:
                 gemini.cancel()  # wake worker threads waiting on rate limits so the process exits now
@@ -159,17 +162,23 @@ def reindex(
     gemini = _gemini(settings)
     if gemini is None:
         raise typer.Exit(code=1)
+    client = create_client(settings.qdrant)
+    name, dimension = settings.qdrant.collection, settings.gemini.embedding_dim
+    if not recreate:
+        ensure_collection(client, name, dimension)
     with _postgres(settings) as postgres, RichProgress() as progress:
         pipeline = IngestionPipeline(
             postgres=postgres,
-            qdrant=_qdrant(settings, recreate=recreate),
+            qdrant=QdrantRepository(client, name),
             embedder=GeminiEmbedder(gemini, settings.gemini),
             web=None,
             enricher=None,
             model_name=settings.gemini.model,
             progress=progress,
         )
-        stats = pipeline.reindex(force=force or recreate)
+        # --recreate embeds everything first and only then drops and recreates the collection.
+        recreate_collection = (lambda: ensure_collection(client, name, dimension, recreate=True)) if recreate else None
+        stats = pipeline.reindex(force=force, recreate=recreate_collection)
     print_counts("Reindex summary", stats.as_dict())
 
 
