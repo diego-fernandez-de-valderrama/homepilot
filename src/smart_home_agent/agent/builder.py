@@ -17,8 +17,7 @@ from smart_home_agent.guardrail import (
     OutputValidator,
     SemanticGuardrail,
 )
-from smart_home_agent.tools import build_tools
-from smart_home_agent.tools.cart import make_cart_result_callback
+from smart_home_agent.tools import CartResultCallback, ToolRegistry
 
 # Verbatim instruction lines long enough that quoting them in an answer can only be a prompt leak.
 _MIN_LEAK_LINE = 60
@@ -35,7 +34,7 @@ def build_agent(
     are always removed from the answer, for the interface and the history. `model` replaces the Gemini
     model (tests only).
     """
-    tools = build_tools(services)
+    tools = ToolRegistry(services).build()
     input_guardrail = guardrail if settings.agent.guardrail_enabled else None
     validator = (
         OutputValidator(services.catalog, input_guardrail, _leak_markers(tools))
@@ -58,7 +57,7 @@ def build_agent(
         ),
         before_agent_callback=InputGuardrailCallback(input_guardrail) if input_guardrail else None,
         after_model_callback=OutputGuardrailCallback(validator),
-        after_tool_callback=make_cart_result_callback(services),
+        after_tool_callback=CartResultCallback(services),
     )
 
 

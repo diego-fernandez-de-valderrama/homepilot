@@ -6,7 +6,7 @@ from google.adk.tools import FunctionTool
 
 from smart_home_agent.models import CartItem
 from smart_home_agent.session import STATE_KEY, SessionState, read_state
-from smart_home_agent.tools import build_tools
+from smart_home_agent.tools import ToolRegistry
 from tests.fakes import FakeToolContext, fact, product, requirement, services_for
 
 PRODUCTS = [
@@ -22,7 +22,7 @@ def by_name(tools: list[FunctionTool]) -> dict[str, Callable[..., dict[str, Any]
 
 @pytest.fixture
 def tools():
-    return by_name(build_tools(services_for(PRODUCTS)))
+    return by_name(ToolRegistry(services_for(PRODUCTS)).build())
 
 
 def test_every_tool_has_a_valid_adk_declaration(tools):
@@ -48,7 +48,7 @@ def test_every_tool_has_a_valid_adk_declaration(tools):
 
 
 def test_only_cart_changes_require_confirmation():
-    confirmed = {tool.name for tool in build_tools(services_for(PRODUCTS)) if tool._require_confirmation}
+    confirmed = {tool.name for tool in ToolRegistry(services_for(PRODUCTS)).build() if tool._require_confirmation}
     assert confirmed == {"add_to_cart", "remove_from_cart"}
 
 
@@ -74,7 +74,7 @@ def test_recommended_accessories_are_known_to_the_session():
     thermostat = product(
         "bosch", price=70.0, facts=[fact("google_home")], requirements=[requirement("bosch_smart_home_controller")]
     )
-    recommend = by_name(build_tools(services_for([thermostat, hub])))["recommend_products"]
+    recommend = by_name(ToolRegistry(services_for([thermostat, hub])).build())["recommend_products"]
     context = FakeToolContext()
     result = recommend("thermostat", context, category="heating_control", must_support=["Google Home"])
     assert [a["product_id"] for a in result["accessories"]] == ["hub"]
@@ -127,7 +127,7 @@ def test_check_compatibility_offers_the_required_hub_product():
     controller = product(
         "controller", title="Bosch Smart Home Controller II", category="hub_gateway", product_type="Hub", price=78.0
     )
-    check = by_name(build_tools(services_for([dimmer, controller])))["check_compatibility"]
+    check = by_name(ToolRegistry(services_for([dimmer, controller])).build())["check_compatibility"]
     [result] = check(["dimmer"], [], FakeToolContext())["results"]
     [accessory] = result["accessories"]
     assert (accessory["product_id"], accessory["status"], accessory["bundle_total"]) == (
@@ -275,7 +275,7 @@ def test_a_change_is_all_or_nothing(tools):
 def test_data_errors_are_not_reported_as_invalid_input():
     from pydantic import BaseModel
 
-    from smart_home_agent.tools._common import tool_errors
+    from smart_home_agent.tools._base import tool_errors
 
     class Stored(BaseModel):
         price: float
@@ -292,7 +292,7 @@ def test_data_errors_are_not_reported_as_invalid_input():
 def test_filter_products_by_product_type_text_and_sort_order():
     plug = product("p1", title="Acme Zwischenstecker", product_type="Smart plug", category="smart_plug", price=19.0)
     cheap_plug = product("p2", title="Acme Steckdose Mini", product_type="Smart plug", category="smart_plug", price=9.0)
-    tools = by_name(build_tools(services_for([*PRODUCTS, plug, cheap_plug])))
+    tools = by_name(ToolRegistry(services_for([*PRODUCTS, plug, cheap_plug])).build())
     result = tools["filter_products"](FakeToolContext(), product_type_contains="smart PLUG", sort="price_asc")
     assert [p["id"] for p in result["products"]] == ["p2", "p1"]
     by_title = tools["filter_products"](FakeToolContext(), product_type_contains="zwischenstecker")

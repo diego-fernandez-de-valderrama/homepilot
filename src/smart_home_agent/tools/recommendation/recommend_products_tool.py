@@ -4,17 +4,21 @@ from typing import Any
 from google.adk.tools import ToolContext
 
 from smart_home_agent.container import Services
-from smart_home_agent.models import RecommendationRequest
+from smart_home_agent.models import Recommendation, RecommendationRequest
 from smart_home_agent.services import Vocabulary
-from smart_home_agent.session import load_state, save_state
-from smart_home_agent.tools._common import ToolResult, ok, resolve_category, resolve_devices, tool_errors, tool_input
+from smart_home_agent.session import SessionState, load_state, save_state
+from smart_home_agent.tools._base import HomePilotTool, ToolResult, tool_errors
 
 logger = logging.getLogger(__name__)
 
 
-def make_recommend_products(services: Services):
+class RecommendProductsTool(HomePilotTool):
+    def __init__(self, services: Services) -> None:
+        self._services = services
+
     @tool_errors
     def recommend_products(
+        self,
         need: str,
         tool_context: ToolContext,
         category: str | None = None,
@@ -46,30 +50,43 @@ def make_recommend_products(services: Services):
           limit: Maximum number of products per list (1-10).
         """
         session = load_state(tool_context)
-        applied: dict[str, Any] = {}
-        if must_support is None and session.must_support:
-            must_support = session.must_support
-            applied["must_support"] = must_support
-        if max_price is None and session.budget_max is not None:
-            max_price = session.budget_max
-            applied["max_price"] = max_price
-        if owned_devices is None and session.owned_devices is not None:
-            owned_devices = session.owned_devices
-            applied["owned_devices"] = owned_devices
-
-        request = tool_input(
+        applied = self._session_defaults(session, max_price, must_support, owned_devices)
+        request = self.validated(
             RecommendationRequest,
             need=need,
-            category=resolve_category(category),
-            max_price=max_price,
+            category=self.category(category),
+            max_price=applied.get("max_price", max_price),
             min_price=min_price,
             brands=brands or [],
-            must_support=[t.canonical for t in Vocabulary.resolve_terms(must_support)],
-            owned_devices=resolve_devices(owned_devices),
+            must_support=[t.canonical for t in Vocabulary.resolve_terms(applied.get("must_support", must_support))],
+            owned_devices=self.devices(applied.get("owned_devices", owned_devices)),
             limit=limit,
         )
-        result = services.recommendation.recommend(request)
+        result = self._services.recommendation.recommend(request)
+        self._remember_result(session, request, result)
+        save_state(tool_context, session)
+        self._log_commerce(result)
+        return self.ok(applied_from_session=applied, **result.model_dump(mode="json"))
 
+    @staticmethod
+    def _session_defaults(
+        session: SessionState,
+        max_price: float | None,
+        must_support: list[str] | None,
+        owned_devices: list[str] | None,
+    ) -> dict[str, Any]:
+        """The values stored in the session that fill arguments the model left out."""
+        applied: dict[str, Any] = {}
+        if must_support is None and session.must_support:
+            applied["must_support"] = session.must_support
+        if max_price is None and session.budget_max is not None:
+            applied["max_price"] = session.budget_max
+        if owned_devices is None and session.owned_devices is not None:
+            applied["owned_devices"] = session.owned_devices
+        return applied
+
+    @staticmethod
+    def _remember_result(session: SessionState, request: RecommendationRequest, result: Recommendation) -> None:
         session.current_category = request.category or session.current_category
         session.last_search = {"tool": "recommend_products", **request.model_dump(mode="json")}
         session.candidate_products = list(
@@ -82,7 +99,9 @@ def make_recommend_products(services: Services):
             pid for pid in (result.best_match, result.upsell.product_id if result.upsell else None) if pid
         ]
         session.last_upsell = result.upsell
-        save_state(tool_context, session)
+
+    @staticmethod
+    def _log_commerce(result: Recommendation) -> None:
         logger.info(
             "commerce best_match=%s upsell=%s upsell_delta=%s accessories=%s bundle_totals=%s",
             result.best_match,
@@ -91,6 +110,3 @@ def make_recommend_products(services: Services):
             [a.product_id for a in result.accessories],
             [a.bundle_total for a in result.accessories],
         )
-        return ok(applied_from_session=applied, **result.model_dump(mode="json"))
-
-    return recommend_products

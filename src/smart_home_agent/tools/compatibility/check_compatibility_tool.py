@@ -1,3 +1,5 @@
+from typing import Any
+
 from catalog_ingestion.domain.enums import RequirementKind
 from google.adk.tools import ToolContext
 
@@ -5,9 +7,8 @@ from smart_home_agent.container import Services
 from smart_home_agent.models import CompatibilityResult
 from smart_home_agent.services import Vocabulary
 from smart_home_agent.session import load_state
-from smart_home_agent.tools._common import ToolResult, ok, resolve_devices, tool_errors
+from smart_home_agent.tools._base import HomePilotTool, ToolResult, tool_errors
 
-MAX_PRODUCTS = 10
 _SETUP_KINDS = (RequirementKind.HUB, RequirementKind.GATEWAY, RequirementKind.SUBSCRIPTION)
 # Unknown stays unknown: no listed requirement is not proof that none exists.
 _NO_SETUP_REQUIREMENT = (
@@ -16,16 +17,15 @@ _NO_SETUP_REQUIREMENT = (
 )
 
 
-def _with_notes(result: CompatibilityResult) -> dict:
-    payload = result.model_dump(mode="json")
-    if not any(r.kind in _SETUP_KINDS for r in result.requirements):
-        payload["requirements_note"] = _NO_SETUP_REQUIREMENT
-    return payload
+class CheckCompatibilityTool(HomePilotTool):
+    MAX_PRODUCTS = 10
 
+    def __init__(self, services: Services) -> None:
+        self._services = services
 
-def make_check_compatibility(services: Services):
     @tool_errors
     def check_compatibility(
+        self,
         product_ids: list[str],
         requirements: list[str],
         tool_context: ToolContext,
@@ -47,15 +47,20 @@ def make_check_compatibility(services: Services):
             May be empty to only check the product's own requirements.
           owned_devices: Hubs/gateways the user owns, e.g. ["Homematic IP Access Point"]. Omit if unknown.
         """
-        if not 1 <= len(product_ids) <= MAX_PRODUCTS:
-            raise ValueError(f"check between 1 and {MAX_PRODUCTS} products")
+        if not 1 <= len(product_ids) <= self.MAX_PRODUCTS:
+            raise ValueError(f"check between 1 and {self.MAX_PRODUCTS} products")
         session = load_state(tool_context)
         if owned_devices is None:
             owned_devices = session.owned_devices
         terms = Vocabulary.resolve_terms(requirements)
-        results = services.compatibility.check(
-            [pid.strip() for pid in product_ids], terms, resolve_devices(owned_devices)
+        results = self._services.compatibility.check(
+            [pid.strip() for pid in product_ids], terms, self.devices(owned_devices)
         )
-        return ok(results=[_with_notes(r) for r in results])
+        return self.ok(results=[self._with_notes(r) for r in results])
 
-    return check_compatibility
+    @staticmethod
+    def _with_notes(result: CompatibilityResult) -> dict[str, Any]:
+        payload = result.model_dump(mode="json")
+        if not any(r.kind in _SETUP_KINDS for r in result.requirements):
+            payload["requirements_note"] = _NO_SETUP_REQUIREMENT
+        return payload

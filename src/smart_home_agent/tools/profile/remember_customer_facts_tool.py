@@ -2,19 +2,16 @@ from google.adk.tools import ToolContext
 
 from smart_home_agent.services import ProfileService
 from smart_home_agent.session import PROFILE_KEY
-from smart_home_agent.tools._common import ToolResult, ok, tool_errors
+from smart_home_agent.tools._base import HomePilotTool, ToolResult, tool_errors
 
 
-def _message_text(tool_context: ToolContext) -> str | None:
-    """Text of the customer's message that started this turn (None for a cart confirmation)."""
-    content = tool_context.user_content
-    parts = [part.text for part in (content.parts or []) if part.text] if content else []
-    return "\n".join(parts) or None
+class RememberCustomerFactsTool(HomePilotTool):
+    def __init__(self, profiles: ProfileService) -> None:
+        self._profiles = profiles
 
-
-def make_remember_customer_facts(profiles: ProfileService):
     @tool_errors
     def remember_customer_facts(
+        self,
         tool_context: ToolContext,
         evidence: str,
         name: str | None = None,
@@ -45,10 +42,10 @@ def make_remember_customer_facts(profiles: ProfileService):
           no_longer_used: Ecosystems or voice assistants the customer stopped using.
           no_longer_owned: Hubs or hardware the customer no longer owns (sold, broken, given away).
         """
-        update = profiles.remember(
+        update = self._profiles.remember(
             tool_context.user_id,
             tool_context.session.id,
-            _message_text(tool_context),
+            self._message_text(tool_context),
             evidence,
             name=name,
             language=language,
@@ -61,7 +58,7 @@ def make_remember_customer_facts(profiles: ProfileService):
         )
         if update.added or update.retracted:  # the rest of this turn sees the new profile
             tool_context.state[PROFILE_KEY] = update.profile.model_dump(mode="json")
-        return ok(
+        return self.ok(
             added=[f"{f.kind.value}: {f.value}" for f in update.added],
             removed=[f"{f.kind.value}: {f.value}" for f in update.retracted],
             already_known=update.unchanged,
@@ -69,4 +66,9 @@ def make_remember_customer_facts(profiles: ProfileService):
             profile=[f"{f.kind.value}: {f.value}" for f in update.profile.active()],
         )
 
-    return remember_customer_facts
+    @staticmethod
+    def _message_text(tool_context: ToolContext) -> str | None:
+        """Text of the customer's message that started this turn (None for a cart confirmation)."""
+        content = tool_context.user_content
+        parts = [part.text for part in (content.parts or []) if part.text] if content else []
+        return "\n".join(parts) or None

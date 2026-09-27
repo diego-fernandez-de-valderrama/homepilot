@@ -1,7 +1,7 @@
 from smart_home_agent.answer_tags import PlainTextRenderer
 from smart_home_agent.models import RichContent
 from smart_home_agent.repositories.postgres import own_variant
-from smart_home_agent.tools import build_tools
+from smart_home_agent.tools import ToolRegistry
 from tests.fakes import FakeToolContext, fact, product, services_for
 from tests.unit.test_tools import by_name
 
@@ -32,7 +32,7 @@ def test_lists_name_the_version_and_inline_items_show_the_title():
 
 def test_get_product_lists_the_other_versions():
     other = product("other", title="Something else", facts=[fact("google_home")])
-    tools = by_name(build_tools(services_for([WHITE, ANTHRACITE, other])))
+    tools = by_name(ToolRegistry(services_for([WHITE, ANTHRACITE, other])).build())
     result = tools["get_product"](WHITE.id, FakeToolContext())
     assert result["product"]["subtitle"] == "Weiß, 10 x 10 cm"
     assert [v["id"] for v in result["other_versions"]] == [ANTHRACITE.id]
@@ -74,27 +74,27 @@ def test_blocks_name_the_version():
 
 def test_cart_results_name_the_version():
     from smart_home_agent.models import CartItem
-    from smart_home_agent.tools.cart import change_result
+    from smart_home_agent.tools.cart._change_report import ChangeReport
 
     cart = services_for([WHITE, ANTHRACITE]).cart
     before = cart.view([])
     after = cart.view([CartItem(product_id=WHITE.id, quantity=1)])
     [line] = after.for_model()
     assert (line["title"], line["variant"], line["subtitle"]) == ("Access Point", "Weiß", "Weiß, 10 x 10 cm")
-    [change] = change_result("ok", "add", [WHITE.id], before, after)["changes"]
+    [change] = ChangeReport.build("ok", "add", [WHITE.id], before, after)["changes"]
     assert (change["variant"], change["subtitle"]) == ("Weiß", "Weiß, 10 x 10 cm")
 
 
 def test_a_change_awaiting_confirmation_names_the_product_from_the_catalog():
-    from smart_home_agent.tools.cart import change_result
+    from smart_home_agent.tools.cart._change_report import ChangeReport
 
     services = services_for([WHITE, ANTHRACITE])
     empty = services.cart.view([])  # nothing added yet: neither cart view knows the product
-    [change] = change_result("awaiting_confirmation", "add", [WHITE.id], empty, empty, catalog=services.catalog)[
+    [change] = ChangeReport.build("awaiting_confirmation", "add", [WHITE.id], empty, empty, catalog=services.catalog)[
         "changes"
     ]
     assert (change["title"], change["variant"]) == ("Access Point", "Weiß")
-    [unknown] = change_result("awaiting_confirmation", "add", ["99999999"], empty, empty, catalog=services.catalog)[
-        "changes"
-    ]
+    [unknown] = ChangeReport.build(
+        "awaiting_confirmation", "add", ["99999999"], empty, empty, catalog=services.catalog
+    )["changes"]
     assert unknown["title"] is None

@@ -3,12 +3,13 @@ from google.adk.tools import ToolContext
 
 from smart_home_agent.services import Vocabulary
 from smart_home_agent.session import load_state, save_state
-from smart_home_agent.tools._common import ToolResult, ok, resolve_category, resolve_devices, tool_errors
+from smart_home_agent.tools._base import HomePilotTool, ToolResult, tool_errors
 
 
-def make_remember_preferences():
+class RememberPreferencesTool(HomePilotTool):
     @tool_errors
     def remember_preferences(
+        self,
         tool_context: ToolContext,
         language: str | None = None,
         ecosystems: list[str] | None = None,
@@ -49,12 +50,10 @@ def make_remember_preferences():
         if budget_max is not None:
             session.budget_max = budget_max if budget_max > 0 else None
         if category is not None:
-            session.current_category = resolve_category(category)
+            session.current_category = self.category(category)
         if owned_devices is not None:
-            session.owned_devices = resolve_devices(owned_devices)
+            session.owned_devices = self.devices(owned_devices)
         if requirements is not None:
             session.requirements = [r.strip() for r in requirements if r.strip()]
         save_state(tool_context, session)
-        return ok(session=session.model_dump(mode="json", exclude={"last_search", "candidate_products"}))
-
-    return remember_preferences
+        return self.ok(session=session.model_dump(mode="json", exclude={"last_search", "candidate_products"}))

@@ -10,7 +10,7 @@ from google.genai import types
 from smart_home_agent.agent import AgentService, build_agent
 from smart_home_agent.agent.prompts import build_instruction
 from smart_home_agent.session import PROFILE_KEY
-from smart_home_agent.tools import build_tools
+from smart_home_agent.tools import ToolRegistry
 from tests.fakes import FakeProfileStore, FakeToolContext, product, services_for
 from tests.unit.test_cart_agent import tool_responses
 from tests.unit.test_guardrail_agent import ScriptedLlm, settings, text_response
@@ -19,7 +19,7 @@ PRODUCTS = [product("30173510", title="Acme Smart Radiator Thermostat", price=49
 
 
 def memory_tool(store: FakeProfileStore):
-    tools = {tool.name: tool.func for tool in build_tools(services_for(PRODUCTS, profiles=store))}
+    tools = {tool.name: tool.func for tool in ToolRegistry(services_for(PRODUCTS, profiles=store)).build()}
     return tools["remember_customer_facts"]
 
 
@@ -43,7 +43,7 @@ def system_instruction(llm: ScriptedLlm, index: int = -1) -> str:
 
 
 def test_memory_tool_only_exists_when_the_memory_is_enabled():
-    assert "remember_customer_facts" not in {t.name for t in build_tools(services_for(PRODUCTS))}
+    assert "remember_customer_facts" not in {t.name for t in ToolRegistry(services_for(PRODUCTS)).build()}
     tool = FunctionTool(memory_tool(FakeProfileStore()))
     declaration = tool._get_declaration()
     assert declaration is not None

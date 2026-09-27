@@ -1,41 +1,21 @@
-"""Shared tool plumbing: error handling and input resolution."""
-
 import functools
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
-from smart_home_agent.services import ProductNotFoundError, TermResolutionError, Vocabulary
+from smart_home_agent.services import ProductNotFoundError, TermResolutionError
+from smart_home_agent.tools._base.invalid_tool_input import InvalidToolInput
 
 logger = logging.getLogger(__name__)
 
-ToolResult = dict[str, Any]
 
-
-def ok(**payload: Any) -> ToolResult:
-    return {"status": "ok", **payload}
-
-
-class InvalidToolInput(ValueError):
-    """The tool's own arguments are invalid (the model can correct them)."""
-
-
-def tool_input[M: BaseModel](model: type[M], **values: Any) -> M:
-    """Validates tool arguments into `model`; errors become InvalidToolInput with the field names."""
-    try:
-        return model(**values)
-    except ValidationError as exc:
-        errors = [f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()]
-        raise InvalidToolInput("; ".join(errors)) from exc
-
-
-def tool_errors[**P](func: Callable[P, ToolResult]) -> Callable[P, ToolResult]:
+def tool_errors[F: Callable[..., dict[str, Any]]](func: F) -> F:
     """Turn expected failures into structured results the model can act on, instead of exceptions."""
 
     @functools.wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> ToolResult:
+    def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
         try:
             return func(*args, **kwargs)
         except TermResolutionError as exc:
@@ -61,14 +41,4 @@ def tool_errors[**P](func: Callable[P, ToolResult]) -> Callable[P, ToolResult]:
             logger.exception("tool %s failed", getattr(func, "__name__", func))
             return {"status": "error", "message": f"The request could not be completed ({type(exc).__name__})."}
 
-    return wrapper
-
-
-def resolve_category(value: str | None) -> str | None:
-    return Vocabulary.resolve_category(value) if value and value.strip() else None
-
-
-def resolve_devices(values: list[str] | None) -> list[str] | None:
-    if values is None:
-        return None
-    return list(dict.fromkeys(Vocabulary.resolve_owned_device(v) for v in values if v.strip()))
+    return cast(F, wrapper)  # functools.wraps keeps the name, docstring and signature ADK reads

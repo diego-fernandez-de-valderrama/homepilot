@@ -55,12 +55,25 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes ar
 "smart_home_agent.services.rich_content".msg = "import from `smart_home_agent.services` instead"
 "smart_home_agent.services.vocabulary".msg = "import from `smart_home_agent.services` instead"
 "smart_home_agent.services.product_not_found_error".msg = "import from `smart_home_agent.services` instead"
+# Tools are imported from `smart_home_agent.tools`; its subpackages are an internal layout.
+"smart_home_agent.tools._base".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.cart".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.catalog".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.comparison".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.compatibility".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.evidence".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.preferences".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.profile".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.recommendation".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.threaded_function_tool".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.tool_registry".msg = "import from `smart_home_agent.tools` instead"
 
 [tool.ruff.lint.per-file-ignores]
 "evals/**" = ["TID251"]
 "tests/**" = ["TID251"]
 "src/smart_home_agent/models/**" = ["TID251"]
 "src/smart_home_agent/services/**" = ["TID251"]
+"src/smart_home_agent/tools/**" = ["TID251"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["smart_home_agent", "evals"]
