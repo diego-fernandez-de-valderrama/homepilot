@@ -1,8 +1,7 @@
-import urllib.error
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
+import httpx
 import streamlit as st
 
 from smart_home_agent.models import Product
@@ -35,17 +34,16 @@ class ImageAvailability:
     def find_missing(urls: tuple[str, ...]) -> frozenset[str]:
         if not urls:
             return frozenset()
-        with ThreadPoolExecutor(max_workers=min(_MAX_WORKERS, len(urls))) as pool:
-            gone = pool.map(ImageAvailability._is_gone, urls)
+        with (
+            httpx.Client(timeout=_TIMEOUT_SECONDS, headers={"User-Agent": "Mozilla/5.0 HomePilot"}) as client,
+            ThreadPoolExecutor(max_workers=min(_MAX_WORKERS, len(urls))) as pool,
+        ):
+            gone = list(pool.map(lambda url: ImageAvailability._is_gone(client, url), urls))
         return frozenset(url for url, is_gone in zip(urls, gone, strict=True) if is_gone)
 
     @staticmethod
-    def _is_gone(url: str) -> bool:
-        request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "Mozilla/5.0 HomePilot"})
+    def _is_gone(client: httpx.Client, url: str) -> bool:
         try:
-            with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS):
-                return False
-        except urllib.error.HTTPError as exc:
-            return exc.code in _GONE
-        except OSError:
+            return client.head(url, follow_redirects=True).status_code in _GONE
+        except httpx.HTTPError:
             return False

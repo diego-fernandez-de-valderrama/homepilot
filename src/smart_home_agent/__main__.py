@@ -9,11 +9,12 @@ uv run python -m smart_home_agent chat [--user ID]
 Evaluations live in the separate `evals` package: `uv run python -m evals --help`.
 """
 
-import argparse
 import json
 import sys
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
+
+import typer
 
 from smart_home_agent.answer_tags import PlainTextRenderer
 from smart_home_agent.config import get_settings
@@ -137,20 +138,34 @@ def _ask(change: CartConfirmation) -> bool:
     return answer.strip().lower() in {"y", "yes", "j", "ja"}
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(prog="smart_home_agent")
-    commands = {
-        "check": check,
-        "init-memory": init_memory,
-        "smoke": smoke,
-    }
-    parser.add_argument("command", choices=[*commands, "chat"])
-    parser.add_argument("--user", default="customer", help="chat: customer id (each customer has their own memory)")
-    args = parser.parse_args()
-    if args.command == "chat":
-        return chat(args.user)
-    return commands[args.command]()
+app = typer.Typer(add_completion=False, no_args_is_help=True)
+
+
+@app.command("check")
+def _check_command() -> None:
+    """PostgreSQL/Qdrant counts, embedding model consistency and customer memory revision."""
+    raise typer.Exit(check())
+
+
+@app.command("init-memory")
+def _init_memory_command() -> None:
+    """Create and migrate the customer memory database (idempotent)."""
+    raise typer.Exit(init_memory())
+
+
+@app.command("smoke")
+def _smoke_command() -> None:
+    """Recommendation pipeline only (one embedding call, no chat model)."""
+    raise typer.Exit(smoke())
+
+
+@app.command("chat")
+def _chat_command(
+    user: Annotated[str, typer.Option(help="Customer id (each customer has their own memory).")] = "customer",
+) -> None:
+    """Terminal chat with the agent."""
+    raise typer.Exit(chat(user))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app(prog_name="smart_home_agent")

@@ -71,6 +71,15 @@ wheels = [
 ]
 
 [[package]]
+name = "anyascii"
+version = "0.3.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/db/ba/edebda727008390936da4a9bf677c19cd63b32d51e864656d2cbd1028e25/anyascii-0.3.3.tar.gz", hash = "sha256:c94e9dd9d47b3d9494eca305fef9447d00b4bf1a32aff85aa746fa3ec7fb95c3", size = 264680, upload-time = "2025-06-29T03:33:30.427Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c2/76/783b75a21ce3563b8709050de030ae253853b147bd52e141edc1025aa268/anyascii-0.3.3-py3-none-any.whl", hash = "sha256:f5ab5e53c8781a36b5a40e1296a0eeda2f48c649ef10c3921c1381b1d00dee7a", size = 345090, upload-time = "2025-06-29T03:33:28.356Z" },
+]
+
+[[package]]
 name = "anyio"
 version = "4.15.1"
 source = { registry = "https://pypi.org/simple" }
@@ -124,9 +133,11 @@ version = "0.1.0"
 source = { editable = "../catalog-ingestion" }
 dependencies = [
     { name = "alembic" },
+    { name = "anyascii" },
     { name = "beautifulsoup4" },
     { name = "google-genai" },
     { name = "httpx" },
+    { name = "numpy" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -140,9 +151,11 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.20.0" },
+    { name = "anyascii", specifier = ">=0.3.3" },
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "google-genai", specifier = ">=2.25.0" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "numpy", specifier = ">=2.5.3" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
@@ -1842,13 +1855,19 @@ dependencies = [
     { name = "catalog-ingestion" },
     { name = "google-adk" },
     { name = "google-genai" },
+    { name = "httpx" },
+    { name = "jinja2" },
     { name = "lingua-language-detector" },
+    { name = "markupsafe" },
+    { name = "numpy" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "qdrant-client" },
     { name = "sqlalchemy" },
     { name = "streamlit" },
+    { name = "tenacity" },
+    { name = "typer" },
 ]
 
 [package.dev-dependencies]
@@ -1865,13 +1884,19 @@ requires-dist = [
     { name = "catalog-ingestion", editable = "../catalog-ingestion" },
     { name = "google-adk", specifier = ">=2.10.0" },
     { name = "google-genai", specifier = ">=2.25.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "jinja2", specifier = ">=3.1.6" },
     { name = "lingua-language-detector", specifier = ">=2.2.0" },
+    { name = "markupsafe", specifier = ">=3.0.3" },
+    { name = "numpy", specifier = ">=2.5.3" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "qdrant-client", specifier = ">=1.19.1" },
     { name = "sqlalchemy", specifier = ">=2.1.1" },
     { name = "streamlit", specifier = ">=1.64.0" },
+    { name = "tenacity", specifier = ">=9.1.4" },
+    { name = "typer", specifier = ">=0.27.2" },
 ]
 
 [package.metadata.requires-dev]

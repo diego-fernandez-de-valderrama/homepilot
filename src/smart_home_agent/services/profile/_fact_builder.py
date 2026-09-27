@@ -1,9 +1,10 @@
 """The tool arguments -> candidate facts, each resolved to a canonical id when that is safe."""
 
+from catalog_ingestion.core import TextNormalizer
 from catalog_ingestion.vocabulary import Dimension
 
 from smart_home_agent.models import FactKind, NewFact, RejectedFact
-from smart_home_agent.services.profile._text import MAX_VALUE, normalize
+from smart_home_agent.services.profile._text import MAX_VALUE
 from smart_home_agent.services.vocabulary import TermResolutionError, Vocabulary
 
 # Kinds a "no longer owned" statement retracts, and kinds an owned hardware value is backed by: the customer does
@@ -44,7 +45,9 @@ def ecosystem_facts(values: list[str], rejected: list[RejectedFact]) -> list[New
 
 def hub_fact(value: str) -> NewFact:
     canonical = _hub_id(value)  # None: keep the customer's wording ("Zigbee bridge"), never guess a hub
-    return NewFact(kind=FactKind.HUB, value=canonical or normalize(value), canonical=canonical, label=value)
+    return NewFact(
+        kind=FactKind.HUB, value=canonical or TextNormalizer.normalize(value), canonical=canonical, label=value
+    )
 
 
 def device_fact(value: str) -> NewFact:
@@ -55,11 +58,13 @@ def device_fact(value: str) -> NewFact:
         canonical = None  # no safe mapping: keep the customer's wording
     if canonical is not None and Vocabulary.is_hub(canonical):
         return hub_fact(value)
-    return NewFact(kind=FactKind.OWNED_DEVICE, value=canonical or normalize(value), canonical=canonical, label=value)
+    return NewFact(
+        kind=FactKind.OWNED_DEVICE, value=canonical or TextNormalizer.normalize(value), canonical=canonical, label=value
+    )
 
 
 def preference_fact(value: str) -> NewFact:
-    return NewFact(kind=FactKind.PREFERENCE, value=normalize(value), label=value)
+    return NewFact(kind=FactKind.PREFERENCE, value=TextNormalizer.normalize(value), label=value)
 
 
 def _hub_id(value: str) -> str | None:

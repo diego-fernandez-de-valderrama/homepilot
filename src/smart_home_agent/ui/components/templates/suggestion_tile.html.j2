@@ -1,0 +1,9 @@
+{% macro render(suggestion) %}
+  <div class="hp-tile">
+    <span class="hp-tile__icon">{{ suggestion.icon }}</span>
+    <span class="hp-tile__kicker">{{ suggestion.kicker }}</span>
+    <span class="hp-tile__title">{{ suggestion.title }}</span>
+    <span class="hp-tile__prompt">"{{ suggestion.prompt }}"</span>
+    <span class="hp-tile__cta">Ask</span>
+  </div>
+{% endmacro %}

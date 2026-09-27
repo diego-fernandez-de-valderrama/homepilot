@@ -7,8 +7,9 @@ uv run python -m evals variant
 uv run python -m evals conversation [--case NAME ...] [--repeat N]
 """
 
-import argparse
-import sys
+from typing import Annotated
+
+import typer
 
 from smart_home_agent.config import get_settings
 from smart_home_agent.container import build_container
@@ -67,20 +68,38 @@ def conversation(names: list[str] | None, repeat: int) -> int:
     return 1 if regressions(results) else 0
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(prog="evals")
-    parser.add_argument("command", choices=["guardrail", "upsell", "variant", "conversation"])
-    parser.add_argument("--sweep", action="store_true", help="guardrail: print score separation per category")
-    parser.add_argument("--record", action="store_true", help="guardrail: rewrite the offline test fixture")
-    parser.add_argument("--case", action="append", help="conversation: run only this conversation (repeatable)")
-    parser.add_argument("--repeat", type=int, default=1, help="conversation: runs per conversation")
-    args = parser.parse_args()
-    if args.command == "conversation":
-        return conversation(args.case, max(1, args.repeat))
-    if args.command == "guardrail":
-        return guardrail(args.sweep, args.record)
-    return {"upsell": upsell, "variant": variant}[args.command]()
+app = typer.Typer(add_completion=False, no_args_is_help=True)
+
+
+@app.command("guardrail")
+def _guardrail_command(
+    sweep: Annotated[bool, typer.Option(help="Print score separation per category.")] = False,
+    record: Annotated[bool, typer.Option(help="Rewrite the offline test fixture.")] = False,
+) -> None:
+    """Guardrail metrics (input classifier and output check)."""
+    raise typer.Exit(guardrail(sweep, record))
+
+
+@app.command("upsell")
+def _upsell_command() -> None:
+    """Upselling KPI over fixed requests."""
+    raise typer.Exit(upsell())
+
+
+@app.command("variant")
+def _variant_command() -> None:
+    """Product version grouping over fixed requests."""
+    raise typer.Exit(variant())
+
+
+@app.command("conversation")
+def _conversation_command(
+    case: Annotated[list[str] | None, typer.Option(help="Run only this conversation (repeatable).")] = None,
+    repeat: Annotated[int, typer.Option(min=1, help="Runs per conversation.")] = 1,
+) -> None:
+    """Regression conversations through the live agent."""
+    raise typer.Exit(conversation(case, repeat))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app(prog_name="evals")

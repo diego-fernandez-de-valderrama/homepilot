@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from google.adk.models import LlmRequest, LlmResponse
 from google.adk.tools import FunctionTool
 from google.genai import types
+from tenacity import RetryCallState, Retrying
 
 from smart_home_agent.agent import AgentService, build_agent
 from smart_home_agent.agent.model import ResilientGemini, RetryPolicy, announces_action
@@ -173,7 +174,13 @@ def test_an_empty_answer_after_a_stall_retry_is_still_retried():
 
 def test_backoff_is_exponential_and_capped():
     policy = RetryPolicy(3, 1.0, 8.0)
-    assert [policy.delay(i) for i in range(6)] == [1.0, 2.0, 4.0, 8.0, 8.0, 8.0]
+    wait = policy.wait()
+    delays = []
+    for attempt in range(1, 7):
+        state = RetryCallState(Retrying(), None, (), {})
+        state.attempt_number = attempt
+        delays.append(wait(state))
+    assert delays == [1.0, 2.0, 4.0, 8.0, 8.0, 8.0]
     options = policy.http_options()
     assert (options.attempts, options.initial_delay, options.max_delay, options.exp_base) == (4, 1.0, 8.0, 2.0)
 

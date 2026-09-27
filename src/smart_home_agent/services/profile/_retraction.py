@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 
+from catalog_ingestion.core import TextNormalizer
+
 from smart_home_agent.models import CustomerProfile, FactKind, RejectedFact
-from smart_home_agent.services.profile._text import normalize
 from smart_home_agent.services.vocabulary import TermResolutionError, Vocabulary
 
 
@@ -22,7 +23,7 @@ class Retraction:
             matches = [
                 f
                 for f in current.active()
-                if f.kind in item.kinds and (f.value in candidates or normalize(f.label) in candidates)
+                if f.kind in item.kinds and (f.value in candidates or TextNormalizer.normalize(f.label) in candidates)
             ]
             if not matches:
                 rejected.append(RejectedFact(kind=item.kinds[0], value=item.text, reason="not in the stored profile"))
@@ -30,7 +31,7 @@ class Retraction:
         return ids, rejected
 
     def _values(self) -> set[str]:
-        values = {normalize(self.text)}
+        values = {TextNormalizer.normalize(self.text)}
         try:
             if FactKind.ECOSYSTEM in self.kinds:
                 values.add(Vocabulary.resolve_term(self.text).canonical)

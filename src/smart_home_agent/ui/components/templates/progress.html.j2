@@ -1,0 +1,11 @@
+{#- Neutral "the advisor is writing" cue: no text, so it never claims work that is not happening. -#}
+{% macro typing() %}
+  <div class="hp-typing" role="status" aria-label="HomePilot is answering"><span></span><span></span><span></span></div>
+{% endmacro %}
+
+{% macro progress(label) %}
+  <div class="hp-progress" role="status">
+    <span class="hp-progress__spinner"></span>
+    <span>{{ label }}</span>
+  </div>
+{% endmacro %}

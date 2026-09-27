@@ -2,9 +2,11 @@
 
 import re
 
+from catalog_ingestion.core import TextNormalizer
+
 from smart_home_agent.models import FactKind, NewFact
 from smart_home_agent.services.profile._fact_builder import OWNED_KINDS
-from smart_home_agent.services.profile._text import MAX_EVIDENCE, MIN_EVIDENCE, normalize, unquote
+from smart_home_agent.services.profile._text import MAX_EVIDENCE, MIN_EVIDENCE, unquote
 from smart_home_agent.services.profile._third_party import about_someone_else, clauses
 from smart_home_agent.services.profile.memory_rule_error import MemoryRuleError
 from smart_home_agent.services.vocabulary import Vocabulary
@@ -59,9 +61,9 @@ def check_quote(user_message: str | None, evidence: str) -> str:
         raise MemoryRuleError("evidence is required: quote the customer's own words from their latest message")
     if len(quote) > MAX_EVIDENCE:
         raise MemoryRuleError("evidence is too long: quote only the sentence that states the fact")
-    message = normalize(user_message or "")
+    message = TextNormalizer.normalize(user_message or "")
     # Whole words only: a fragment such as "e" inside "use" is not a quote.
-    span = re.search(rf"(?<!\w){re.escape(normalize(quote))}(?!\w)", message)
+    span = re.search(rf"(?<!\w){re.escape(TextNormalizer.normalize(quote))}(?!\w)", message)
     if span is None:
         raise MemoryRuleError(
             "evidence is not a verbatim quote of the customer's latest message: only facts the customer stated "
@@ -84,6 +86,8 @@ def backed_by(fact: NewFact, text: str) -> bool:
     if fact.kind in OWNED_KINDS and fact.canonical and Vocabulary.mentions_requirement(fact.canonical, text):
         return True
     min_length = 4 if fact.kind is FactKind.PREFERENCE else 2
-    words = [w for w in _WORD.findall(normalize(fact.label)) if len(w) >= min_length and w not in _FILLER]
+    words = [
+        w for w in _WORD.findall(TextNormalizer.normalize(fact.label)) if len(w) >= min_length and w not in _FILLER
+    ]
     # Preferences may be inflected ("günstige" for "günstig"): a shared stem of 5 letters counts.
     return any(re.search(rf"(?<!\w){re.escape(w[:5] if fact.kind is FactKind.PREFERENCE else w)}", text) for w in words)

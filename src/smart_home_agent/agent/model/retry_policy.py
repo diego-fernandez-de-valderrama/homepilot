@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
 from google.genai import types
+from tenacity import wait_exponential
+from tenacity.wait import wait_base
 
 
 @dataclass(frozen=True)
@@ -11,9 +13,9 @@ class RetryPolicy:
     initial_delay: float
     max_delay: float
 
-    def delay(self, attempt: int) -> float:
-        """Delay before retry number `attempt` (0-based): initial, 2x, 4x ..., capped."""
-        return min(self.initial_delay * 2**attempt, self.max_delay)
+    def wait(self) -> wait_base:
+        """tenacity wait before each retry: initial, 2x, 4x ..., capped."""
+        return wait_exponential(multiplier=self.initial_delay, max=self.max_delay, exp_base=2)
 
     def http_options(self) -> types.HttpRetryOptions:
         """Same backoff for transient HTTP errors (the genai client's default status codes: 408, 429, 5xx)."""

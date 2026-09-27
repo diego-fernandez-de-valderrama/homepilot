@@ -9,6 +9,7 @@ single accidental near-duplicate than the plain maximum.
 import logging
 from collections.abc import Mapping, Sequence
 
+import numpy as np
 from catalog_ingestion.indexing import GeminiEmbedder
 
 from smart_home_agent.guardrail.input._decision_rule import decide
@@ -31,7 +32,9 @@ class SemanticGuardrail:
         thresholds: GuardrailThresholds,
     ) -> None:
         self._embed = embed
-        self._prototypes = {category: [list(v) for v in vectors] for category, vectors in prototype_vectors.items()}
+        self._prototypes = {
+            category: np.asarray(vectors, dtype=np.float64) for category, vectors in prototype_vectors.items()
+        }
         self.thresholds = thresholds
 
     @classmethod
@@ -58,12 +61,9 @@ class SemanticGuardrail:
         return decide(self.scores(GeminiEmbedder.l2_normalize(list(vector))), self.thresholds, words)
 
     def scores(self, vector: Sequence[float]) -> dict[Category, float]:
+        query = np.asarray(vector, dtype=np.float64)
         result = {}
         for category, prototypes in self._prototypes.items():
-            similarities = sorted((self._cosine(vector, p) for p in prototypes), reverse=True)[:TOP_K]
-            result[category] = sum(similarities) / len(similarities)
+            similarities = prototypes @ query  # cosine: all vectors are L2-normalized
+            result[category] = float(np.sort(similarities)[::-1][:TOP_K].mean())
         return result
-
-    @staticmethod
-    def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
-        return sum(x * y for x, y in zip(a, b, strict=True))  # dot product: vectors are L2-normalized

@@ -9,7 +9,9 @@ model's text. Each class renders one component:
   `ComparisonHtml` (<compare>), `CompatibilityHtml` (<compatibility>), `UpgradeHtml` (<upgrade>);
 - customer panel and cart: `SetupPanelHtml`, `CartHtml`, `ConfirmationHtml` (with `ConfirmationState`).
 
-Shared escaping and formatting live in the private `_markup`, fixed texts in `_texts`.
+The markup lives in Jinja2 templates (`templates/`, one file per component, one macro per public method, shared
+pieces in `_macros.html.j2`), rendered with autoescape by the private `_templates`; `_compact_source` strips the
+template layout so the output stays on one line. Formatting filters live in `_markup`, fixed texts in `_texts`.
 """
 
 from smart_home_agent.ui.components.answer_markdown import AnswerMarkdown

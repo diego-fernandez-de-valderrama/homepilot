@@ -1,0 +1,37 @@
+{% from "_macros.html.j2" import version %}
+
+{#- Compatibility cells show the customer wording of their status; everything else stays verbatim. -#}
+{% macro cell(group, value) %}
+  {% set status = value.split(" ", 1)[0] %}
+  {% if group == "compatibility" and status | status_text %}
+    <td class="hp-compare__status hp-compare__status--{{ status }}">{{ status | status_text }}</td>
+  {% else %}
+    <td>{{ value }}</td>
+  {% endif %}
+{% endmacro %}
+
+{% macro render(products, rows, notes) %}
+  <div class="hp-compare">
+    <table>
+      <thead>
+        <tr>
+          <td></td>
+          {% for product in products %}
+            <th scope="col">{{ product.title }}{{ version(product, "hp-compare") }}<span class="hp-compare__price">{{ product.price | price }}</span></th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr{% if row.differs %} class="hp-compare__differs"{% endif %}>
+            <th scope="row">{{ row.attribute }}</th>
+            {% for value in row.values %}{{ cell(row.group, value) }}{% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <ul class="hp-compare__notes">
+      {% for note in notes %}<li>{{ note }}</li>{% endfor %}
+    </ul>
+  </div>
+{% endmacro %}

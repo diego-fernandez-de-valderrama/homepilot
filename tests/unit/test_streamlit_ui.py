@@ -459,7 +459,7 @@ def test_failure_notice_is_friendly_and_localized():
     from smart_home_agent.ui.components import NoticeHtml
 
     english = NoticeHtml.failure("en")
-    assert "Sorry, I couldn&#x27;t finish my answer." in english and 'role="alert"' in english
+    assert "Sorry, I couldn&#39;t finish my answer." in english and 'role="alert"' in english
     assert "Entschuldigung" in NoticeHtml.failure("de")
     assert NoticeHtml.failure(None) == english
     assert "Error" not in english and "finish_reason" not in english  # no technical details for customers

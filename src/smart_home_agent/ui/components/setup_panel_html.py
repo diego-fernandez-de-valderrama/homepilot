@@ -1,10 +1,8 @@
-import html
-
 from catalog_ingestion.vocabulary import CategoryVocabulary
 
 from smart_home_agent.services import Vocabulary
 from smart_home_agent.session import SessionState
-from smart_home_agent.ui.components._markup import Markup
+from smart_home_agent.ui.components._templates import Templates
 from smart_home_agent.ui.components._texts import LANGUAGES
 
 
@@ -14,15 +12,7 @@ class SetupPanelHtml:
     @staticmethod
     def render(state: SessionState | None) -> str:
         rows = SetupPanelHtml._rows(state) if state is not None else []
-        if not rows:
-            body = '<p class="hp-setup__empty">Tell me about your setup: ecosystem, voice assistant, budget, hubs.</p>'
-        else:
-            body = "".join(
-                f'<div class="hp-setup__row"><span class="hp-setup__key">{html.escape(key)}</span>'
-                f'<div class="hp-setup__values">{Markup.chips(values)}</div></div>'
-                for key, values in rows
-            )
-        return f'<section class="hp-setup"><p class="hp-panel-label">Your setup</p>{body}</section>'
+        return Templates.render("setup_panel", "render", rows=rows)
 
     @staticmethod
     def _rows(state: SessionState) -> list[tuple[str, list[str]]]:

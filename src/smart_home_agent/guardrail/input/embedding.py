@@ -1,6 +1,7 @@
 """The embedding function the classifier uses: Gemini, CLASSIFICATION task type, L2-normalized."""
 
 from collections.abc import Callable, Sequence
+from itertools import batched
 
 from catalog_ingestion.core import GeminiClient
 from catalog_ingestion.indexing import GeminiEmbedder
@@ -17,9 +18,8 @@ def gemini_embed(client: GeminiClient, task_type: str = TASK_TYPE) -> EmbedFn:
 
     def embed(texts: Sequence[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
-        for start in range(0, len(texts), GeminiEmbedder.BATCH_SIZE):
-            batch = list(texts[start : start + GeminiEmbedder.BATCH_SIZE])
-            vectors.extend(GeminiEmbedder.l2_normalize(v) for v in client.embed(batch, task_type=task_type))
+        for batch in batched(texts, GeminiEmbedder.BATCH_SIZE):
+            vectors.extend(GeminiEmbedder.l2_normalize(v) for v in client.embed(list(batch), task_type=task_type))
         return vectors
 
     return embed

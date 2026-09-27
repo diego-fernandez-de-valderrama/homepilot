@@ -1,3 +1,5 @@
+from catalog_ingestion.core import TextNormalizer
+
 from smart_home_agent.models import (
     CustomerFact,
     CustomerProfile,
@@ -19,7 +21,7 @@ from smart_home_agent.services.profile._fact_builder import (
     preference_fact,
 )
 from smart_home_agent.services.profile._retraction import Retraction
-from smart_home_agent.services.profile._text import clean, normalize
+from smart_home_agent.services.profile._text import clean
 from smart_home_agent.services.profile._third_party import own_clauses
 
 
@@ -67,7 +69,9 @@ class ProfileService:
         new += [preference_fact(value) for value in clean(preferences)]
 
         # 2. Only values stated in the customer's own words.
-        own_words = "\n".join([normalize(quote), *own_clauses(normalize(user_message or ""))])
+        own_words = "\n".join(
+            [TextNormalizer.normalize(quote), *own_clauses(TextNormalizer.normalize(user_message or ""))]
+        )
         unbacked = [fact for fact in new if not backed_by(fact, own_words)]
         rejected += [
             RejectedFact(kind=f.kind, value=f.label, reason="the evidence quote does not state it") for f in unbacked
