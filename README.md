@@ -537,7 +537,7 @@ uv run deptry .                # every imported package is declared, none is unu
 | Comparison | Structured rows, "not listed", unknown vs unsupported, capability differences, input validation. |
 | Ranking and recommendation | Compatibility gate before upselling; the budget is never exceeded; no upsell that loses a capability, has no verifiable advantage or crosses product types; owned-hub fit in the ranking; structured matches found even when semantic search misses them. |
 | Conversation evaluation | The checks and the runner of `conversation-eval` on scripted replies: resolved criteria from both search tools, wrong concepts, blocks, language, follow-ups, cart confirmation, memory, known issues vs regressions. |
-| Tools | ADK declarations, input/output contracts, error statuses, session state. |
+| Tools | ADK declarations, input/output contracts, error statuses, session state; several units of a hub, gateway, controller or starter set are refused with `needs_clarification` before any confirmation card. |
 | Agent | Offline build, instruction content, language detection, trace. |
 | Vocabulary and evidence | Term resolution and provenance lookup. |
 | Guardrail classifier | Threshold/margin rule, prototypes embedded once, one embedding per message (synthetic vectors). |
@@ -554,7 +554,7 @@ uv run deptry .                # every imported package is declared, none is unu
 
 ### Conversation regression evaluation
 
-The unit tests never call the chat model, so they cannot notice when a prompt change makes the agent behave differently. `conversation-eval` does: it runs 19 fixed EN/DE conversations (`conversation_eval.py`, 29 turns, about 100 seconds) through the real agent, guardrail and tools, and checks every turn with deterministic rules on what the agent *did*, never on its wording:
+The unit tests never call the chat model, so they cannot notice when a prompt change makes the agent behave differently. `conversation-eval` does: it runs 20 fixed EN/DE conversations (`conversation_eval.py`, 37 turns, about 2 minutes) through the real agent, guardrail and tools, and checks every turn with deterministic rules on what the agent *did*, never on its wording:
 
 | Conversation(s) | What must hold |
 |---|---|
@@ -568,6 +568,7 @@ The unit tests never call the chat model, so they cannot notice when a prompt ch
 | `memory_across_conversations`, `memory_not_about_others` | The customer's own facts are stored and known in the next conversation; facts about others are not stored. |
 | `profile_sets_setup` | A stored ecosystem is used as the setup in the next conversation (the search runs with it). |
 | `no_homekit_blinds` | When no confirmed product covers the need (no HomeKit blind motors in the catalog), nothing is put in the cart. |
+| `blinds_replay` | Replay of a reported live conversation (typos kept): the stored setup is used, no turn stops at announcing work, and a controller is never multiplied by the number of windows (known issue: "is the App Control needed?" is answered without `check_compatibility`). |
 
 Every turn must also produce an answer that the output check did not have to replace and that does not stop at announcing work ("give me a moment to search"). Checks read the tools' own echo of what they ran (`request` of `recommend_products`, `criteria` of `filter_products`), so either search tool passes. A failing turn is reported with its tool calls and arguments and any pending cart change.
 

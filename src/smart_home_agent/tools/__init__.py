@@ -9,7 +9,13 @@ from typing import Any
 from google.adk.tools import FunctionTool
 
 from smart_home_agent.container import Services
-from smart_home_agent.tools.cart import CONFIRMED_TOOLS, make_add_to_cart, make_remove_from_cart, make_view_cart
+from smart_home_agent.tools.cart import (
+    CONFIRMED_TOOLS,
+    make_add_confirmation_rule,
+    make_add_to_cart,
+    make_remove_from_cart,
+    make_view_cart,
+)
 from smart_home_agent.tools.catalog import make_filter_products, make_get_product, make_search_products
 from smart_home_agent.tools.comparison import make_compare_products
 from smart_home_agent.tools.compatibility import make_check_compatibility
@@ -37,8 +43,13 @@ def build_tools(services: Services) -> list[FunctionTool]:
     ]
     if services.profile is not None:
         functions.append(make_remember_customer_facts(services.profile))
-    # The customer confirms every cart change in the interface before ADK runs the tool.
-    return [ThreadedFunctionTool(f, require_confirmation=f.__name__ in CONFIRMED_TOOLS) for f in functions]
+    # The customer confirms every cart change in the interface before ADK runs the tool (an add refused at once,
+    # see make_add_confirmation_rule, has nothing to confirm).
+    rules: dict[str, bool | Callable[..., bool]] = {"add_to_cart": make_add_confirmation_rule(services)}
+    return [
+        ThreadedFunctionTool(f, require_confirmation=rules.get(f.__name__, f.__name__ in CONFIRMED_TOOLS))
+        for f in functions
+    ]
 
 
 class ThreadedFunctionTool(FunctionTool):

@@ -336,6 +336,17 @@ def no_cart_change() -> Check:
     return Check("no_cart_change", test)
 
 
+def adds_at_most(quantity: int) -> Check:
+    """No proposed add puts more than `quantity` units of one product into the cart."""
+
+    def test(ctx: TurnContext) -> str | None:
+        lines = [line for c in ctx.reply.pending_confirmations if c.action == "add" for line in c.lines]
+        over = [f"{line.product_id} x{line.quantity}" for line in lines if (line.quantity or 0) > quantity]
+        return f"adds more than {quantity}: {_described(over)}" if over else None
+
+    return Check(f"adds_at_most:{quantity}", test)
+
+
 def cart_applied(confirmed: bool) -> Check:
     """After the decision the cart holds exactly what was confirmed (or is unchanged after a rejection)."""
 
@@ -607,6 +618,35 @@ CONVERSATIONS: tuple[Conversation, ...] = (
                 found_products(),
                 no_cart_change(),
             ),
+        ),
+    ),
+    Conversation(
+        "blinds_replay",
+        "Replay of a reported live conversation (typos kept): a customer with Apple Home stored asks for blinds for "
+        "6 windows. The live catalog has no HomeKit blind motors, only VELUX controllers that need VELUX motorized "
+        "products; the agent must search with the stored setup, never announce a search and stop, and never "
+        "multiply a controller or starter set by the number of windows",
+        (
+            _say("I use Apple Home and I have a Philips Hue Bridge.", remembers(FactKind.ECOSYSTEM, "apple_home")),
+            _say(
+                "I wannt a set of smart blindfolds for the 6 window sin my home",
+                searched(supports=["apple_home"]),
+                reply_language("en"),
+                new_session=True,
+            ),
+            _say(
+                "I want it to be compatible with I already have and help me make it as cheap as possible",
+                no_cart_change(),
+            ),
+            _say("but can those be controlled from HomeKit?", no_cart_change()),
+            _say("then add me to the kart whiter is needed to control 6 of them", adds_at_most(1)),
+            _say("add teh blinds as well please", adds_at_most(1)),
+            _say("i want my 6 blinds add whatever is needed", adds_at_most(1)),
+            _say("the app control is needed then?", called("check_compatibility")),
+        ),
+        known_issue=(
+            "turn 8 answers whether the App Control is needed without check_compatibility, 3/3 runs with and without "
+            "the prompt rule (2026-09-27); turn 5 (controller x6) is fixed by the central-unit guard of add_to_cart"
         ),
     ),
 )

@@ -2,8 +2,13 @@
 prices and titles always come from PostgreSQL, never from the session.
 
 One add/remove call can cover several products. It is applied all or nothing: the customer confirmed the
-whole change, so a change with any invalid product leaves the cart untouched and reports every problem."""
+whole change, so a change with any invalid product leaves the cart untouched and reports every problem.
 
+A central unit (hub, gateway, bridge, access point, control centre, smart home controller, starter set) runs every
+device of a home, so an add that would put more than one of it into the cart is a likely mistake ("control 6
+windows" is not 6 controllers): `central_units_over_one` finds them, and the add tool asks the customer first."""
+
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -17,6 +22,7 @@ from smart_home_agent.models.cart import (
     CartLine,
     CartView,
 )
+from smart_home_agent.models.product import ProductSummary
 from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.services.compatibility import ProductNotFoundError
 
@@ -40,6 +46,19 @@ class CartChangeError(ValueError):
     @property
     def status(self) -> str:
         return "not_found" if all(e["status"] == "not_found" for e in self.errors) else "invalid_input"
+
+
+# Matched against the product type (the title only when the type is missing). Plain "controller" is not enough:
+# RGBW, dimmer and underfloor heating controllers are per-room devices.
+_CENTRAL_UNIT = re.compile(
+    r"\b(hub|gateway|bridge|access point|base station|basisstation|zentrale|ccu\d*|control cent(?:er|re)"
+    r"|central control unit|smart home control(?:ler| unit)|starter[ -]?(?:set|kit)|starterkit)\b",
+    re.IGNORECASE,
+)
+
+
+def is_central_unit(product: ProductSummary) -> bool:
+    return _CENTRAL_UNIT.search(product.product_type or product.title) is not None
 
 
 def _quantity(value: Any, default: int | None) -> int | None:
@@ -133,6 +152,18 @@ class CartService:
                     # A line holds at most MAX_QUANTITY units: removing that many (or more) removes all of them.
                     merged[pid] = None if total >= MAX_QUANTITY else total
         return [CartChange(product_id=pid, quantity=quantity) for pid, quantity in merged.items()]
+
+    def central_units_over_one(
+        self, items: Sequence[CartItem], changes: Sequence[CartChange]
+    ) -> list[tuple[ProductSummary, int]]:
+        """Central units (`is_central_unit`) that an add of `changes` would leave in the cart more than once, with
+        the units the cart would then hold. Reads the catalog only when some product would exceed one unit."""
+        in_cart = {item.product_id: item.quantity for item in items}
+        after = {c.product_id: in_cart.get(c.product_id, 0) + (c.quantity or 0) for c in changes}
+        several = [pid for pid, units in after.items() if units > 1]
+        if not several:
+            return []
+        return [(p, after[p.id]) for p in self._catalog.get_products(several) if is_central_unit(p)]
 
     def apply(self, items: Sequence[CartItem], action: CartAction, changes: Sequence[CartChange]) -> list[CartItem]:
         """Applies every change, or none: raises CartChangeError listing each product that cannot be applied."""

@@ -20,7 +20,15 @@ GUARDRAIL_LAST_REPLY_KEY = "homepilot_guardrail_last_reply"
 # each turn and by remember_customer_facts. The memory database is the source; this is only for the instruction.
 PROFILE_KEY = "homepilot_profile"
 # Cart bookkeeping of SessionState: the model reads the cart through view_cart, never through the prompt.
-CART_FIELDS = frozenset({"cart", "cart_checked", "cart_changed_by_user"})
+CART_FIELDS = frozenset({"cart", "cart_checked", "cart_changed_by_user", "central_units_asked"})
+
+
+class CentralUnitsAsked(BaseModel):
+    """Several units of central units (hubs, controllers, starter sets) that add_to_cart refused, so the model asks
+    the customer. The same add is allowed in a later turn (another invocation), after the customer answered."""
+
+    invocation_id: str
+    units: dict[str, int]  # product id -> units the cart would hold
 
 
 class SessionState(BaseModel):
@@ -39,6 +47,7 @@ class SessionState(BaseModel):
     cart: list[CartItem] = Field(default_factory=list)  # ids and quantities only; data comes from PostgreSQL
     cart_checked: bool = False  # a cart tool ran in this conversation
     cart_changed_by_user: bool = False  # edited in the interface since the last cart tool call
+    central_units_asked: CentralUnitsAsked | None = None
 
     @property
     def must_support(self) -> list[str]:

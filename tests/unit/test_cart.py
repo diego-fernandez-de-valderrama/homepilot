@@ -1,7 +1,7 @@
 import pytest
 
-from smart_home_agent.models.cart import MAX_QUANTITY, CartItem
-from smart_home_agent.services.cart import CartChangeError, CartService, NotInCartError
+from smart_home_agent.models.cart import MAX_QUANTITY, CartChange, CartItem
+from smart_home_agent.services.cart import CartChangeError, CartService, NotInCartError, is_central_unit
 from smart_home_agent.services.compatibility import ProductNotFoundError
 from tests.fakes import FakeCatalog, product
 
@@ -19,6 +19,41 @@ def items(*pairs: tuple[str, int]) -> list[CartItem]:
 
 def pairs(cart_items: list[CartItem]) -> list[tuple[str, int]]:
     return [(i.product_id, i.quantity) for i in cart_items]
+
+
+@pytest.mark.parametrize(
+    ("product_type", "central"),
+    [
+        ("Smart home controller", True),  # Velux App Control KIG 300
+        ("Starter Set", True),
+        ("Smart home access point", True),
+        ("WiFi bridge", True),
+        ("Smart Home Control Center", True),
+        ("Starter kit with gateway and climate sensors", True),
+        ("RGBW LED Controller", False),  # per-room devices, not central units
+        ("Underfloor heating controller", False),
+        ("Wireless remote control", False),
+        ("Roller blind motor", False),
+        ("Smart LED bulb set", False),
+    ],
+)
+def test_central_units_are_recognized_by_their_product_type(product_type, central):
+    assert is_central_unit(product("x", product_type=product_type)) is central
+
+
+def test_central_unit_by_title_when_the_type_is_missing():
+    assert is_central_unit(product("x", title="Philips Hue Bridge", product_type=None))
+    assert not is_central_unit(product("x", title="Hue White E27", product_type=None))
+
+
+def test_central_units_over_one_counts_the_cart_too():
+    catalog = FakeCatalog([product("hub", product_type="Smart home hub"), product("plug", product_type="Smart plug")])
+    service = CartService(catalog)
+    six = [CartChange(product_id="hub", quantity=6), CartChange(product_id="plug", quantity=6)]
+    assert [(p.id, n) for p, n in service.central_units_over_one([], six)] == [("hub", 6)]
+    one = [CartChange(product_id="hub", quantity=1)]
+    assert service.central_units_over_one([], one) == []
+    assert [(p.id, n) for p, n in service.central_units_over_one(items(("hub", 1)), one)] == [("hub", 2)]
 
 
 def test_add_merges_lines_and_caps_the_quantity(cart):

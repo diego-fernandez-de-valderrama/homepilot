@@ -13,7 +13,7 @@ from tests.unit.test_guardrail_agent import ScriptedLlm, call_response, settings
 
 PRODUCTS = [
     product("30173510", title="Acme Smart Radiator Thermostat", price=49.99),
-    product("30387250", title="Acme Bridge", price=59.0),
+    product("30387250", title="Acme Bridge", product_type="Smart home bridge", price=59.0),
 ]
 
 
@@ -177,6 +177,73 @@ def test_several_products_are_confirmed_together():
     assert [(i.product_id, i.quantity) for i in agent.state("s1").cart] == [("30173510", 2), ("30387250", 1)]
     result = tool_responses(llm.requests[-1], "add_to_cart")[-1]
     assert [c["remaining_of_product"] for c in result["changes"]] == [2, 1]
+
+
+def test_several_units_of_a_central_unit_are_refused_without_a_confirmation_card():
+    llm = ScriptedLlm(
+        script=[
+            call_response("add_to_cart", product_ids=["30387250", "30173510"], quantities=[6, 6]),
+            text_response("One bridge runs all six thermostats. Do you really want six bridges?"),
+        ]
+    )
+    agent = service(llm)
+    reply = agent.chat("s1", "Add whatever is needed to control 6 thermostats")
+    assert reply.pending_confirmations == []  # nothing for the customer to confirm
+    assert reply.text.startswith("One bridge")
+    assert agent.state("s1").cart == []
+    result = tool_responses(llm.requests[-1], "add_to_cart")[-1]
+    assert result["status"] == "needs_clarification"  # not replaced by the "awaiting_confirmation" callback
+    assert result["central_units"] == [{"product_id": "30387250", "title": "Acme Bridge", "units_in_cart_after": 6}]
+    assert [c["quantity_changed"] for c in result["changes"]] == [0, 0]
+
+
+def test_a_second_unit_of_a_central_unit_already_in_the_cart_is_refused_too():
+    llm = ScriptedLlm(
+        script=[
+            call_response("add_to_cart", product_ids=["30387250"]),
+            text_response("Added."),
+            call_response("add_to_cart", product_ids=["30387250"]),
+            text_response("You already have one bridge. Do you need a second one?"),
+        ]
+    )
+    agent = service(llm)
+    [confirmation] = agent.chat("s1", "Add the bridge").pending_confirmations
+    agent.confirm("s1", {confirmation.request_id: True})
+    reply = agent.chat("s1", "Add the bridge")
+    assert reply.pending_confirmations == []
+    assert [(i.product_id, i.quantity) for i in agent.state("s1").cart] == [("30387250", 1)]
+
+
+def test_the_same_add_in_the_same_turn_is_refused_again():
+    llm = ScriptedLlm(
+        script=[
+            call_response("add_to_cart", product_ids=["30387250"], quantities=[2]),
+            call_response("add_to_cart", product_ids=["30387250"], quantities=[2]),
+            text_response("Do you really need two bridges?"),
+        ]
+    )
+    agent = service(llm)
+    reply = agent.chat("s1", "Add two bridges")
+    assert reply.pending_confirmations == []  # the model has to ask the customer first
+    statuses = [r["status"] for r in tool_responses(llm.requests[-1], "add_to_cart")]
+    assert statuses == ["needs_clarification", "needs_clarification"]
+
+
+def test_several_units_of_a_central_unit_the_customer_insisted_on_wait_for_confirmation():
+    llm = ScriptedLlm(
+        script=[
+            call_response("add_to_cart", product_ids=["30387250"], quantities=[2]),
+            text_response("One bridge usually runs a whole home. Do you really need two?"),
+            call_response("add_to_cart", product_ids=["30387250"], quantities=[2]),
+            text_response("Both bridges are in your cart."),
+        ]
+    )
+    agent = service(llm)
+    assert agent.chat("s1", "Add two bridges").pending_confirmations == []
+    [confirmation] = agent.chat("s1", "Yes, I really need two bridges, one per house").pending_confirmations
+    assert [(line.product_id, line.quantity) for line in confirmation.lines] == [("30387250", 2)]
+    agent.confirm("s1", {confirmation.request_id: True})
+    assert [(i.product_id, i.quantity) for i in agent.state("s1").cart] == [("30387250", 2)]
 
 
 def _raw_state(agent: AgentService) -> dict[str, Any]:

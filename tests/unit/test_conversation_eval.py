@@ -148,6 +148,22 @@ def test_no_cart_change_fails_on_a_proposed_or_applied_change():
     assert _check(ev.no_cart_change(), _reply(state=applied), _reply()) == "cart changed: 11111111"
 
 
+def test_adds_at_most_limits_the_units_per_product():
+    pending = [
+        CartConfirmation(
+            request_id="r1",
+            action="add",
+            lines=[
+                CartChangeLine(product_id="11111111", quantity=1, product=None),
+                CartChangeLine(product_id="22222222", quantity=6, product=None),
+            ],
+        )
+    ]
+    assert _check(ev.adds_at_most(1), _reply(pending_confirmations=pending)) == "adds more than 1: 22222222 x6"
+    assert _check(ev.adds_at_most(6), _reply(pending_confirmations=pending)) is None
+    assert _check(ev.adds_at_most(1), _reply()) is None
+
+
 def test_an_announced_action_fails_every_turn():
     stalled = _reply("I will find compatible blinds for you. Please give me a moment.")
     assert _check(ev.no_announced_action(), stalled)

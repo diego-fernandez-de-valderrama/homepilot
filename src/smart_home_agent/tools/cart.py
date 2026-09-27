@@ -5,6 +5,12 @@ One add/remove call can cover several products, so the customer confirms them to
 applied all or nothing. Add and remove always tell the model whether the change happened, what is left of
 each product and what is left in the cart, also when it failed or the customer cancelled it
 (`cart_result_callback` covers the calls the tool never ran).
+
+An add that would put more than one unit of a hub, gateway, bridge, controller or starter set into the cart
+(`CartService.central_units_over_one`) is not shown to the customer for confirmation: the tool answers at once
+with "needs_clarification", so the model asks whether one unit is enough. The same add is allowed in a later turn,
+after the customer answered (`SessionState.central_units_asked`). There is no tool parameter for it on purpose:
+an extra add_to_cart parameter changed how the model handled unrelated requests.
 """
 
 import asyncio
@@ -14,7 +20,7 @@ from typing import Any
 from google.adk.tools import BaseTool, ToolContext
 
 from smart_home_agent.agent import state
-from smart_home_agent.agent.state import SessionState
+from smart_home_agent.agent.state import CentralUnitsAsked, SessionState
 from smart_home_agent.container import Services
 from smart_home_agent.models.cart import CartAction, CartView
 from smart_home_agent.repositories.postgres import CatalogReader
@@ -25,6 +31,11 @@ CONFIRMED_TOOLS: dict[str, CartAction] = {"add_to_cart": "add", "remove_from_car
 
 _AWAITING = "The customer is asked to confirm this change in the interface. It is not applied yet."
 _REJECTED = "The customer cancelled this change in the interface. The cart was not changed."
+_CENTRAL_UNITS = (
+    "Nothing was changed and the customer was not asked yet: one hub, gateway, bridge, controller or starter set "
+    "usually runs all devices of a home. Ask the customer whether one unit is enough. Only if they answer that "
+    "they want several, call add_to_cart again with the same quantities."
+)
 
 
 def _synced(tool_context: ToolContext) -> SessionState:
@@ -87,6 +98,36 @@ def change_result(
     return result
 
 
+def _refused_central_units(
+    services: Services, tool_context: ToolContext, product_ids: list[str], quantities: list[int] | None
+) -> list[dict[str, Any]]:
+    """Hubs, gateways, controllers and starter sets the add would put in the cart more than once, unless that
+    was refused in an earlier turn (the customer has answered since). Invalid arguments give none here: the tool
+    itself reports them."""
+    try:
+        changes = services.cart.changes("add", product_ids, quantities)
+    except (ValueError, TypeError):
+        return []
+    session = state.load(tool_context)
+    over = services.cart.central_units_over_one(session.cart, changes)
+    asked = session.central_units_asked
+    if asked is not None and asked.invocation_id != tool_context.invocation_id:
+        over = [(p, units) for p, units in over if units > asked.units.get(p.id, 0)]
+    return [{"product_id": p.id, "title": p.title, "units_in_cart_after": units} for p, units in over]
+
+
+def make_add_confirmation_rule(services: Services) -> Callable[..., bool]:
+    """ADK `require_confirmation` for add_to_cart: every add waits for the customer, except one that the tool
+    refuses at once because it would put several central units into the cart (nothing to confirm)."""
+
+    def add_needs_confirmation(
+        product_ids: list[str], tool_context: ToolContext, quantities: list[int] | None = None
+    ) -> bool:
+        return not _refused_central_units(services, tool_context, product_ids, quantities)
+
+    return add_needs_confirmation
+
+
 def make_view_cart(services: Services):
     @tool_errors
     def view_cart(tool_context: ToolContext) -> ToolResult:
@@ -147,6 +188,19 @@ def make_add_to_cart(services: Services):
           quantities: Units to add per product (1-99), in the same order as product_ids. Omit it to add
             1 of each. To raise a quantity from 2 to 3, add 1.
         """
+        if over := _refused_central_units(services, tool_context, product_ids, quantities):
+            session = _synced(tool_context)
+            session.central_units_asked = CentralUnitsAsked(
+                invocation_id=tool_context.invocation_id,
+                units={unit["product_id"]: unit["units_in_cart_after"] for unit in over},
+            )
+            state.save(tool_context, session)
+            view = services.cart.view(session.cart)
+            result = change_result(
+                "needs_clarification", "add", _ids(product_ids), view, view, _CENTRAL_UNITS, catalog=services.catalog
+            )
+            result["central_units"] = over
+            return result
         return _change_cart(services, tool_context, "add", product_ids, quantities)
 
     return add_to_cart
@@ -183,6 +237,8 @@ def make_cart_result_callback(
         confirmation = tool_context.tool_confirmation
         if action is None or (confirmation is not None and confirmation.confirmed):
             return None  # not a cart change, or the tool really ran and built its own result
+        if confirmation is None and tool_response.get("status") == "needs_clarification":
+            return None  # the add refused several central units at once, without asking the customer
         session = _synced(tool_context)
         state.save(tool_context, session)
         status, message = ("awaiting_confirmation", _AWAITING) if confirmation is None else ("rejected", _REJECTED)
