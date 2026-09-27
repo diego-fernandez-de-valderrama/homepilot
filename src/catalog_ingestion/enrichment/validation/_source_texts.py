@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
+from catalog_ingestion.core import TextNormalizer
 from catalog_ingestion.enrichment.validation._quote_matcher import QuoteMatcher
-from catalog_ingestion.enrichment.validation._text_normalizer import TextNormalizer
 from catalog_ingestion.models import NormalizedProduct, WebPage
 from catalog_ingestion.vocabulary import FactSource
 

@@ -1,4 +1,5 @@
 import uuid
+from itertools import batched
 
 from qdrant_client import QdrantClient, models
 
@@ -11,6 +12,7 @@ class QdrantRepository:
     """Qdrant persistence. Point ids are derived from the stable dataset product id."""
 
     UPSERT_BATCH = 128
+    RETRIEVE_BATCH = 256
     _NAMESPACE = uuid.UUID("0b6a1f2c-9d57-4a57-9a52-6c1e5b1f7a10")
     _MAX_NUMERIC_ID = 2**63 - 1
 
@@ -20,8 +22,7 @@ class QdrantRepository:
 
     def indexed_states(self, product_ids: list[str]) -> dict[str, IndexedState]:
         states: dict[str, IndexedState] = {}
-        for start in range(0, len(product_ids), 256):
-            chunk = product_ids[start : start + 256]
+        for chunk in batched(product_ids, self.RETRIEVE_BATCH):
             records = self._client.retrieve(
                 self._collection,
                 ids=[self.point_id(pid) for pid in chunk],
@@ -36,25 +37,25 @@ class QdrantRepository:
         return states
 
     def upsert(self, items: list[tuple[QdrantPayloadSchema, list[float]]]) -> None:
-        for start in range(0, len(items), self.UPSERT_BATCH):
+        for chunk in batched(items, self.UPSERT_BATCH):
             points = [
                 models.PointStruct(
                     id=self.point_id(payload.product_id), vector=vector, payload=payload.model_dump(mode="json")
                 )
-                for payload, vector in items[start : start + self.UPSERT_BATCH]
+                for payload, vector in chunk
             ]
             self._client.upsert(self._collection, points=points, wait=True)
 
     def overwrite_payloads(self, payloads: list[QdrantPayloadSchema]) -> None:
         """Replaces the payload of existing points without touching their vectors."""
-        for start in range(0, len(payloads), self.UPSERT_BATCH):
+        for chunk in batched(payloads, self.UPSERT_BATCH):
             operations = [
                 models.OverwritePayloadOperation(
                     overwrite_payload=models.SetPayload(
                         payload=payload.model_dump(mode="json"), points=[self.point_id(payload.product_id)]
                     )
                 )
-                for payload in payloads[start : start + self.UPSERT_BATCH]
+                for payload in chunk
             ]
             self._client.batch_update_points(self._collection, update_operations=operations, wait=True)
 

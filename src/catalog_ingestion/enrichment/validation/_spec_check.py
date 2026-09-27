@@ -1,7 +1,7 @@
 import re
 
+from catalog_ingestion.core import TextNormalizer
 from catalog_ingestion.enrichment.validation._source_texts import SourceTexts
-from catalog_ingestion.enrichment.validation._text_normalizer import TextNormalizer
 from catalog_ingestion.models import Spec
 
 

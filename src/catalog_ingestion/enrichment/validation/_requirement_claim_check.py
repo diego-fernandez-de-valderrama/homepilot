@@ -1,11 +1,11 @@
 import re
 
+from catalog_ingestion.core import TextNormalizer
 from catalog_ingestion.enrichment.validation._claim_provenance import ClaimProvenance
 from catalog_ingestion.enrichment.validation._mention_matcher import MentionMatcher
 from catalog_ingestion.enrichment.validation._outcome import Outcome
 from catalog_ingestion.enrichment.validation._quote_matcher import QuoteMatcher
 from catalog_ingestion.enrichment.validation._source_texts import SourceTexts
-from catalog_ingestion.enrichment.validation._text_normalizer import TextNormalizer
 from catalog_ingestion.models import Requirement, RequirementClaim
 from catalog_ingestion.vocabulary import Method, RequirementVocabulary
 

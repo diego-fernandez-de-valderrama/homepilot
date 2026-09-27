@@ -7,6 +7,7 @@
 - `gemini/`: `GeminiClient` (pacing, retries, quota errors) and the `TextGenerator` protocol.
 - `LogSetup`: key=value logging on stderr (`LogSetup.fields(...)` for structured `extra`).
 - `Hashing`: stable content hashes that decide which pipeline stages must re-run.
+- `TextNormalizer`: the one text normalization for matching quotes and mentions (also used by the agent).
 """
 
 from catalog_ingestion.core.gemini import (
@@ -27,6 +28,7 @@ from catalog_ingestion.core.settings import (
     QdrantSettings,
     WebSettings,
 )
+from catalog_ingestion.core.text_normalizer import TextNormalizer
 
 __all__ = [
     "AppSettings",
@@ -42,5 +44,6 @@ __all__ = [
     "QdrantSettings",
     "QuotaExhaustedError",
     "TextGenerator",
+    "TextNormalizer",
     "WebSettings",
 ]

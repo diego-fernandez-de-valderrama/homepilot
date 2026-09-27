@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Callable
+from itertools import batched
 
 from catalog_ingestion.core import LogSetup
 from catalog_ingestion.database import PostgresRepository
@@ -67,15 +68,15 @@ class IndexWriter:
 
         self._progress.start("embed", len(pending))
         indexed_count = 0
-        for start in range(0, len(pending), self.EMBED_BATCH):
-            batch = pending[start : start + self.EMBED_BATCH]
+        for number, batch in enumerate(batched(pending, self.EMBED_BATCH)):
             try:
                 vectors = self._embedder.embed_documents([doc.text for _, doc in batch])
-                self._store_vectors(batch, vectors, model_id)
+                self._store_vectors(list(batch), vectors, model_id)
                 indexed_count += len(batch)
             except Exception:
                 logger.exception(
-                    "Embedding/Qdrant batch failed", extra=LogSetup.fields(batch_start=start, size=len(batch))
+                    "Embedding/Qdrant batch failed",
+                    extra=LogSetup.fields(batch_start=number * self.EMBED_BATCH, size=len(batch)),
                 )
                 stats.inc("qdrant_failed", len(batch))
             self._progress.advance("embed", len(batch))
@@ -92,16 +93,16 @@ class IndexWriter:
         model_id = self._embedder.model_id
         self._progress.start("embed", len(documents))
         vectors: list[list[float]] = []
-        for start in range(0, len(documents), self.EMBED_BATCH):
-            batch = documents[start : start + self.EMBED_BATCH]
+        for batch in batched(documents, self.EMBED_BATCH):
             vectors.extend(self._embedder.embed_documents([doc.text for _, doc in batch]))  # any error aborts
             self._progress.advance("embed", len(batch))
         self._progress.finish("embed")
         recreate()
         self._pg.clear_indexed([doc.product_id for _, doc in documents])
-        for start in range(0, len(documents), self.EMBED_BATCH):
-            end = start + self.EMBED_BATCH
-            self._store_vectors(documents[start:end], vectors[start:end], model_id)
+        for batch, batch_vectors in zip(
+            batched(documents, self.EMBED_BATCH), batched(vectors, self.EMBED_BATCH), strict=True
+        ):
+            self._store_vectors(list(batch), list(batch_vectors), model_id)
         stats.set("qdrant_indexed", len(documents))
 
     def _refresh_payloads(self, payloads: list[QdrantPayloadSchema], stats: RunStats) -> None:

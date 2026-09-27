@@ -1,7 +1,7 @@
 import re
 
+from catalog_ingestion.core import TextNormalizer
 from catalog_ingestion.enrichment.validation._quote_matcher import QuoteMatcher
-from catalog_ingestion.enrichment.validation._text_normalizer import TextNormalizer
 
 
 class MentionMatcher:

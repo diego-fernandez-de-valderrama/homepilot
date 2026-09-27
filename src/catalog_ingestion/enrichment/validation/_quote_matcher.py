@@ -1,6 +1,6 @@
 import re
 
-from catalog_ingestion.enrichment.validation._text_normalizer import TextNormalizer
+from catalog_ingestion.core import TextNormalizer
 
 
 class QuoteMatcher:

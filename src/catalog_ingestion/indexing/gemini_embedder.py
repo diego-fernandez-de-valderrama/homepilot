@@ -1,5 +1,7 @@
-import math
 from collections.abc import Sequence
+from itertools import batched
+
+import numpy as np
 
 from catalog_ingestion.core import GeminiClient, GeminiSettings
 
@@ -27,9 +29,10 @@ class GeminiEmbedder:
 
     def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
-        for start in range(0, len(texts), self.BATCH_SIZE):
-            batch = list(texts[start : start + self.BATCH_SIZE])
-            vectors.extend(self.l2_normalize(v) for v in self._client.embed(batch, task_type="RETRIEVAL_DOCUMENT"))
+        for batch in batched(texts, self.BATCH_SIZE):
+            vectors.extend(
+                self.l2_normalize(v) for v in self._client.embed(list(batch), task_type="RETRIEVAL_DOCUMENT")
+            )
         return vectors
 
     def embed_query(self, text: str) -> list[float]:
@@ -37,5 +40,6 @@ class GeminiEmbedder:
 
     @staticmethod
     def l2_normalize(vector: list[float]) -> list[float]:
-        norm = math.sqrt(sum(value * value for value in vector))
-        return [value / norm for value in vector] if norm else vector
+        array = np.asarray(vector, dtype=np.float64)
+        norm = np.linalg.norm(array)
+        return (array / norm).tolist() if norm else vector
