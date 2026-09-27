@@ -51,7 +51,8 @@ src/smart_home_agent/
 ├── config.py            AgentSettings (AGENT_*) + reused GEMINI_/POSTGRES_/QDRANT_ settings
 ├── container.py         composition root (engine, Qdrant client, embedder, services)
 ├── __main__.py          `check`, `init-memory`, `smoke`, `chat` commands
-├── agent/               orchestrator.py, prompts.py (rules + guardrails), state.py, language.py, trace.py
+├── agent/               entry point: build_agent (builder.py), AgentService (service.py); model/, prompts/ (rules + guardrails), reply/ (AgentReply, TurnTrace), private _turn_runner.py etc.
+├── session/             SessionState, state keys, load_state/save_state, detect_language
 ├── guardrail/           classifier.py, prototypes.py, responses.py, output_check.py, callbacks.py
 ├── tools/               recommend.py, catalog.py (search/filter/get), compatibility.py, comparison.py,
 │                        evidence.py, preferences.py, _common.py (error handling, input resolution)
@@ -255,7 +256,7 @@ Retrieved text is never used for comparison.
 | Kind | Where | Purpose |
 |---|---|---|
 | SQLAlchemy ORM | `catalog_ingestion.storage.postgres.models` (reused) | Persistence only, used exclusively inside `repositories/postgres.py` |
-| Pydantic `BaseModel` | `models/*`, `agent/state.py`, `agent/trace.py` | Business models and contracts: `Product`, `ProductSummary`, `CompatibilityFact`, `Evidence`, `ProductFilter`, `SearchResult`, `CompatibilityResult`, `ComparisonResult`, `RecommendationRequest`, `Recommendation`, `UpsellSuggestion`, `SessionState`, `AgentReply` |
+| Pydantic `BaseModel` | `models/*`, `session/session_state.py`, `agent/reply/` | Business models and contracts: `Product`, `ProductSummary`, `CompatibilityFact`, `Evidence`, `ProductFilter`, `SearchResult`, `CompatibilityResult`, `ComparisonResult`, `RecommendationRequest`, `Recommendation`, `UpsellSuggestion`, `SessionState`, `AgentReply` |
 | `dataclass` | `SearchCandidate`, `RankingCandidate`, `ResolvedTerm`, `Services`, `Settings` | Internal processing and wiring, never exposed to the model |
 
 The repository maps ORM → Pydantic (`to_product`). ORM objects never reach services, tools or the agent.
@@ -266,7 +267,7 @@ The repository maps ORM → Pydantic (`to_product`). ORM objects never reach ser
 
 **Language**
 - Gemini replies in the language of the latest user message.
-- Because the catalog data is German, the model tends to drift into German. To prevent this, `agent/language.py` detects EN/DE per turn with a small word-list heuristic. The result is passed as a per-turn state value, and the instruction turns it into an explicit "reply in English/German" line. If the heuristic is unsure, the model decides alone.
+- Because the catalog data is German, the model tends to drift into German. To prevent this, `session/language.py` detects EN/DE per turn with a small word-list heuristic. The result is passed as a per-turn state value, and the instruction turns it into an explicit "reply in English/German" line. If the heuristic is unsure, the model decides alone.
 - Catalog values (titles, attributes) are never translated destructively. `summary_en` / `summary_de` are chosen by language. Retrieval works for both languages because the indexed documents contain English canonical names and the German catalog text.
 
 **Session state** (`SessionState`, stored in the ADK in-memory session under `homepilot`) holds:
@@ -275,7 +276,7 @@ The repository maps ORM → Pydantic (`to_product`). ORM objects never reach ser
 
 Tools update it automatically. `remember_preferences` stores what the user said about their home. `recommend_products` uses the stored ecosystems, protocols and budget as defaults and reports them in `applied_from_session`. The instruction includes the known state every turn. The session itself is not persisted; lasting facts about the customer go to the [customer memory](#customer-memory-per-user-across-conversations).
 
-**Guardrails** are prompt-level (`agent/prompts.py`), and since the guardrail change they are backed by a
+**Guardrails** are prompt-level (`agent/prompts/`), and since the guardrail change they are backed by a
 deterministic layer around the agent (see [Semantic guardrail](#semantic-guardrail-inputoutput-validation)):
 - Firm refusal of wiring, electrical installation and mains-voltage instructions, with a referral to a qualified electrician (Elektrofachkraft).
 - Products with `requires_professional_installation` are flagged in the answer.
@@ -310,7 +311,7 @@ This section documents a change to the running system. The agent, its prompt, to
 
 ### Existing architecture (before)
 
-Every message went straight from `AgentService.chat_async` to the ADK `Runner` and the single `LlmAgent`. Gemini decided on its own, guided only by the prompt rules in `agent/prompts.py`, whether to refuse wiring questions, redirect off-topic requests or ignore injection attempts. Its answer went back to the user without any check.
+Every message went straight from `AgentService.chat` to the ADK `Runner` and the single `LlmAgent`. Gemini decided on its own, guided only by the prompt rules in `agent/prompts/`, whether to refuse wiring questions, redirect off-topic requests or ignore injection attempts. Its answer went back to the user without any check.
 
 ### New security layer
 
@@ -347,7 +348,7 @@ before_agent_callback  (guardrail/callbacks.py)
 **Deterministic replies.**
 - Each blocked category, plus the output fallback, has a pool of 3-4 equivalent EN and DE variants. The German texts use the informal "du" form.
 - A variant is picked at random, and never the one used last in the session.
-- The language comes from the existing `agent/language.py` heuristic.
+- The language comes from the existing `session/language.py` heuristic.
 - These replies are returned as `Content(role="model")` authored by the agent. ADK therefore keeps them in the session history as the model's own previous turn, and on the next turn Gemini sees exactly what the user saw. A test verifies this through the captured model request.
 
 **Output: validation.** `OutputValidator` is conservative: it only rejects what it can prove wrong from PostgreSQL, because a failure replaces the whole answer.
@@ -376,7 +377,7 @@ A generative judge would add a full model inference, with its latency and cost, 
 
 ### ADK integration
 
-- Both checks are ADK callbacks on the existing `LlmAgent`, attached in `agent/orchestrator.build_agent`. No second agent is created.
+- Both checks are ADK callbacks on the existing `LlmAgent`, attached in `agent/builder.build_agent`. No second agent is created.
 - **`before_agent_callback`** runs once per turn, before the first model call. When it returns content, ADK ends the invocation with that content (`end_invocation`), so the model is never called. `before_model_callback` was not used because it runs again after every tool round trip.
 - **`after_model_callback`** only acts on final text responses (no function calls). It reads this turn's tool results from the session events of the current invocation.
 - `AgentService` only resets the per-turn report (`homepilot_guardrail` in the session state) and exposes it as `AgentReply.guardrail`. The CLI prints it and the Streamlit developer panel shows it.

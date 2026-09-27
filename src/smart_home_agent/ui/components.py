@@ -17,7 +17,6 @@ import streamlit as st
 from catalog_ingestion.domain.enums import FactStatus
 from catalog_ingestion.vocabulary import categories as category_vocabulary
 
-from smart_home_agent.agent.state import SessionState
 from smart_home_agent.models import rich
 from smart_home_agent.models.cart import CartChangeLine, CartConfirmation, CartLine, CartView
 from smart_home_agent.models.comparison import NOT_LISTED, ComparisonResult
@@ -25,6 +24,7 @@ from smart_home_agent.models.product import Product, ProductSummary
 from smart_home_agent.models.recommendation import UpsellSuggestion
 from smart_home_agent.models.rich import ProductCompatibility
 from smart_home_agent.services import vocabulary
+from smart_home_agent.session import SessionState
 
 _UI_DIR = Path(__file__).parent
 ADVISOR_AVATAR = str(_UI_DIR / "assets" / "advisor.svg")

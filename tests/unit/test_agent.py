@@ -6,12 +6,10 @@ import pytest
 from google.adk.models import BaseLlm
 from pydantic import SecretStr
 
-from smart_home_agent.agent.language import detect_language
-from smart_home_agent.agent.orchestrator import AgentService, build_agent
+from smart_home_agent.agent import AgentService, TurnTrace, build_agent
 from smart_home_agent.agent.prompts import build_instruction
-from smart_home_agent.agent.state import STATE_KEY, TURN_LANGUAGE_KEY
-from smart_home_agent.agent.trace import TurnTrace
 from smart_home_agent.config import AgentSettings, Settings
+from smart_home_agent.session import STATE_KEY, TURN_LANGUAGE_KEY, detect_language
 from tests.fakes import product, services_for
 
 

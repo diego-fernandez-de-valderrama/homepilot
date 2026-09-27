@@ -6,18 +6,11 @@ from collections.abc import AsyncIterator
 from google.adk.models import LlmRequest, LlmResponse
 from google.genai import types
 
-from smart_home_agent.agent.model import (
-    RETRY_NOTE,
-    STALL_NOTE,
-    ResilientGemini,
-    announces_action,
-    backoff,
-    http_retry_options,
-    is_empty,
-    is_stalled,
-    retry_empty_responses,
-)
-from smart_home_agent.agent.orchestrator import AgentService, build_agent
+from smart_home_agent.agent import AgentService, build_agent
+from smart_home_agent.agent.model import ResilientGemini, RetryPolicy, announces_action
+from smart_home_agent.agent.model.response_checks import is_empty, is_stalled
+from smart_home_agent.agent.model.retry_notes import RETRY_NOTE, STALL_NOTE
+from smart_home_agent.agent.model.retrying import retry_empty_responses
 from tests.fakes import FakeProfileStore, product, services_for
 from tests.unit.test_guardrail_agent import settings
 
@@ -67,7 +60,7 @@ def run(script: Script, retries: int = 3) -> tuple[list[LlmResponse], list[float
         sleeps.append(delay)
 
     async def collect() -> list[LlmResponse]:
-        return [r async for r in retry_empty_responses(script, request(), retries, 1.0, 8.0, sleep)]
+        return [r async for r in retry_empty_responses(script, request(), RetryPolicy(retries, 1.0, 8.0), sleep)]
 
     return asyncio.run(collect()), sleeps
 
@@ -153,8 +146,9 @@ def test_an_empty_answer_after_a_stall_retry_is_still_retried():
 
 
 def test_backoff_is_exponential_and_capped():
-    assert [backoff(i, 1.0, 8.0) for i in range(6)] == [1.0, 2.0, 4.0, 8.0, 8.0, 8.0]
-    options = http_retry_options(3, 1.0, 8.0)
+    policy = RetryPolicy(3, 1.0, 8.0)
+    assert [policy.delay(i) for i in range(6)] == [1.0, 2.0, 4.0, 8.0, 8.0, 8.0]
+    options = policy.http_options()
     assert (options.attempts, options.initial_delay, options.max_delay, options.exp_base) == (4, 1.0, 8.0, 2.0)
 
 
@@ -215,7 +209,7 @@ def test_the_retry_note_never_reaches_the_session():
     llm = model(empty(), text("Hello!"))
     service = agent_with(llm, FakeProfileStore())
     assert service.chat("s1", "Hi", "anna").text == "Hello!"
-    session = service._run(service._sessions.get_session(app_name="test-app", user_id="anna", session_id="s1"))
+    session = service._loop.run(service._sessions.get("s1", "anna"))
     assert session is not None
     texts = [p.text for e in session.events if e.content for p in e.content.parts or [] if p.text]
     assert RETRY_NOTE not in texts and texts == ["Hi", "Hello!"]
@@ -225,7 +219,7 @@ def test_a_stalled_answer_is_replaced_and_the_stall_note_never_reaches_the_sessi
     llm = model(text("Please give me a moment to search."), text("Here you go."))
     service = agent_with(llm, FakeProfileStore())
     assert service.chat("s1", "Find a plug", "anna").text == "Here you go."
-    session = service._run(service._sessions.get_session(app_name="test-app", user_id="anna", session_id="s1"))
+    session = service._loop.run(service._sessions.get("s1", "anna"))
     assert session is not None
     texts = [p.text for e in session.events if e.content for p in e.content.parts or [] if p.text]
     assert texts == ["Find a plug", "Here you go."]

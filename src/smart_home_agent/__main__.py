@@ -22,7 +22,7 @@ from smart_home_agent.models.recommendation import RecommendationRequest
 from smart_home_agent.models.rich import to_plain
 
 if TYPE_CHECKING:
-    from smart_home_agent.agent.trace import AgentReply
+    from smart_home_agent.agent import AgentReply
     from smart_home_agent.config import Settings
 
 
@@ -94,7 +94,7 @@ def smoke() -> int:
 
 
 def chat(user_id: str) -> int:
-    from smart_home_agent.agent.orchestrator import AgentService, build_agent
+    from smart_home_agent.agent import AgentService, build_agent
 
     settings = get_settings()
     container = build_container(settings)

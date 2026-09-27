@@ -4,8 +4,8 @@ from typing import Any
 import pytest
 from google.adk.tools import FunctionTool
 
-from smart_home_agent.agent.state import STATE_KEY, SessionState, read_state
 from smart_home_agent.models.cart import CartItem
+from smart_home_agent.session import STATE_KEY, SessionState, read_state
 from smart_home_agent.tools import build_tools
 from tests.fakes import FakeToolContext, fact, product, requirement, services_for
 

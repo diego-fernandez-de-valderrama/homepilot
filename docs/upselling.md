@@ -78,7 +78,7 @@ Each `AccessorySuggestion` contains the product it belongs to, the requirement, 
 
 ## How the agent presents it
 
-The rules live in `agent/prompts.py`, section "Recommendations and upselling":
+The rules live in `agent/prompts/`, section "Recommendations and upselling":
 
 - Lead with the best match. Present the upgrade after it, using only its `upgrade_reasons` and the price difference, and show it with `<upgrade from="ID" to="ID"/>`.
 - Name a required hub with `<item id="ID"/>`, say it is required ("required unless you already own one" when `unverified`) and give the bundle total. If the bundle exceeds the budget, say so.
@@ -138,6 +138,6 @@ Differences left out, because the data cannot back them:
 | `services/accessories.py` | hub lookup and `AccessorySuggestion` |
 | `models/recommendation.py` | `UpsellSuggestion`, `AccessorySuggestion`, `Recommendation` |
 | `tools/recommend.py` | tool, session state, commerce log line |
-| `agent/prompts.py` | presentation rules |
+| `agent/prompts/` | presentation rules |
 | `evals/upsell.py` | KPI evaluation cases and report |
 | `tests/unit/test_ranking.py`, `test_recommendation.py`, `test_accessories.py`, `test_compatibility.py`, `tests/evals/test_upsell_eval.py` | unit tests |

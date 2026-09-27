@@ -17,7 +17,7 @@ from pydantic import Field, SecretStr
 
 from evals.guardrail import EmbeddingFixture
 from evals.guardrail_cases import OUTPUT_CASES
-from smart_home_agent.agent.orchestrator import AgentService, build_agent
+from smart_home_agent.agent import AgentService, build_agent
 from smart_home_agent.config import AgentSettings, Settings
 from smart_home_agent.container import guardrail_thresholds
 from smart_home_agent.guardrail.categories import Category

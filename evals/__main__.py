@@ -44,7 +44,7 @@ def variant() -> int:
 def conversation(names: list[str] | None, repeat: int) -> int:
     """Fixed conversations through the real agent (live chat model); deterministic checks per turn."""
     from evals.conversation import EVAL_USER, evaluate, regressions, report, select
-    from smart_home_agent.agent.orchestrator import AgentService, build_agent
+    from smart_home_agent.agent import AgentService, build_agent
     from smart_home_agent.container import build_profile_store
 
     conversations = select(names)

@@ -3,10 +3,10 @@ from typing import Any
 
 from google.adk.tools import ToolContext
 
-from smart_home_agent.agent import state
 from smart_home_agent.container import Services
 from smart_home_agent.models.recommendation import RecommendationRequest
 from smart_home_agent.services import vocabulary
+from smart_home_agent.session import load_state, save_state
 from smart_home_agent.tools._common import ToolResult, ok, resolve_category, resolve_devices, tool_errors, tool_input
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ def make_recommend_products(services: Services):
           owned_devices: Hubs/gateways the user already owns, e.g. ["Hue Bridge"]. Omit if unknown.
           limit: Maximum number of products per list (1-10).
         """
-        session = state.load(tool_context)
+        session = load_state(tool_context)
         applied: dict[str, Any] = {}
         if must_support is None and session.must_support:
             must_support = session.must_support
@@ -82,7 +82,7 @@ def make_recommend_products(services: Services):
             pid for pid in (result.best_match, result.upsell.product_id if result.upsell else None) if pid
         ]
         session.last_upsell = result.upsell
-        state.save(tool_context, session)
+        save_state(tool_context, session)
         logger.info(
             "commerce best_match=%s upsell=%s upsell_delta=%s accessories=%s bundle_totals=%s",
             result.best_match,

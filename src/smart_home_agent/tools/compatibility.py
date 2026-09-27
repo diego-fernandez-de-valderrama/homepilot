@@ -1,10 +1,10 @@
 from catalog_ingestion.domain.enums import RequirementKind
 from google.adk.tools import ToolContext
 
-from smart_home_agent.agent import state
 from smart_home_agent.container import Services
 from smart_home_agent.models.compatibility import CompatibilityResult
 from smart_home_agent.services import vocabulary
+from smart_home_agent.session import load_state
 from smart_home_agent.tools._common import ToolResult, ok, resolve_devices, tool_errors
 
 MAX_PRODUCTS = 10
@@ -49,7 +49,7 @@ def make_check_compatibility(services: Services):
         """
         if not 1 <= len(product_ids) <= MAX_PRODUCTS:
             raise ValueError(f"check between 1 and {MAX_PRODUCTS} products")
-        session = state.load(tool_context)
+        session = load_state(tool_context)
         if owned_devices is None:
             owned_devices = session.owned_devices
         terms = vocabulary.resolve_terms(requirements)

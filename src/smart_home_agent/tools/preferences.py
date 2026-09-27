@@ -1,8 +1,8 @@
 from catalog_ingestion.domain.enums import Dimension
 from google.adk.tools import ToolContext
 
-from smart_home_agent.agent import state
 from smart_home_agent.services import vocabulary
+from smart_home_agent.session import load_state, save_state
 from smart_home_agent.tools._common import ToolResult, ok, resolve_category, resolve_devices, tool_errors
 
 
@@ -34,7 +34,7 @@ def make_remember_preferences():
           owned_devices: Hubs/gateways the user owns, e.g. ["Hue Bridge"]. Pass [] if they own none.
           requirements: Other stated needs in free text, e.g. ["battery powered", "outdoor use"].
         """
-        session = state.load(tool_context)
+        session = load_state(tool_context)
         if language is not None:
             session.language = language.strip().lower()[:2] or None
         if ecosystems is not None or protocols is not None:
@@ -54,7 +54,7 @@ def make_remember_preferences():
             session.owned_devices = resolve_devices(owned_devices)
         if requirements is not None:
             session.requirements = [r.strip() for r in requirements if r.strip()]
-        state.save(tool_context, session)
+        save_state(tool_context, session)
         return ok(session=session.model_dump(mode="json", exclude={"last_search", "candidate_products"}))
 
     return remember_preferences

@@ -10,9 +10,9 @@ import pytest
 from google.adk.models import LlmRequest, LlmResponse
 from google.adk.tools import ToolContext
 
-from smart_home_agent.agent.orchestrator import AgentService, build_agent
+from smart_home_agent.agent import AgentService, build_agent
 from smart_home_agent.agent.prompts import MEMORY_INSTRUCTION
-from smart_home_agent.agent.state import PROFILE_KEY
+from smart_home_agent.session import PROFILE_KEY
 from smart_home_agent.tools import ThreadedFunctionTool
 from tests.fakes import FakeProfileStore, FakeToolContext, services_for
 from tests.unit.test_cart_agent import PRODUCTS
@@ -84,16 +84,16 @@ def test_a_cart_edit_waits_for_the_running_turn_of_the_same_session():
     agent.confirm("s1", {confirmation.request_id: True})
 
     async def scenario() -> tuple[bool, bool]:
-        lock = agent._lock("s1", "customer")
+        lock = agent._sessions.lock("s1", "customer")
         await lock.acquire()  # a turn of this session is running
-        edit = asyncio.ensure_future(agent.set_cart_quantity_async("s1", "30173510", 2))
+        edit = asyncio.ensure_future(agent._customer_cart.set_quantity("s1", "30173510", 2, "customer"))
         await asyncio.sleep(0.05)
         waited = not edit.done()
         lock.release()
         await edit
         return waited, edit.done()
 
-    waited, finished = asyncio.run_coroutine_threadsafe(scenario(), agent._loop).result(timeout=5)
+    waited, finished = agent._loop.submit(scenario()).result(timeout=5)
     assert waited and finished
     assert [(i.product_id, i.quantity) for i in agent.state("s1").cart] == [("30173510", 2)]
 
@@ -105,4 +105,4 @@ def test_memory_rules_stay_in_the_prompt_when_the_first_profile_load_fails():
     agent = agent_service(llm, store)
     agent.chat("s1", "Hi")
     assert MEMORY_INSTRUCTION.strip().splitlines()[0] in str(llm.requests[-1].config.system_instruction)
-    assert agent._run(agent._state_dict("s1", "customer"))[PROFILE_KEY] is None
+    assert agent._loop.run(agent._sessions.raw_state("s1", "customer"))[PROFILE_KEY] is None

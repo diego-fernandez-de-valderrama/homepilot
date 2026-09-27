@@ -2,7 +2,7 @@
 
 from catalog_ingestion.domain.enums import FactStatus
 
-from smart_home_agent.agent.orchestrator import AgentService, build_agent
+from smart_home_agent.agent import AgentService, build_agent
 from smart_home_agent.models import rich
 from smart_home_agent.models.recommendation import UpsellSuggestion
 from smart_home_agent.services.rich_content import RichContentService

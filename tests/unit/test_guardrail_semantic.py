@@ -11,12 +11,12 @@ import pytest
 
 from evals.guardrail import ALLOWED, EmbeddingFixture, evaluate, evaluate_output
 from evals.guardrail_cases import ACCEPTANCE_CASES, EVAL_CASES, OUTPUT_CASES, TEST_CASES
-from smart_home_agent.agent.language import detect_language
 from smart_home_agent.config import AgentSettings
 from smart_home_agent.container import guardrail_thresholds
 from smart_home_agent.guardrail.categories import BLOCKING, Category
 from smart_home_agent.guardrail.classifier import TASK_TYPE, SemanticGuardrail
 from smart_home_agent.guardrail.prototypes import PROTOTYPES
+from smart_home_agent.session import detect_language
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "guardrail_embeddings.json"
 

@@ -6,7 +6,7 @@ from typing import Any
 
 from google.adk.models import LlmRequest
 
-from smart_home_agent.agent.orchestrator import AgentService, build_agent
+from smart_home_agent.agent import AgentService, build_agent
 from smart_home_agent.agent.prompts import build_instruction
 from tests.fakes import product, services_for
 from tests.unit.test_guardrail_agent import ScriptedLlm, call_response, settings, text_response
@@ -247,5 +247,5 @@ def test_several_units_of_a_central_unit_the_customer_insisted_on_wait_for_confi
 
 
 def _raw_state(agent: AgentService) -> dict[str, Any]:
-    session = agent._run(agent._session("s1", "customer"))
+    session = agent._loop.run(agent._sessions.get_or_create("s1", "customer"))
     return dict(session.state)

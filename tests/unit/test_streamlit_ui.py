@@ -5,12 +5,12 @@ import streamlit as st
 from catalog_ingestion.domain.enums import FactStatus
 from streamlit.testing.v1 import AppTest
 
-from smart_home_agent.agent.state import SessionState
 from smart_home_agent.config import get_settings
 from smart_home_agent.models.cart import CartChangeLine, CartConfirmation, CartItem
 from smart_home_agent.services.cart import CartService
 from smart_home_agent.services.comparison import compare
 from smart_home_agent.services.rich_content import product_compatibility
+from smart_home_agent.session import SessionState
 from smart_home_agent.ui import streamlit_app
 from smart_home_agent.ui.components import (
     Suggestion,
@@ -458,8 +458,8 @@ def test_failure_notice_is_friendly_and_localized():
 def _failed_turn_in_history() -> None:
     import streamlit as st
 
-    from smart_home_agent.agent.state import SessionState
-    from smart_home_agent.agent.trace import AgentReply, TurnTrace
+    from smart_home_agent.agent import AgentReply, TurnTrace
+    from smart_home_agent.session import SessionState
     from smart_home_agent.ui.streamlit_app import render_message
 
     reply = AgentReply(

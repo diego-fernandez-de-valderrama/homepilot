@@ -19,12 +19,11 @@ from typing import Any
 
 from google.adk.tools import BaseTool, ToolContext
 
-from smart_home_agent.agent import state
-from smart_home_agent.agent.state import CentralUnitsAsked, SessionState
 from smart_home_agent.container import Services
 from smart_home_agent.models.cart import CartAction, CartView
 from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.services.cart import CartChangeError
+from smart_home_agent.session import CentralUnitsAsked, SessionState, load_state, save_state
 from smart_home_agent.tools._common import ToolResult, ok, tool_errors
 
 CONFIRMED_TOOLS: dict[str, CartAction] = {"add_to_cart": "add", "remove_from_cart": "remove"}
@@ -40,7 +39,7 @@ _CENTRAL_UNITS = (
 
 def _synced(tool_context: ToolContext) -> SessionState:
     """Every cart tool returns the current cart, so the model is up to date with the interface again."""
-    session = state.load(tool_context)
+    session = load_state(tool_context)
     session.cart_checked = True
     session.cart_changed_by_user = False
     return session
@@ -108,7 +107,7 @@ def _refused_central_units(
         changes = services.cart.changes("add", product_ids, quantities)
     except (ValueError, TypeError):
         return []
-    session = state.load(tool_context)
+    session = load_state(tool_context)
     over = services.cart.central_units_over_one(session.cart, changes)
     asked = session.central_units_asked
     if asked is not None and asked.invocation_id != tool_context.invocation_id:
@@ -137,7 +136,7 @@ def make_view_cart(services: Services):
         """
         session = _synced(tool_context)
         view = services.cart.view(session.cart)
-        state.save(tool_context, session)
+        save_state(tool_context, session)
         result = ok(items=view.for_model(), item_count=view.item_count, cart_total=view.total)
         if not view.lines:
             result["note"] = "the cart is empty"
@@ -162,14 +161,14 @@ def _change_cart(
         changes = services.cart.changes(action, product_ids, quantities)
         session.cart = services.cart.apply(session.cart, action, changes)
     except CartChangeError as exc:  # nothing applied: the customer confirmed the change as a whole
-        state.save(tool_context, session)
+        save_state(tool_context, session)
         message = "Nothing was changed: " + str(exc)
         return change_result(exc.status, action, ids, before, before, message, exc.errors, services.catalog)
     except ValueError as exc:
-        state.save(tool_context, session)
+        save_state(tool_context, session)
         message = f"Nothing was changed: {exc}"
         return change_result("invalid_input", action, ids, before, before, message, catalog=services.catalog)
-    state.save(tool_context, session)
+    save_state(tool_context, session)
     return change_result("ok", action, ids, before, services.cart.view(session.cart), catalog=services.catalog)
 
 
@@ -194,7 +193,7 @@ def make_add_to_cart(services: Services):
                 invocation_id=tool_context.invocation_id,
                 units={unit["product_id"]: unit["units_in_cart_after"] for unit in over},
             )
-            state.save(tool_context, session)
+            save_state(tool_context, session)
             view = services.cart.view(session.cart)
             result = change_result(
                 "needs_clarification", "add", _ids(product_ids), view, view, _CENTRAL_UNITS, catalog=services.catalog
@@ -240,7 +239,7 @@ def make_cart_result_callback(
         if confirmation is None and tool_response.get("status") == "needs_clarification":
             return None  # the add refused several central units at once, without asking the customer
         session = _synced(tool_context)
-        state.save(tool_context, session)
+        save_state(tool_context, session)
         status, message = ("awaiting_confirmation", _AWAITING) if confirmation is None else ("rejected", _REJECTED)
         ids = _ids(args.get("product_ids"))
 

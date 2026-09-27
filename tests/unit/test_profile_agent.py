@@ -7,9 +7,9 @@ from google.adk.models import LlmResponse
 from google.adk.tools import FunctionTool
 from google.genai import types
 
-from smart_home_agent.agent.orchestrator import AgentService, build_agent
+from smart_home_agent.agent import AgentService, build_agent
 from smart_home_agent.agent.prompts import build_instruction
-from smart_home_agent.agent.state import PROFILE_KEY
+from smart_home_agent.session import PROFILE_KEY
 from smart_home_agent.tools import build_tools
 from tests.fakes import FakeProfileStore, FakeToolContext, product, services_for
 from tests.unit.test_cart_agent import tool_responses

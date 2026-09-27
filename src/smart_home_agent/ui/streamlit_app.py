@@ -16,10 +16,7 @@ from typing import Any
 import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
 
-from smart_home_agent.agent.language import detect_language
-from smart_home_agent.agent.orchestrator import DEFAULT_USER, AgentService, build_agent
-from smart_home_agent.agent.state import SessionState
-from smart_home_agent.agent.trace import AgentReply
+from smart_home_agent.agent import DEFAULT_USER, AgentReply, AgentService, build_agent
 from smart_home_agent.config import get_settings
 from smart_home_agent.container import build_container, build_profile_store
 from smart_home_agent.models import rich
@@ -27,6 +24,7 @@ from smart_home_agent.models.cart import MAX_QUANTITY, CartConfirmation, CartVie
 from smart_home_agent.models.profile import CustomerSummary
 from smart_home_agent.models.rich import RichContent
 from smart_home_agent.services.profile import ProfileService
+from smart_home_agent.session import SessionState, detect_language
 from smart_home_agent.ui.components import (
     ADVISOR_AVATAR,
     TYPING_HTML,
@@ -595,7 +593,7 @@ def applied_confirmations(session_id: str, request_ids: list[str], customer_id: 
 
 def answer_turn(start: TurnStarter, debug: bool, language: str | None) -> bool:
     """Runs a turn in a new assistant message and stores it. The model call is already retried silently
-    (agent/model.py), so a failure is shown as a friendly notice:
+    (agent/model/), so a failure is shown as a friendly notice:
     - the turn ran but produced nothing to show (empty answer after all retries): stored in the history as a
       failed message, since its tools (e.g. a confirmed cart change) did run; returns True;
     - the backend raised: nothing is stored and False is returned, so the caller can offer a retry."""

@@ -2,10 +2,10 @@ from typing import cast
 
 from google.adk.tools import ToolContext
 
-from smart_home_agent.agent import state
 from smart_home_agent.container import Services
 from smart_home_agent.models.search import ProductFilter, SortOrder
 from smart_home_agent.services import vocabulary
+from smart_home_agent.session import load_state, save_state
 from smart_home_agent.tools._common import ToolResult, ok, resolve_category, tool_errors, tool_input
 
 
@@ -27,11 +27,11 @@ def make_search_products(services: Services):
         """
         category_key = resolve_category(category)
         result = services.retrieval.semantic_search(query, category_key, max(1, min(limit, 20)))
-        session = state.load(tool_context)
+        session = load_state(tool_context)
         session.last_search = {"tool": "search_products", "query": query, "category": category_key}
         session.candidate_products = [hit.product.id for hit in result.hits]
         session.current_category = category_key or session.current_category
-        state.save(tool_context, session)
+        save_state(tool_context, session)
         return ok(**result.model_dump(mode="json"))
 
     return search_products
@@ -77,11 +77,11 @@ def make_filter_products(services: Services):
             limit=max(1, min(limit, 50)),
         )
         total, products = services.catalog.filter_products(criteria)
-        session = state.load(tool_context)
+        session = load_state(tool_context)
         session.last_search = {"tool": "filter_products", **criteria.model_dump(mode="json")}
         session.candidate_products = [p.id for p in products]
         session.current_category = criteria.category or session.current_category
-        state.save(tool_context, session)
+        save_state(tool_context, session)
         return ok(
             criteria=criteria.model_dump(mode="json"),
             total=total,
@@ -104,10 +104,10 @@ def make_get_product(services: Services):
         product = services.catalog.get_product(product_id.strip())
         if product is None:
             return {"status": "not_found", "product_ids": [product_id], "message": "Unknown product id."}
-        session = state.load(tool_context)
+        session = load_state(tool_context)
         if product.id not in session.selected_products:
             session.selected_products = [*session.selected_products, product.id][-5:]
-        state.save(tool_context, session)
+        save_state(tool_context, session)
         payload = product.model_dump(mode="json", exclude={"provenance", "validation_notes"})
         payload["requires_professional_installation"] = product.requires_professional_installation
         versions = services.catalog.get_versions([product.title]).get(product.title, [])
