@@ -60,7 +60,8 @@ src/smart_home_agent/
 │                        recommendation.py, comparison.py, evidence.py
 ├── repositories/        catalog/ (PostgreSQL), semantic/ (Qdrant), profile/ (customer memory DB + migrations)
 ├── models/              product.py, evidence.py, search.py, compatibility.py, comparison.py, recommendation.py
-└── ui/streamlit_app.py
+└── ui/                  entry point: HomePilotApp (app.py), run via streamlit_app.py; backend/, state/,
+                         turns/, views/ (Streamlit), components/ (pure HTML builders), assets/
 
 evals/                   evaluation harnesses (`uv run python -m evals ...`), outside the installed package;
                          `smart_home_agent` never imports them (ruff TID251)

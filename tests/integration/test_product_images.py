@@ -9,8 +9,8 @@ import urllib.request
 import pytest
 
 from smart_home_agent.repositories import CatalogRepository
-from smart_home_agent.ui import images
-from smart_home_agent.ui.components import card_image_urls, product_cards_html
+from smart_home_agent.ui.backend import ImageAvailability
+from smart_home_agent.ui.components import ProductCardHtml
 
 pytestmark = pytest.mark.integration
 
@@ -34,8 +34,8 @@ def test_real_catalog_images_render_or_fall_back(catalog: CatalogRepository, onl
     assert {p.id for p in products} == {WORKING_ID, GONE_ID}
     by_id = {p.id: p for p in products}
 
-    missing = images.find_missing_images(card_image_urls(products))
-    html = product_cards_html(products, missing)
+    missing = ImageAvailability.find_missing(ProductCardHtml.image_urls(products))
+    html = ProductCardHtml.cards(products, missing)
 
     assert by_id[GONE_ID].image_url in missing
     assert by_id[WORKING_ID].image_url not in missing

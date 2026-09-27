@@ -9,8 +9,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from smart_home_agent.ui import images
-from smart_home_agent.ui.components import card_image_urls, product_cards_html
+from smart_home_agent.ui.backend import ImageAvailability
+from smart_home_agent.ui.components import ProductCardHtml
 from tests.fakes import product
 
 IMAGE_BODY = b"RIFF\x00\x00\x00\x00WEBP"  # only the status code matters to the check
@@ -60,8 +60,8 @@ def test_working_images_are_shown_and_gone_ones_are_left_out(cdn):
     no_url = _with_image("30000004", None)
     products = [*working, gone, no_url]
 
-    missing = images.find_missing_images(card_image_urls(products))
-    html = product_cards_html(products, missing)
+    missing = ImageAvailability.find_missing(ProductCardHtml.image_urls(products))
+    html = ProductCardHtml.cards(products, missing)
 
     assert missing == frozenset({gone.image_url})
     for p in working:
@@ -73,4 +73,4 @@ def test_working_images_are_shown_and_gone_ones_are_left_out(cdn):
 def test_server_errors_and_unreachable_hosts_keep_the_image(cdn):
     unreachable = "http://127.0.0.1:9/nothing-listens-here.webp"
     urls = (f"{cdn}/slow/c.webp", unreachable)
-    assert images.find_missing_images(urls) == frozenset()
+    assert ImageAvailability.find_missing(urls) == frozenset()

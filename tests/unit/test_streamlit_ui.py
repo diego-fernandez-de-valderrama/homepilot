@@ -1,3 +1,5 @@
+import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
@@ -11,24 +13,21 @@ from smart_home_agent.services import CartService, ProductComparer, RichContentS
 from smart_home_agent.session import SessionState
 from smart_home_agent.ui import streamlit_app
 from smart_home_agent.ui.components import (
+    AnswerMarkdown,
+    CartHtml,
+    ChromeHtml,
+    ComparisonHtml,
+    CompatibilityHtml,
+    ConfirmationHtml,
+    ItemChipHtml,
+    ProductCardHtml,
+    ProgressHtml,
+    SetupPanelHtml,
     Suggestion,
-    answer_markdown,
-    cart_confirmation_html,
-    cart_header_html,
-    cart_line_html,
-    cart_total_html,
-    comparison_html,
-    compatibility_html,
-    confirm_button_label,
-    item_chip_html,
-    masthead_html,
-    product_cards_html,
-    setup_panel_html,
-    suggestion_tile_html,
-    tool_progress_html,
-    tool_status_label,
-    upgrade_html,
+    SuggestionTileHtml,
+    UpgradeHtml,
 )
+from smart_home_agent.ui.views import CustomerPicker, Welcome
 from tests.fakes import FakeCatalog, fact, product
 from tests.unit.test_rich import BASIC, PRO, UPSELL
 
@@ -40,18 +39,18 @@ def test_empty_state_renders_without_backend():
     assert not app.exception
     labels = [button.label for button in app.button]
     assert "New conversation" in labels
-    assert all(s.title in labels for s in streamlit_app.SUGGESTIONS)
+    assert all(s.title in labels for s in Welcome.SUGGESTIONS)
     assert [toggle.label for toggle in app.toggle] == ["Developer panel"]
 
 
 def test_setup_panel_without_known_facts_invites_the_user():
-    assert "Tell me about your setup" in setup_panel_html(None)
-    assert "Tell me about your setup" in setup_panel_html(SessionState())
+    assert "Tell me about your setup" in SetupPanelHtml.render(None)
+    assert "Tell me about your setup" in SetupPanelHtml.render(SessionState())
 
 
 def test_setup_panel_shows_only_known_facts_with_labels():
     state = SessionState(language="de", user_ecosystems=["apple_home"], owned_devices=[], budget_max=150)
-    panel = setup_panel_html(state)
+    panel = SetupPanelHtml.render(state)
     assert "Apple Home" in panel
     assert "up to 150 €" in panel
     assert "None" in panel  # the user said they own no hub
@@ -60,21 +59,21 @@ def test_setup_panel_shows_only_known_facts_with_labels():
 
 
 def test_dynamic_values_are_escaped():
-    panel = setup_panel_html(SessionState(requirements=["<script>x</script>"]))
+    panel = SetupPanelHtml.render(SessionState(requirements=["<script>x</script>"]))
     assert "<script>" not in panel
-    tile = suggestion_tile_html(Suggestion("home", "Topic", "<b>Title</b>", "Say <hi>"))
+    tile = SuggestionTileHtml.render(Suggestion("home", "Topic", "<b>Title</b>", "Say <hi>"))
     assert "<b>" not in tile and "&lt;hi&gt;" in tile
 
 
 def test_progress_labels_name_the_tool_actually_called():
-    assert tool_status_label("compare_products") == "Comparing products"
-    assert tool_status_label("some_new_tool") == "Working on your request"
-    assert "Checking compatibility" in tool_progress_html(tool_status_label("check_compatibility"))
+    assert ProgressHtml.label_for("compare_products") == "Comparing products"
+    assert ProgressHtml.label_for("some_new_tool") == "Working on your request"
+    assert "Checking compatibility" in ProgressHtml.progress(ProgressHtml.label_for("check_compatibility"))
 
 
 def test_product_cards_escape_and_only_link_http_urls():
     plug = product("30000009", title="<b>Plug</b>", price=19.9).model_copy(update={"source_url": "javascript:x"})
-    card = product_cards_html([plug])
+    card = ProductCardHtml.cards([plug])
     assert "&lt;b&gt;Plug&lt;/b&gt;" in card and "<b>" not in card
     assert "19.90 €" in card
     assert "javascript:" not in card and "View in shop" not in card
@@ -84,19 +83,19 @@ def test_inline_item_is_a_chip_with_a_hover_card_from_catalog_data():
     plug = product("30000009", title="Plug *Pro* <b>", price=19.9, brand="Innr").model_copy(
         update={"source_url": "https://www.bauhaus.info/p/30000009", "image_url": "https://cdn.example/p.webp"}
     )
-    chip = item_chip_html(plug, plug.id)
+    chip = ItemChipHtml.render(plug, plug.id)
     assert chip.startswith('<span class="hp-item" tabindex="0">')
     assert "Plug \\*Pro\\* &lt;b&gt;" in chip and "<b>" not in chip  # escaped for HTML and markdown
     assert '<span class="hp-item__price">19.90 €</span>' in chip
     assert 'class="hp-item__card" role="tooltip"' in chip
     assert 'src="https://cdn.example/p.webp"' in chip and 'href="https://www.bauhaus.info/p/30000009"' in chip
     assert "\n" not in chip  # stays inline inside the sentence
-    assert item_chip_html(None, "30000009") == "30000009"
+    assert ItemChipHtml.render(None, "30000009") == "30000009"
 
 
 def test_chip_hover_card_leaves_out_a_gone_image():
     plug = product("30000009").model_copy(update={"image_url": "https://cdn.example/gone.webp"})
-    chip = item_chip_html(plug, plug.id, missing_images=frozenset({"https://cdn.example/gone.webp"}))
+    chip = ItemChipHtml.render(plug, plug.id, missing_images=frozenset({"https://cdn.example/gone.webp"}))
     assert "gone.webp" not in chip and "hp-item__image" not in chip
     assert 'class="hp-item__card hp-item__card--no-image"' in chip
 
@@ -104,14 +103,16 @@ def test_chip_hover_card_leaves_out_a_gone_image():
 def test_answer_markdown_escapes_model_html_and_drops_echoed_titles():
     plug = product("30000009", title="Philips Hue Bewegungsmelder", price=39.65)
     body = 'The <item id="30000009"/> Philips Hue Bewegungsmelder works. <script>x</script> **bold**'
-    markdown = answer_markdown(body, {plug.id: plug})
+    markdown = AnswerMarkdown.render(body, {plug.id: plug})
     assert markdown.count("Philips Hue Bewegungsmelder") == 2  # chip name + hover card title, no echo
     assert "&lt;script>" in markdown and "<script>" not in markdown
     assert "**bold**" in markdown  # the model's markdown still works
 
 
 def test_compatibility_component_shows_unknown_as_not_confirmed():
-    html = compatibility_html(PRO, RichContentService.product_compatibility(PRO, ["google_home", "apple_home"], None))
+    html = CompatibilityHtml.render(
+        PRO, RichContentService.product_compatibility(PRO, ["google_home", "apple_home"], None)
+    )
     assert "Not confirmed for your setup" in html
     assert "hp-compat-chip--unknown" in html and "Not confirmed" in html
     assert "Works with your setup" not in html
@@ -119,32 +120,32 @@ def test_compatibility_component_shows_unknown_as_not_confirmed():
 
 def test_compatibility_component_with_explicit_negative_evidence():
     plug = product("30000009", facts=[fact("apple_home", FactStatus.UNSUPPORTED)])
-    html = compatibility_html(plug, RichContentService.product_compatibility(plug, ["apple_home"], None))
+    html = CompatibilityHtml.render(plug, RichContentService.product_compatibility(plug, ["apple_home"], None))
     assert "Not compatible with your setup" in html and "Not supported" in html
 
 
 def test_comparison_never_shows_unknown_as_supported():
-    html = comparison_html(ProductComparer.compare([BASIC, PRO]))
+    html = ComparisonHtml.render(ProductComparer.compare([BASIC, PRO]))
     assert "Acme Basic Thermostat" in html and "Acme Pro Thermostat" in html
     assert "hp-compare__status--unknown" in html  # Apple Home: listed for PRO only, unknown for BASIC
     assert "data completeness" not in html
 
 
 def test_upgrade_component_uses_the_upsell_data():
-    html = upgrade_html(BASIC, PRO, UPSELL)
+    html = UpgradeHtml.render(BASIC, PRO, UPSELL)
     assert "+30.00 €" in html and "Also supports Matter" in html
     assert html.index("Acme Basic Thermostat") < html.index("Acme Pro Thermostat")
 
 
 def _render_tagged_answer() -> None:
     from smart_home_agent.services import RichContentService
-    from smart_home_agent.ui.streamlit_app import render_answer
+    from smart_home_agent.ui.views import AnswerView
     from tests.fakes import FakeCatalog
     from tests.unit.test_rich import ANSWER, BASIC, PRO, UPSELL
 
     content = RichContentService(FakeCatalog([BASIC, PRO])).resolve(ANSWER, ["google_home"], None, UPSELL)
-    render_answer(ANSWER, content)
-    render_answer('Unresolved: <item id="39999999"/>\n<items ids="39999999"/>', None)
+    AnswerView.render(ANSWER, content)
+    AnswerView.render('Unresolved: <item id="39999999"/>\n<items ids="39999999"/>', None)
 
 
 def test_render_answer_turns_tags_into_components():
@@ -160,31 +161,39 @@ def test_render_answer_turns_tags_into_components():
 def test_cards_leave_out_images_known_to_be_gone():
     url = "https://media.cdn.example/m/1/prod.webp"
     plug = product("30000009").model_copy(update={"image_url": url})
-    shown = product_cards_html([plug])
+    shown = ProductCardHtml.cards([plug])
     assert f'src="{url}"' in shown and "hp-card--no-image" not in shown
-    card = product_cards_html([plug], frozenset({url}))
+    card = ProductCardHtml.cards([plug], frozenset({url}))
     assert url not in card and "hp-card__image" not in card and 'class="hp-card hp-card--no-image"' in card
 
 
 def test_inline_item_for_a_product_already_in_a_block_does_not_repeat_the_price():
     plug = product("30000009", title="Plug", price=19.9)
-    chip = item_chip_html(plug, plug.id, shown_in_block=True)
+    chip = ItemChipHtml.render(plug, plug.id, shown_in_block=True)
     assert "hp-item__price" not in chip and '<span class="hp-item__card-price">19.90 €</span>' in chip
 
 
 def test_stylesheet_has_no_markup():
     # st.html sanitizes its input: markup-like text such as "<item/>" (even in a CSS comment) drops the whole
     # <style> block, and the page renders unstyled.
-    css = (APP.parent / "styles.css").read_text(encoding="utf-8")
+    css = (APP.parent / "assets" / "styles.css").read_text(encoding="utf-8")
     assert "<" not in css
 
 
+def test_ui_folder_names_never_shadow_other_modules():
+    """Regression: `streamlit run` puts the script's folder (`ui/`) first on sys.path, so a subpackage named like
+    a real module (a `ui/html/` shadowed the stdlib `html`) broke the server at startup."""
+    names = {p.stem for p in APP.parent.iterdir() if not p.name.startswith((".", "_"))}
+    shadowing = {n for n in names if n in sys.stdlib_module_names or importlib.util.find_spec(n) is not None}
+    assert shadowing == set()
+
+
 def test_hover_card_flip_script_and_styles_agree():
-    script = (APP.parent / "item_card.js").read_text(encoding="utf-8")
-    css = (APP.parent / "styles.css").read_text(encoding="utf-8")
+    script = (APP.parent / "assets" / "item_card.js").read_text(encoding="utf-8")
+    css = (APP.parent / "assets" / "styles.css").read_text(encoding="utf-8")
     assert '"hp-item--below"' in script and ".hp-item--below .hp-item__card" in css
     assert ".hp-masthead" in script  # room is measured below the pinned masthead, not the window top
-    assert "</script" not in script  # embedded in a <script> tag by inject_behaviour
+    assert "</script" not in script  # embedded in a <script> tag by PageAssets.inject_behaviour
 
 
 CART = CartService(FakeCatalog([product("a", title="<b>Thermo</b>", price=19.99), product("n", price=None)]))
@@ -192,52 +201,52 @@ CART = CartService(FakeCatalog([product("a", title="<b>Thermo</b>", price=19.99)
 
 def test_cart_panel_states():
     empty = CART.view([])
-    assert "Your cart is empty" in cart_header_html(empty)
+    assert "Your cart is empty" in CartHtml.header(empty)
     view = CART.view([CartItem(product_id="a", quantity=2), CartItem(product_id="gone", quantity=1)])
-    assert "hp-cart__count" in cart_header_html(view) and ">3<" in cart_header_html(view)
-    line = cart_line_html(view.lines[0])
+    assert "hp-cart__count" in CartHtml.header(view) and ">3<" in CartHtml.header(view)
+    line = CartHtml.line(view.lines[0])
     assert "<b>" not in line and "&lt;b&gt;Thermo" in line
     assert "39.98 €" in line and "2 × 19.99 €" in line
-    assert "No longer available" in cart_line_html(view.lines[1])
+    assert "No longer available" in CartHtml.line(view.lines[1])
     # Without an image: a decorative package glyph instead of placeholder text.
     assert "hp-thumb-glyph" in line and "No image" not in line
-    assert "hp-thumb-glyph" in cart_line_html(view.lines[1])
-    assert "39.98 €" in cart_total_html(view)
-    assert "not listed" in cart_total_html(CART.view([CartItem(product_id="n", quantity=1)]))
+    assert "hp-thumb-glyph" in CartHtml.line(view.lines[1])
+    assert "39.98 €" in CartHtml.total(view)
+    assert "not listed" in CartHtml.total(CART.view([CartItem(product_id="n", quantity=1)]))
 
 
 def test_masthead_is_brand_only():
     # The cart button is a Streamlit widget beside the masthead (it opens the customer panel), not HTML.
-    masthead = masthead_html()
+    masthead = ChromeHtml.masthead()
     assert "hp-masthead" in masthead and "HomePilot" in masthead
     assert "cart" not in masthead
 
 
 def test_confirmation_card_from_catalog_data():
     add = CART.describe("r1", "add", {"product_ids": ["a"], "quantities": [2]}, [])
-    card = cart_confirmation_html(add)
+    card = ConfirmationHtml.card(add)
     assert "Add to cart" in card and "&lt;b&gt;Thermo" in card and "products" not in card
     assert "2 × 19.99 € = 39.98 €" in card and "after this change: 2" in card
     assert "hp-confirm__total" not in card  # a single product needs no change total
     assert "hp-confirm__state" not in card  # open: the buttons are rendered below it
-    assert confirm_button_label(add) == "Add to cart"
-    assert "Added to your cart" in cart_confirmation_html(add, "confirmed")
-    assert "Not added" in cart_confirmation_html(add, "cancelled")
-    assert "Not confirmed" in cart_confirmation_html(add, "expired")
+    assert ConfirmationHtml.button_label(add) == "Add to cart"
+    assert "Added to your cart" in ConfirmationHtml.card(add, "confirmed")
+    assert "Not added" in ConfirmationHtml.card(add, "cancelled")
+    assert "Not confirmed" in ConfirmationHtml.card(add, "expired")
     remove_all = CART.describe("r2", "remove", {"product_ids": ["a"]}, [CartItem(product_id="a", quantity=3)])
-    removal = cart_confirmation_html(remove_all)
+    removal = ConfirmationHtml.card(remove_all)
     assert "Remove from cart" in removal and "All 3" in removal and "after this change: 0" in removal
     unknown = CartConfirmation(
         request_id="r3",
         action="add",
         lines=[CartChangeLine(product_id="99", quantity=1, product=None)],
     )
-    assert "not in the catalog" in cart_confirmation_html(unknown)
+    assert "not in the catalog" in ConfirmationHtml.card(unknown)
 
 
 def test_confirmation_card_for_several_products():
     batch = CART.describe("r1", "add", {"product_ids": ["a", "n"], "quantities": [2, 1]}, [])
-    card = cart_confirmation_html(batch)
+    card = ConfirmationHtml.card(batch)
     assert "Add to cart · 2 products" in card
     assert card.count('class="hp-confirm__body"') == 2
     assert "hp-confirm__total" not in card  # one product has no listed price: no misleading total
@@ -251,22 +260,25 @@ def test_confirmation_card_for_several_products():
             CartChangeLine(product_id="b", quantity=1, product=product("b", price=5.0), in_cart=1),
         ],
     )
-    removal = cart_confirmation_html(two)
+    removal = ConfirmationHtml.card(two)
     assert "−44.98 €" in removal and "Change total" in removal
-    assert confirm_button_label(two) == "Remove 2 products" and confirm_button_label(batch) == "Add 2 products"
+    assert (
+        ConfirmationHtml.button_label(two) == "Remove 2 products"
+        and ConfirmationHtml.button_label(batch) == "Add 2 products"
+    )
 
 
 def _confirmation_script(decided: bool) -> None:
     import streamlit as st
 
     from smart_home_agent.models import CartChangeLine, CartConfirmation
-    from smart_home_agent.ui.streamlit_app import render_confirmations
+    from smart_home_agent.ui.views import ConfirmationCards
 
     st.session_state.setdefault("expired", set())
     st.session_state.setdefault("decisions", {"r1": True} if decided else {})
     line = CartChangeLine(product_id="a", quantity=1, product=None)
     change = CartConfirmation(request_id="r1", action="add", lines=[line])
-    render_confirmations([change], interactive=True)
+    ConfirmationCards.render([change], interactive=True)
 
 
 def _slot_keys(app: AppTest) -> tuple[list[int], list[int]]:
@@ -306,7 +318,7 @@ def picker_app() -> AppTest:
 
 
 def new_customer(app: AppTest, customer_id: str) -> None:
-    app.selectbox(key="hp-customer-pick").set_value(streamlit_app.NEW_CUSTOMER).run()
+    app.selectbox(key="hp-customer-pick").set_value(CustomerPicker.NEW_CUSTOMER).run()
     app.text_input(key="hp-customer-new").set_value(customer_id).run()
 
 
@@ -357,9 +369,9 @@ def test_picker_lists_stored_customers_most_recent_first_with_fact_counts():
         CustomerSummary(user_id="anna", active_facts=3, total_facts=4, last_activity=datetime(2026, 9, 25, tzinfo=UTC)),
         CustomerSummary(user_id="old", active_facts=0, total_facts=2, last_activity=datetime(2026, 9, 1, tzinfo=UTC)),
     ]
-    options = streamlit_app.customer_options(stored, "customer", ["anna", "clara"])
-    assert options == ["ben", "anna", "old", "clara", "customer", streamlit_app.NEW_CUSTOMER]
-    assert [streamlit_app.customer_label(o) for o in options] == [
+    options = CustomerPicker.options(stored, "customer", ["anna", "clara"])
+    assert options == ["ben", "anna", "old", "clara", "customer", CustomerPicker.NEW_CUSTOMER]
+    assert [CustomerPicker.label(o) for o in options] == [
         "ben",
         "anna",
         "old",
@@ -367,12 +379,12 @@ def test_picker_lists_stored_customers_most_recent_first_with_fact_counts():
         "customer",
         "+ New customer…",
     ]
-    assert streamlit_app.customer_options(None, "customer", []) == ["customer", streamlit_app.NEW_CUSTOMER]
+    assert CustomerPicker.options(None, "customer", []) == ["customer", CustomerPicker.NEW_CUSTOMER]
     # The fact count is shown under the picker, never in the option labels.
-    assert streamlit_app.stored_facts_caption("anna", stored) == "3 facts stored for this customer."
-    assert streamlit_app.stored_facts_caption("ben", stored) == "1 fact stored for this customer."
-    assert streamlit_app.stored_facts_caption("old", stored) == "Nothing stored for this customer yet."
-    assert streamlit_app.stored_facts_caption("x", None).startswith("Stored customers are not available")
+    assert CustomerPicker.caption("anna", stored) == "3 facts stored for this customer."
+    assert CustomerPicker.caption("ben", stored) == "1 fact stored for this customer."
+    assert CustomerPicker.caption("old", stored) == "Nothing stored for this customer yet."
+    assert CustomerPicker.caption("x", None).startswith("Stored customers are not available")
 
 
 class _State(dict):
@@ -392,17 +404,17 @@ def test_a_stale_value_from_the_browser_never_becomes_a_customer(monkeypatch):
             "customer_id": "anna",
             "known_customers": ["anna"],
             "session_id": "s1",
-            "hp-customer-options": ["anna", "ben", streamlit_app.NEW_CUSTOMER],
+            "hp-customer-options": ["anna", "ben", CustomerPicker.NEW_CUSTOMER],
             "hp-customer-pick": "anna · 1 fact",
         }
     )
-    monkeypatch.setattr(streamlit_app.st, "session_state", state)
-    streamlit_app.pick_customer()
+    monkeypatch.setattr(st, "session_state", state)
+    CustomerPicker.on_pick()
     assert state["customer_id"] == "anna" and state["hp-customer-pick"] == "anna"
     assert state["session_id"] == "s1" and state["known_customers"] == ["anna"]  # no switch, no new conversation
 
     state["hp-customer-pick"] = "ben"  # a real option still switches
-    streamlit_app.pick_customer()
+    CustomerPicker.on_pick()
     assert state["customer_id"] == "ben" and state["session_id"] != "s1"
 
 
@@ -414,14 +426,14 @@ def test_stored_data_button_only_in_developer_mode():
 
 
 def _customer_memory_dialog() -> None:
-    from smart_home_agent.ui import streamlit_app as app
+    from smart_home_agent.ui.views import CustomerMemoryDialog
 
-    app.show_customer_memory("anna")
+    CustomerMemoryDialog.show("anna")
 
 
 def test_customer_memory_dialog_lists_active_and_retracted_facts(monkeypatch):
     from smart_home_agent.services import ProfileService
-    from smart_home_agent.ui import streamlit_app
+    from smart_home_agent.ui.backend import CustomerDirectory
     from tests.fakes import FakeProfileStore
 
     service = ProfileService(FakeProfileStore())
@@ -429,7 +441,7 @@ def test_customer_memory_dialog_lists_active_and_retracted_facts(monkeypatch):
     service.remember("anna", "s2", "I sold my Hue Bridge", "I sold my Hue Bridge", owned_devices=["Hue Bridge"])
     service.remember("anna", "s2", "I sold my Hue Bridge", "I sold my Hue Bridge", no_longer_owned=["Hue Bridge"])
     # The dialog reads the memory only (no agent, no Gemini); monkeypatch restores the module afterwards.
-    monkeypatch.setattr(streamlit_app, "get_customer_directory", lambda: service)
+    monkeypatch.setattr(CustomerDirectory, "service", lambda: service)
 
     app = AppTest.from_function(_customer_memory_dialog).run()
     assert not app.exception
@@ -444,12 +456,12 @@ def test_customer_memory_dialog_lists_active_and_retracted_facts(monkeypatch):
 
 
 def test_failure_notice_is_friendly_and_localized():
-    from smart_home_agent.ui.components import failure_html
+    from smart_home_agent.ui.components import NoticeHtml
 
-    english = failure_html("en")
+    english = NoticeHtml.failure("en")
     assert "Sorry, I couldn&#x27;t finish my answer." in english and 'role="alert"' in english
-    assert "Entschuldigung" in failure_html("de")
-    assert failure_html(None) == english
+    assert "Entschuldigung" in NoticeHtml.failure("de")
+    assert NoticeHtml.failure(None) == english
     assert "Error" not in english and "finish_reason" not in english  # no technical details for customers
 
 
@@ -458,13 +470,13 @@ def _failed_turn_in_history() -> None:
 
     from smart_home_agent.agent import AgentReply, TurnTrace
     from smart_home_agent.session import SessionState
-    from smart_home_agent.ui.streamlit_app import render_message
+    from smart_home_agent.ui.views import MessageView
 
     reply = AgentReply(
         text="", detected_language="de", trace=TurnTrace(), state=SessionState(), error="The model returned no content"
     )
     message = {"role": "assistant", "content": "", "reply": reply, "failed": True, "language": "de"}
-    render_message(message, debug=bool(st.query_params.get("debug")))
+    MessageView.render(message, debug=bool(st.query_params.get("debug")))
 
 
 def test_failed_turn_shows_the_notice_and_the_detail_only_to_developers():
@@ -478,7 +490,7 @@ def test_failed_turn_shows_the_notice_and_the_detail_only_to_developers():
 
 
 def test_unknown_applied_state_never_reopens_a_cart_change(monkeypatch):
-    from smart_home_agent.ui import streamlit_app
+    from smart_home_agent.ui.backend import AgentBackend
 
     class Broken:
         def applied_confirmations(self, session_id, request_ids, customer_id):
@@ -488,10 +500,10 @@ def test_unknown_applied_state_never_reopens_a_cart_change(monkeypatch):
         def applied_confirmations(self, session_id, request_ids, customer_id):
             return {"r1"}
 
-    monkeypatch.setattr(streamlit_app, "get_agent_service", Broken)
-    assert streamlit_app.applied_confirmations("s1", ["r1", "r2"], "anna") == {"r1", "r2"}
-    monkeypatch.setattr(streamlit_app, "get_agent_service", Known)
-    assert streamlit_app.applied_confirmations("s1", ["r1", "r2"], "anna") == {"r1"}
+    monkeypatch.setattr(AgentBackend, "service", Broken)
+    assert AgentBackend.applied_confirmations("s1", ["r1", "r2"], "anna") == {"r1", "r2"}
+    monkeypatch.setattr(AgentBackend, "service", Known)
+    assert AgentBackend.applied_confirmations("s1", ["r1", "r2"], "anna") == {"r1"}
 
 
 def test_developer_tools_can_be_switched_off(monkeypatch):

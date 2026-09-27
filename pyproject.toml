@@ -71,6 +71,8 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes ar
 "smart_home_agent.tools.recommendation".msg = "import from `smart_home_agent.tools` instead"
 "smart_home_agent.tools.threaded_function_tool".msg = "import from `smart_home_agent.tools` instead"
 "smart_home_agent.tools.tool_registry".msg = "import from `smart_home_agent.tools` instead"
+# The UI is the top layer: nothing below it imports it.
+"smart_home_agent.ui".msg = "the UI is presentation only: no other package imports `smart_home_agent.ui`"
 # Session state is imported from `smart_home_agent.session`; its subpackages are an internal layout.
 "smart_home_agent.session.language".msg = "import from `smart_home_agent.session` instead"
 "smart_home_agent.session.state".msg = "import from `smart_home_agent.session` instead"
@@ -84,6 +86,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes ar
 "src/smart_home_agent/services/**" = ["TID251"]
 "src/smart_home_agent/session/**" = ["TID251"]
 "src/smart_home_agent/tools/**" = ["TID251"]
+"src/smart_home_agent/ui/**" = ["TID251"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["smart_home_agent", "evals"]

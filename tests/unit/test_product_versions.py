@@ -42,25 +42,25 @@ def test_get_product_lists_the_other_versions():
 
 
 def test_ui_shows_which_version_a_product_is():
-    from smart_home_agent.ui import components
+    from smart_home_agent.ui.components import ItemChipHtml, ProductCardHtml
 
-    card = components.product_cards_html([WHITE])
+    card = ProductCardHtml.cards([WHITE])
     assert '<span class="hp-card__version">Weiß, 10 x 10 cm</span>' in card
-    chip = components.item_chip_html(WHITE, WHITE.id)
+    chip = ItemChipHtml.render(WHITE, WHITE.id)
     assert '<span class="hp-item__name">Access Point</span>' in chip  # the text names the version
     assert '<span class="hp-item__version">Weiß, 10 x 10 cm</span>' in chip  # hover card
-    assert "hp-card__version" not in components.product_cards_html([product("12345678")])  # no subtitle, no line
+    assert "hp-card__version" not in ProductCardHtml.cards([product("12345678")])  # no subtitle, no line
 
 
 def test_blocks_name_the_version():
     from smart_home_agent.models import UpsellSuggestion
     from smart_home_agent.services import ProductComparer, RichContentService
-    from smart_home_agent.ui import components
+    from smart_home_agent.ui.components import ComparisonHtml, CompatibilityHtml, UpgradeHtml
 
-    head = components.comparison_html(ProductComparer.compare([WHITE, ANTHRACITE]))
+    head = ComparisonHtml.render(ProductComparer.compare([WHITE, ANTHRACITE]))
     assert '<span class="hp-compare__version">Weiß, 10 x 10 cm</span>' in head
     assert '<span class="hp-compare__version">Anthrazit, 10 x 10 cm</span>' in head
-    compat = components.compatibility_html(WHITE, RichContentService.product_compatibility(WHITE, [], None))
+    compat = CompatibilityHtml.render(WHITE, RichContentService.product_compatibility(WHITE, [], None))
     assert '<span class="hp-compat__version">Weiß, 10 x 10 cm</span>' in compat
     upsell = UpsellSuggestion(
         product_id=ANTHRACITE.id,
@@ -70,7 +70,7 @@ def test_blocks_name_the_version():
         price_difference=5.0,
         upgrade_reasons=[],
     )
-    assert components.upgrade_html(WHITE, ANTHRACITE, upsell).count("hp-upgrade__version") == 2
+    assert UpgradeHtml.render(WHITE, ANTHRACITE, upsell).count("hp-upgrade__version") == 2
 
 
 def test_cart_results_name_the_version():
