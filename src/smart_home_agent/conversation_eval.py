@@ -22,6 +22,7 @@ from typing import Any, Protocol
 from pydantic import BaseModel
 
 from smart_home_agent.agent.language import detect_language
+from smart_home_agent.agent.model import announces_action
 from smart_home_agent.agent.trace import AgentReply, ToolCallTrace
 from smart_home_agent.guardrail.categories import Category
 from smart_home_agent.models.profile import FactKind
@@ -125,6 +126,15 @@ def answered() -> Check:
         return None
 
     return Check("answered", test)
+
+
+def no_announced_action() -> Check:
+    """The answer does the work instead of announcing it ("give me a moment to search") and stopping."""
+
+    def test(ctx: TurnContext) -> str | None:
+        return f"announces an action: {_plain_text(ctx.reply)[:100]!r}" if announces_action(ctx.reply.text) else None
+
+    return Check("no_announced_action", test)
 
 
 def output_not_replaced() -> Check:
@@ -311,6 +321,19 @@ def cart_change_pending(action: str = "add", products: int | None = None) -> Che
         return f"cart changed before confirmation: {_described(changed)}" if changed else None
 
     return Check(f"pending:{action}", test)
+
+
+def no_cart_change() -> Check:
+    """No cart change was proposed (nothing is waiting for confirmation) and the cart is unchanged."""
+
+    def test(ctx: TurnContext) -> str | None:
+        pending = [line.product_id for c in ctx.reply.pending_confirmations for line in c.lines]
+        if pending:
+            return f"cart change proposed for {_described(pending)}"
+        changed = _cart_ids(ctx.reply) ^ _cart_ids(ctx.previous)
+        return f"cart changed: {_described(changed)}" if changed else None
+
+    return Check("no_cart_change", test)
 
 
 def cart_applied(confirmed: bool) -> Check:
@@ -558,9 +581,37 @@ CONVERSATIONS: tuple[Conversation, ...] = (
             ),
         ),
     ),
+    Conversation(
+        "profile_sets_setup",
+        "A stored ecosystem is the customer's setup in the next conversation: search with it, never ask for it",
+        (
+            _say(
+                "I use Apple Home and I have a Philips Hue Bridge.",
+                remembers(FactKind.ECOSYSTEM, "apple_home"),
+            ),
+            _say(
+                "I want smart blinds for the 6 windows in my home.",
+                searched(supports=["apple_home"]),
+                reply_language("en"),
+                new_session=True,
+            ),
+        ),
+    ),
+    Conversation(
+        "no_homekit_blinds",
+        "No confirmed product covers the need (the live catalog has no HomeKit blind motors, only VELUX "
+        "controllers): the agent explains instead of filling the cart with another product type",
+        (
+            _say(
+                "I use Apple Home. I want smart blinds for my 6 windows, add whatever is needed to my cart.",
+                found_products(),
+                no_cart_change(),
+            ),
+        ),
+    ),
 )
 
-_ALWAYS = (answered(),)
+_ALWAYS = (answered(), no_announced_action())
 
 
 # --- running and reporting ---

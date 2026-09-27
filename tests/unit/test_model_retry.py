@@ -8,10 +8,13 @@ from google.genai import types
 
 from smart_home_agent.agent.model import (
     RETRY_NOTE,
+    STALL_NOTE,
     ResilientGemini,
+    announces_action,
     backoff,
     http_retry_options,
     is_empty,
+    is_stalled,
     retry_empty_responses,
 )
 from smart_home_agent.agent.orchestrator import AgentService, build_agent
@@ -32,6 +35,10 @@ def text(value: str) -> LlmResponse:
 def call(name: str, **args: object) -> LlmResponse:
     function_call = types.FunctionCall(id=f"call-{name}", name=name, args=args)
     return LlmResponse(content=types.Content(role="model", parts=[types.Part(function_call=function_call)]))
+
+
+def texts(responses: list[LlmResponse]) -> list[str | None]:
+    return [p.text for r in responses if r.content for p in r.content.parts or []]
 
 
 def request() -> LlmRequest:
@@ -92,6 +99,57 @@ def test_after_the_last_retry_the_empty_answer_is_passed_on():
     responses, sleeps = run(Script(empty(), empty(), empty(), empty(), empty()), retries=3)
     assert len(responses) == 1 and is_empty(responses[0])
     assert sleeps == [1.0, 2.0, 4.0]
+
+
+def test_what_counts_as_an_announced_action():
+    stalled = [
+        "I will use this information to find compatible smart blinds for your 6 windows. Please give me a moment.",
+        "Please give me a moment to search for VELUX smart blinds.",
+        "Let me check the compatibility for you.",
+        "I'll search the catalog now.",
+        "Einen Moment, ich suche passende Rollläden.",
+        "Ich werde jetzt die passenden Thermostate heraussuchen.",
+    ]
+    answers = [
+        "The Velux App Control KIG 300 works with Apple Home.",
+        "Would you like me to look for compatible VELUX blinds?",
+        "Let me know if you want a comparison.",
+        "Soll ich nach passenden Rollläden suchen?",
+        "",
+    ]
+    assert all(announces_action(t) for t in stalled)
+    assert not any(announces_action(t) for t in answers)
+    assert is_stalled(text(stalled[0]))
+    assert not is_stalled(call("recommend_products"))
+    announced_call = types.Content(
+        role="model",
+        parts=[types.Part(text=stalled[2]), types.Part(function_call=types.FunctionCall(name="check_compatibility"))],
+    )
+    assert not is_stalled(LlmResponse(content=announced_call, finish_reason=STOP))
+
+
+def test_a_stalled_answer_is_retried_once_with_the_stall_note():
+    script = Script(text("Please give me a moment to search."), call("recommend_products"))
+    responses, sleeps = run(script)
+    assert len(responses) == 1 and not is_stalled(responses[0]) and texts(responses) == [None]
+    assert sleeps == []  # no backoff: the answer was not empty, only incomplete
+    assert script.request_sizes == [1, 2]
+    assert script.last_texts == ["hi", STALL_NOTE]
+
+
+def test_a_second_stalled_answer_is_passed_on():
+    script = Script(text("Let me check that."), text("Let me check that for you."), text("unused"))
+    responses, _ = run(script)
+    assert texts(responses) == ["Let me check that for you."]
+    assert len(script.responses) == 1  # only one stall retry
+
+
+def test_an_empty_answer_after_a_stall_retry_is_still_retried():
+    script = Script(text("One moment please."), empty(), text("Here are three thermostats."))
+    responses, sleeps = run(script)
+    assert texts(responses) == ["Here are three thermostats."]
+    assert script.last_texts == ["hi", STALL_NOTE, RETRY_NOTE]
+    assert sleeps == [1.0]
 
 
 def test_backoff_is_exponential_and_capped():
@@ -161,6 +219,16 @@ def test_the_retry_note_never_reaches_the_session():
     assert session is not None
     texts = [p.text for e in session.events if e.content for p in e.content.parts or [] if p.text]
     assert RETRY_NOTE not in texts and texts == ["Hi", "Hello!"]
+
+
+def test_a_stalled_answer_is_replaced_and_the_stall_note_never_reaches_the_session():
+    llm = model(text("Please give me a moment to search."), text("Here you go."))
+    service = agent_with(llm, FakeProfileStore())
+    assert service.chat("s1", "Find a plug", "anna").text == "Here you go."
+    session = service._run(service._sessions.get_session(app_name="test-app", user_id="anna", session_id="s1"))
+    assert session is not None
+    texts = [p.text for e in session.events if e.content for p in e.content.parts or [] if p.text]
+    assert texts == ["Find a plug", "Here you go."]
 
 
 def test_thinking_is_off_by_default_and_the_model_default_can_be_restored():

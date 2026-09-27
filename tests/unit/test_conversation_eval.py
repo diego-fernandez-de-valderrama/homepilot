@@ -136,6 +136,27 @@ def test_cart_change_must_wait_for_confirmation():
     assert _check(ev.cart_size(1), _reply(state=applied)) is None
 
 
+def test_no_cart_change_fails_on_a_proposed_or_applied_change():
+    pending = [
+        CartConfirmation(
+            request_id="r1", action="add", lines=[CartChangeLine(product_id="11111111", quantity=6, product=None)]
+        )
+    ]
+    assert _check(ev.no_cart_change(), _reply(), _reply()) is None
+    assert _check(ev.no_cart_change(), _reply(pending_confirmations=pending)) == "cart change proposed for 11111111"
+    applied = SessionState(cart=[CartItem(product_id="11111111", quantity=1)])
+    assert _check(ev.no_cart_change(), _reply(state=applied), _reply()) == "cart changed: 11111111"
+
+
+def test_an_announced_action_fails_every_turn():
+    stalled = _reply("I will find compatible blinds for you. Please give me a moment.")
+    assert _check(ev.no_announced_action(), stalled)
+    assert _check(ev.no_announced_action(), _reply("Shall I look for VELUX blinds?")) is None
+    service = ScriptedService([stalled])
+    result = ev.run_conversation(service, ev.Conversation("c", "p", (ev.Turn(text="blinds"),)), "eval-1")
+    assert [f.split(":")[0] for f in result.turns[0].failures] == ["no_announced_action"]
+
+
 def _profile(*facts: tuple[FactKind, str, bool]) -> CustomerProfile:
     now = datetime.now(UTC)
     return CustomerProfile(

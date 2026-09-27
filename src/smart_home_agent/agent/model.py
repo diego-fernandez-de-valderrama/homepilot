@@ -9,10 +9,16 @@ note asking for the answer was rescued 3 of 3, so every retry adds that note to 
 it is never stored in the session. Only the model call is repeated, never the
 tools that already ran, so nothing (a cart change, a stored fact) happens twice. Transient HTTP errors
 (408, 429, 5xx) are retried by the genai client with the same exponential backoff.
+
+Without thinking the model also sometimes ends a turn by announcing work instead of doing it ("Please give me
+a moment to search ..."), with no tool call, so the customer has to push it on. Such a stalled answer
+(`announces_action`) is retried once, without delay, with a note asking it to do the work now; a second stalled
+answer is passed on. A reply that ends with a question is never stalled (offering a search is legitimate).
 """
 
 import asyncio
 import logging
+import re
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 
 from google.adk.models import Gemini, LlmRequest, LlmResponse
@@ -30,6 +36,37 @@ RETRY_NOTE = (
     "needed. Do not mention this note.)"
 )
 
+STALL_NOTE = (
+    "(System note: your previous reply announced an action but did not do it. Do it now: call the tools "
+    "needed and answer with the result. Do not announce it, and do not mention this note.)"
+)
+
+# Announcements of work still to come, in English and German. Matched only in a final answer without a tool call.
+_ANNOUNCEMENT = re.compile(
+    "|".join(
+        (
+            r"\b(give|allow) me a (moment|second|minute)\b",
+            r"\b(one|just a|wait a) (moment|second|minute)\b",
+            r"\bplease (wait|hold on|bear with me)\b",
+            r"\blet me (now |quickly |just )?(search|look|check|find|get|pull)\b",
+            r"\bI(?:'ll| will| am going to|'m going to)( now| quickly| just)? "
+            r"(search|look|check|find|use this information)\b",
+            r"\bI(?:'m| am) (now )?(searching|looking|checking)\b",
+            r"\b(einen|einen kleinen|einen kurzen) (moment|augenblick)\b",
+            r"\bmoment,? bitte\b",
+            r"\bich (suche|schaue|prüfe|sehe) (jetzt|gleich|kurz|nun|sofort)\b",
+            r"\b(ich werde|lass mich|lassen sie mich) (\w+ ){0,4}(suchen|prüfen|nachsehen|nachschauen|heraussuchen)\b",
+        )
+    ),
+    re.IGNORECASE,
+)
+
+
+def announces_action(text: str) -> bool:
+    """The answer promises work to come instead of a result (a closing question is an offer, not a promise)."""
+    stripped = text.strip()
+    return bool(stripped) and not stripped.endswith("?") and _ANNOUNCEMENT.search(stripped) is not None
+
 
 def is_empty(response: LlmResponse) -> bool:
     """A finished answer without anything usable: no parts, or only thoughts (never shown to the customer)."""
@@ -39,6 +76,16 @@ def is_empty(response: LlmResponse) -> bool:
         return False
     parts = response.content.parts if response.content else None
     return not any((part.text and not part.thought) or part.function_call for part in parts or [])
+
+
+def is_stalled(response: LlmResponse) -> bool:
+    """A finished answer without a tool call that only announces what the model is about to do."""
+    if response.partial or response.error_code is not None or not response.content:
+        return False
+    parts = response.content.parts or []
+    if any(part.function_call for part in parts):
+        return False
+    return announces_action("".join(part.text or "" for part in parts if not part.thought))
 
 
 def backoff(attempt: int, initial_delay: float, max_delay: float) -> float:
@@ -54,36 +101,51 @@ async def retry_empty_responses(
     max_delay: float,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> AsyncGenerator[LlmResponse, None]:
-    """Runs a non-streaming call and repeats it while the answer is empty. After the last attempt the empty
-    answer is passed on, so ADK still reports it as an error event."""
+    """Runs a non-streaming call and repeats it while the answer is empty (with backoff), and once when it is
+    stalled (`is_stalled`). After the last attempt the answer is passed on, so ADK still reports an empty one
+    as an error event."""
     pristine = llm_request.model_copy(deep=True)  # the model call adds to the request; each retry starts clean
-    for attempt in range(retries + 1):
-        request = llm_request if attempt == 0 else with_retry_note(pristine)
+    note: str | None = None
+    attempt = 0  # empty-answer retries spent
+    stall_retried = False
+    while True:
+        request = llm_request if note is None else with_retry_note(pristine, note)
         responses = [response async for response in generate(request)]
-        if not responses or not is_empty(responses[-1]) or attempt == retries:
-            if attempt and responses and not is_empty(responses[-1]):
-                logger.info("model answered after %d silent retr%s", attempt, "y" if attempt == 1 else "ies")
-            elif attempt == retries and responses and is_empty(responses[-1]):
-                logger.warning("model returned no content %d times in a row; giving up", attempt + 1)
-            for response in responses:
-                yield response
-            return
-        delay = backoff(attempt, initial_delay, max_delay)
-        logger.warning(
-            "model returned no content (finish_reason=%s, after %s); retry %d of %d in %.1fs",
-            responses[-1].finish_reason,
-            _last_turn(llm_request),
-            attempt + 1,
-            retries,
-            delay,
-        )
-        await sleep(delay)
+        last = responses[-1] if responses else None
+        if last is not None and is_empty(last) and attempt < retries:
+            delay = backoff(attempt, initial_delay, max_delay)
+            logger.warning(
+                "model returned no content (finish_reason=%s, after %s); retry %d of %d in %.1fs",
+                last.finish_reason,
+                _last_turn(llm_request),
+                attempt + 1,
+                retries,
+                delay,
+            )
+            attempt += 1
+            note = RETRY_NOTE
+            await sleep(delay)
+            continue
+        if last is not None and not stall_retried and is_stalled(last):
+            logger.warning(
+                "model announced an action without doing it (after %s); retrying once", _last_turn(llm_request)
+            )
+            stall_retried = True
+            note = STALL_NOTE
+            continue
+        if last is not None and is_empty(last):
+            logger.warning("model returned no content %d times in a row; giving up", attempt + 1)
+        elif attempt:
+            logger.info("model answered after %d silent retr%s", attempt, "y" if attempt == 1 else "ies")
+        for response in responses:
+            yield response
+        return
 
 
-def with_retry_note(llm_request: LlmRequest) -> LlmRequest:
-    """A copy of the request that ends with RETRY_NOTE (an identical retry would get the same empty answer)."""
+def with_retry_note(llm_request: LlmRequest, note: str = RETRY_NOTE) -> LlmRequest:
+    """A copy of the request that ends with `note` (an identical retry would get the same answer)."""
     request = llm_request.model_copy(deep=True)
-    request.contents.append(types.Content(role="user", parts=[types.Part(text=RETRY_NOTE)]))
+    request.contents.append(types.Content(role="user", parts=[types.Part(text=note)]))
     return request
 
 
@@ -97,7 +159,7 @@ def _last_turn(llm_request: LlmRequest) -> str:
 
 
 class ResilientGemini(Gemini):
-    """ADK's Gemini model plus silent retries of empty answers (see the module docstring)."""
+    """ADK's Gemini model plus silent retries of empty and stalled answers (see the module docstring)."""
 
     empty_retries: int = Field(default=3, ge=0)
     retry_initial_delay: float = Field(default=1.0, ge=0.0)

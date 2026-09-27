@@ -467,7 +467,7 @@ Copy `.env.example` to `.env` in this directory. `GEMINI_*`, `POSTGRES_*` and `Q
 | `AGENT_MODEL` | `gemini-2.5-flash` | Chat/orchestration model (separate from `GEMINI_MODEL`, the enrichment model). |
 | `AGENT_TEMPERATURE` | `0.2` | |
 | `AGENT_THINKING_BUDGET` | `0` | Thinking tokens per call; `0` = off, `-1` = the model's dynamic default. `0` avoids the empty answers of the dynamic default and is faster. |
-| `AGENT_MODEL_RETRIES`, `AGENT_MODEL_RETRY_INITIAL_DELAY`, `AGENT_MODEL_RETRY_MAX_DELAY` | `3`, `1.0`, `8.0` | Silent retries of empty answers and transient HTTP errors (408/429/5xx), backoff 1s, 2s, 4s (capped). |
+| `AGENT_MODEL_RETRIES`, `AGENT_MODEL_RETRY_INITIAL_DELAY`, `AGENT_MODEL_RETRY_MAX_DELAY` | `3`, `1.0`, `8.0` | Silent retries of empty answers and transient HTTP errors (408/429/5xx), backoff 1s, 2s, 4s (capped). A stalled answer (announces work without a tool call) is retried once more, without delay. |
 | `AGENT_CANDIDATE_POOL` | `50` | Candidates per retrieval path before filtering. |
 | `AGENT_UPSELL_MIN_RELEVANCE` | `0.75` | An upsell must reach this share of the best match's relevance. |
 | `AGENT_GUARDRAIL_ENABLED` | `true` | Semantic input guardrail. `false` = no prototype embedding at startup, all messages go to the agent. |
@@ -554,7 +554,7 @@ uv run deptry .                # every imported package is declared, none is unu
 
 ### Conversation regression evaluation
 
-The unit tests never call the chat model, so they cannot notice when a prompt change makes the agent behave differently. `conversation-eval` does: it runs 17 fixed EN/DE conversations (`conversation_eval.py`, 26 turns, about 80 seconds) through the real agent, guardrail and tools, and checks every turn with deterministic rules on what the agent *did*, never on its wording:
+The unit tests never call the chat model, so they cannot notice when a prompt change makes the agent behave differently. `conversation-eval` does: it runs 19 fixed EN/DE conversations (`conversation_eval.py`, 29 turns, about 100 seconds) through the real agent, guardrail and tools, and checks every turn with deterministic rules on what the agent *did*, never on its wording:
 
 | Conversation(s) | What must hold |
 |---|---|
@@ -566,8 +566,10 @@ The unit tests never call the chat model, so they cannot notice when a prompt ch
 | `off_topic`, `conversation_control` | Off-topic gets no catalog tools; conversation control is never blocked and switches the language. |
 | `cart_needs_confirmation`, `cart_rejected` | Nothing changes before the customer decides; afterwards the cart holds exactly what was confirmed. |
 | `memory_across_conversations`, `memory_not_about_others` | The customer's own facts are stored and known in the next conversation; facts about others are not stored. |
+| `profile_sets_setup` | A stored ecosystem is used as the setup in the next conversation (the search runs with it). |
+| `no_homekit_blinds` | When no confirmed product covers the need (no HomeKit blind motors in the catalog), nothing is put in the cart. |
 
-Every turn must also produce an answer that the output check did not have to replace. Checks read the tools' own echo of what they ran (`request` of `recommend_products`, `criteria` of `filter_products`), so either search tool passes. A failing turn is reported with its tool calls and arguments and any pending cart change.
+Every turn must also produce an answer that the output check did not have to replace and that does not stop at announcing work ("give me a moment to search"). Checks read the tools' own echo of what they ran (`request` of `recommend_products`, `criteria` of `filter_products`), so either search tool passes. A failing turn is reported with its tool calls and arguments and any pending cart change.
 
 ```bash
 uv run python -m smart_home_agent conversation-eval                      # all conversations, exit 1 on a regression
@@ -633,5 +635,6 @@ Agent: Bosch Smart Home Heizkörper-Thermostat II (55.00 EUR, radiator thermosta
 | `404 model not found` from the chat model | Check `AGENT_MODEL` against the models available to your key. |
 | 429 / quota errors | Free-tier limits. Chat model calls are retried silently with exponential backoff (`AGENT_MODEL_RETRIES`); if they keep failing, the UI shows a friendly "please try again" notice (technical detail in the developer panel) and keeps the conversation. For embeddings, set `GEMINI_EMBEDDING_REQUESTS_PER_MINUTE`. |
 | Log `model returned no content ... retry 1 of 3` / `agent error event: The model returned no content (finish_reason=STOP with empty parts)` | Gemini 2.5 ended a call with no output at all. The main trigger was its dynamic thinking: keep `AGENT_THINKING_BUDGET=0` (the default); with `-1` (dynamic) about half of the harder live prompts came back empty. Remaining cases are retried silently: each retry adds a one-line note to its copy of the request (an identical retry gets the same empty answer), never to the conversation, and tools are not run again. Only after all retries does the customer see the friendly notice. |
+| Log `model announced an action without doing it ...; retrying once` | The model answered "give me a moment, I will search ..." without calling a tool (the customer would have to push it on). The answer is retried once with a note asking it to do the work now; the note never reaches the conversation. If this shows up often after a prompt change, run `conversation-eval --repeat 3`: its `no_announced_action` check fails turns where the retry did not help. |
 | Answers in the wrong language | Very short or mixed messages give no language hint; the model then follows the conversation. Ask explicitly ("answer in English"). |
 | `UserWarning: [EXPERIMENTAL] ... JSON_SCHEMA_FOR_FUNC_DECL` | Emitted by ADK 2.x when building tool schemas. It is filtered in `smart_home_agent/agent/__init__.py`; if you still see it, the code imported ADK tools without importing `smart_home_agent.agent` first. Harmless. |
