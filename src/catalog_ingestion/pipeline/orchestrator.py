@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from catalog_ingestion.core.logging import log_fields
 from catalog_ingestion.domain.enrichment import EnrichedProduct, WebPage
 from catalog_ingestion.domain.enums import WebStatus
@@ -63,6 +65,7 @@ class ProductResult:
     enrichment_hash: str | None
     llm_status: str  # called | cached | skipped | skipped_quota | failed
     error: str | None = None
+    kept_previous_llm: bool = False  # no new result: the stored output was kept
 
 
 class IngestionPipeline:
@@ -245,31 +248,37 @@ class IngestionPipeline:
             llm_result: LLMResult | None = None
             llm_status = "skipped"
             input_hash = enrichment_hash(item, web_page, PROMPT_VERSION)
+            result_hash: str | None = input_hash
             if not options.force and state is not None and self._is_cached(item, state, web_page, input_hash):
-                assert state.llm_output is not None
-                # Keep the model that actually produced the output (provenance), whatever is configured now.
-                llm_result = from_cached_output(
-                    state.llm_output, state.enrichment_model or self._model, state.prompt_version or PROMPT_VERSION
-                )
-                llm_status = "cached"
-            elif self._enricher is not None and not options.skip_llm and self._llm_quota_exhausted.is_set():
-                llm_status = "skipped_quota"
-            elif self._enricher is not None and not options.skip_llm:
-                try:
-                    llm_result = self._enricher.enrich(item.product, item.facts, item.requirements, web_page)
-                    llm_status = "called"
-                except QuotaExhaustedError as exc:
-                    llm_status = "failed"
-                    if not self._llm_quota_exhausted.is_set():
-                        self._llm_quota_exhausted.set()
-                        logger.error(
-                            "Gemini quota exhausted: LLM enrichment is skipped for the rest of this run. "
-                            "Products keep their deterministic data; re-run `ingest` later to enrich them.",
-                            extra=log_fields(error=str(exc)),
-                        )
-                except Exception as exc:
-                    llm_status = "failed"
-                    logger.warning("LLM enrichment failed", extra=log_fields(product_id=product_id, error=str(exc)))
+                llm_result = self._stored_result(product_id, state)
+                if llm_result is not None:
+                    llm_status = "cached"
+            if llm_result is None:
+                if self._enricher is not None and not options.skip_llm and self._llm_quota_exhausted.is_set():
+                    llm_status = "skipped_quota"
+                elif self._enricher is not None and not options.skip_llm:
+                    try:
+                        llm_result = self._enricher.enrich(item.product, item.facts, item.requirements, web_page)
+                        llm_status = "called"
+                    except QuotaExhaustedError as exc:
+                        llm_status = "failed"
+                        if not self._llm_quota_exhausted.is_set():
+                            self._llm_quota_exhausted.set()
+                            logger.error(
+                                "Gemini quota exhausted: LLM enrichment is skipped for the rest of this run. "
+                                "Products keep their stored data; re-run `ingest` later to enrich them.",
+                                extra=log_fields(error=str(exc)),
+                            )
+                    except Exception as exc:
+                        llm_status = "failed"
+                        logger.warning("LLM enrichment failed", extra=log_fields(product_id=product_id, error=str(exc)))
+            kept_previous = False
+            if llm_result is None and state is not None and state.llm_output is not None:
+                # No new result: keep the stored output (re-validated below against the current sources)
+                # under its old hash, so the product still counts as stale and is re-enriched later.
+                llm_result = self._stored_result(product_id, state)
+                kept_previous = llm_result is not None
+                result_hash = state.enrichment_hash
 
             enriched = self._validator.validate(
                 product=item.product,
@@ -287,12 +296,27 @@ class IngestionPipeline:
                 enriched=enriched,
                 fetched_page=fetched,
                 llm_output=llm_result.raw_output if llm_result else None,
-                enrichment_hash=input_hash if llm_result else None,
+                enrichment_hash=result_hash if llm_result else None,
                 llm_status=llm_status,
+                kept_previous_llm=kept_previous,
             )
         except Exception as exc:
             logger.exception("Product processing failed", extra=log_fields(product_id=product_id))
             return ProductResult(item, None, None, None, None, "failed", error=f"{type(exc).__name__}: {exc}")
+
+    def _stored_result(self, product_id: str, state: ProductState) -> LLMResult | None:
+        """The stored LLM output, or None when it no longer matches the output schema."""
+        assert state.llm_output is not None
+        try:
+            # Keep the model that actually produced the output (provenance), whatever is configured now.
+            return from_cached_output(
+                state.llm_output, state.enrichment_model or self._model, state.prompt_version or PROMPT_VERSION
+            )
+        except ValidationError as exc:
+            logger.warning(
+                "Stored LLM output is unreadable, re-enriching", extra=log_fields(product_id=product_id, error=str(exc))
+            )
+            return None
 
     @staticmethod
     def _is_cached(item: PreparedProduct, state: ProductState, web_page: WebPage | None, input_hash: str) -> bool:
@@ -322,6 +346,10 @@ class IngestionPipeline:
             return WebStatus.SKIPPED, None, None
         assert self._web is not None
         page = self._web.retrieve(url)
+        if not page.ok and cached is not None and cached.ok:
+            # A failed refresh never replaces a good cached page.
+            logger.info("Web refresh failed, keeping the cached page", extra=log_fields(url=url, error=page.error))
+            return WebStatus.OK, cached, None
         return (WebStatus.OK if page.ok else WebStatus.FAILED), page, page
 
     def _record(
@@ -346,6 +374,8 @@ class IngestionPipeline:
         elif enriched.web_status is WebStatus.SKIPPED:
             stats.inc("web_enrichment_skipped")
         stats.inc(f"llm_{result.llm_status}")
+        if result.kept_previous_llm:
+            stats.inc("llm_kept_previous")
         stats.inc("validated")
         if enriched.validation_notes:
             stats.inc("validation_notes", len(enriched.validation_notes))
@@ -354,16 +384,15 @@ class IngestionPipeline:
             outcome = self._pg.upsert_product(
                 enriched, result.prepared.raw, result.prepared.raw_hash, result.enrichment_hash, result.llm_output
             )
+            stats.inc(f"postgres_{outcome.value}")
+            if outcome is not UpsertOutcome.UNCHANGED:
+                stats.inc("postgres_upserted")
+            document = build_document(enriched)
+            self._pg.save_document(document)
         except Exception:
-            logger.exception("PostgreSQL upsert failed", extra=log_fields(product_id=product_id))
+            logger.exception("Storing the product failed", extra=log_fields(product_id=product_id))
             stats.inc("failed")
             return
-        stats.inc(f"postgres_{outcome.value}")
-        if outcome is not UpsertOutcome.UNCHANGED:
-            stats.inc("postgres_upserted")
-
-        document = build_document(enriched)
-        self._pg.save_document(document)
         documents.append((enriched, document))
 
     # --- indexing ------------------------------------------------------------------------

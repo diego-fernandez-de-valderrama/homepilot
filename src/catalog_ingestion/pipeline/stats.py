@@ -8,7 +8,7 @@ ORDER: tuple[str, ...] = (
     "loaded", "load_errors", "selected", "normalized", "needs_web_enrichment", "web_fetched",
     "web_enrichment_successful", "web_enrichment_failed", "web_enrichment_skipped",
     "web_transient_failures_not_cached",
-    "llm_called", "llm_cached", "llm_skipped", "llm_skipped_quota", "llm_failed",
+    "llm_called", "llm_cached", "llm_skipped", "llm_skipped_quota", "llm_failed", "llm_kept_previous",
     "validated", "validation_notes", "failed",
     "loaded_from_postgres", "postgres_inserted", "postgres_updated", "postgres_unchanged", "postgres_upserted",
     "postgres_deactivated", "deactivation_skipped", "deactivation_refused",

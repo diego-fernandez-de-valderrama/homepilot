@@ -339,3 +339,66 @@ def test_interrupted_run_keeps_finished_products_and_resumes(env):
     stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()
     assert stats["llm_cached"] == 3
     assert stats["llm_called"] == n - 3  # only the remaining products
+
+
+def test_force_with_skip_llm_keeps_stored_llm_output(env):
+    n = len(env["products"])
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    stored = {pid: row["llm_output"] for pid, row in env["postgres"].products.items()}
+    stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"], force=True, skip_llm=True)).as_dict()
+    assert stats["llm_kept_previous"] == n
+    assert {pid: row["llm_output"] for pid, row in env["postgres"].products.items()} == stored
+
+
+def test_failed_re_enrichment_keeps_stored_output_and_stays_stale(env):
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    old_hash = env["postgres"].products[SPARSE_MATTER]["enrichment_hash"]
+    products = [dict(p) for p in env["products"]]
+    next(p for p in products if p["id"] == SPARSE_MATTER)["description"] = "Neue Beschreibung mit Matter."
+    changed = build_zip(env["tmp"] / "changed.zip", products)
+
+    env["pipeline"]._enricher = QuotaEnricher()
+    stats = env["pipeline"].ingest(IngestOptions(input_path=changed)).as_dict()
+    assert stats["llm_failed"] == 1 and stats["llm_kept_previous"] == 1
+    row = env["postgres"].products[SPARSE_MATTER]
+    assert row["llm_output"] is not None
+    assert row["enrichment_hash"] == old_hash  # still stale: re-enriched on the next run
+
+    env["pipeline"]._enricher = FakeEnricher()
+    assert env["pipeline"].ingest(IngestOptions(input_path=changed)).as_dict()["llm_called"] == 1
+
+
+def test_unreadable_stored_output_is_re_enriched(env):
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    env["postgres"].products[SPARSE_MATTER]["llm_output"] = {"key_features": 42}
+    env["pipeline"]._enricher = FakeEnricher()
+    stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()
+    assert stats["llm_called"] == 1
+    assert "failed" not in stats
+
+
+def test_failed_web_refresh_keeps_the_cached_page(env):
+    url = load_fixture_json(SPARSE_MATTER)["url"].strip()
+    good = WebPage(url, True, "http", 200, "Kompatibel mit Apple Home.", None, datetime.now(UTC))
+    env["postgres"].web_pages[url] = good
+    options = IngestOptions(input_path=env["zip"], only_products=(SPARSE_MATTER,), refresh_web=True)
+    stats = env["pipeline"].ingest(options).as_dict()
+    assert env["fetcher"].calls == 1
+    assert stats["web_enrichment_successful"] == 1
+    assert env["postgres"].web_pages[url] == good
+
+
+def test_a_storage_error_fails_only_that_product(env, monkeypatch):
+    n = len(env["products"])
+    save = env["postgres"].save_document
+
+    def flaky(document):
+        if document.product_id == SPARSE_MATTER:
+            raise RuntimeError("disk full")
+        save(document)
+
+    monkeypatch.setattr(env["postgres"], "save_document", flaky)
+    stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()
+    assert stats["failed"] == 1
+    assert stats["qdrant_indexed"] == n - 1
+    assert env["postgres"].runs[-1]["status"] == "partial"

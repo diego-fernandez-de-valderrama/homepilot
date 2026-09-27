@@ -87,7 +87,7 @@ def ingest(
     force: Annotated[bool, typer.Option(help="Ignore all caches: re-run LLM enrichment and re-embed.")] = False,
     skip_web: Annotated[bool, typer.Option(help="Do not fetch product pages (cached pages are still used).")] = False,
     skip_llm: Annotated[
-        bool, typer.Option(help="Deterministic enrichment only (cached LLM output is still used).")
+        bool, typer.Option(help="No LLM calls: stored LLM output is kept (also with --force), new products get none.")
     ] = False,
     refresh_web: Annotated[bool, typer.Option(help="Re-fetch product pages even if cached.")] = False,
     only_product: Annotated[list[str] | None, typer.Option(help="Process only this product id (repeatable).")] = None,
