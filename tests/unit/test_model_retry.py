@@ -1,9 +1,11 @@
 """Silent retries of empty model answers (no Gemini): the retry helper alone, then inside the real ADK runner."""
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 
 from google.adk.models import LlmRequest, LlmResponse
+from google.adk.tools import FunctionTool
 from google.genai import types
 
 from smart_home_agent.agent import AgentService, build_agent
@@ -86,6 +88,30 @@ def test_an_empty_answer_is_retried_silently():
     # an identical retry would get the same empty answer.
     assert script.request_sizes == [1, 2, 2]
     assert script.last_texts == ["hi", RETRY_NOTE, RETRY_NOTE]
+
+
+class ToolWithServices:
+    """Like a `HomePilotTool`: the ADK tool is a bound method of an object holding things deepcopy cannot copy."""
+
+    def __init__(self) -> None:
+        self.client = json  # a module, as somewhere inside the real services
+
+    def view_cart(self) -> dict:
+        """Shows the cart."""
+        return {}
+
+
+def test_a_request_whose_tools_hold_services_can_be_retried():
+    with_tools = request()
+    with_tools.append_tools([FunctionTool(ToolWithServices().view_cart)])
+    script = Script(empty(), text("Here you go"))
+
+    async def collect() -> list[LlmResponse]:
+        policy = RetryPolicy(3, 0.0, 0.0)
+        return [r async for r in retry_empty_responses(script, with_tools, policy, lambda _: asyncio.sleep(0))]
+
+    assert texts(asyncio.run(collect())) == ["Here you go"]
+    assert script.last_texts == ["hi", RETRY_NOTE]
 
 
 def test_after_the_last_retry_the_empty_answer_is_passed_on():

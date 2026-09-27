@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from google.adk.models import LlmRequest, LlmResponse
 
 from smart_home_agent.agent.model.response_checks import is_empty, is_stalled
-from smart_home_agent.agent.model.retry_notes import RETRY_NOTE, STALL_NOTE, with_retry_note
+from smart_home_agent.agent.model.retry_notes import RETRY_NOTE, STALL_NOTE, copy_request, with_retry_note
 from smart_home_agent.agent.model.retry_policy import RetryPolicy
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ async def retry_empty_responses(
     """Runs a non-streaming call and repeats it while the answer is empty (with backoff), and once when it is
     stalled (`is_stalled`). After the last attempt the answer is passed on, so ADK still reports an empty one
     as an error event."""
-    pristine = llm_request.model_copy(deep=True)  # the model call adds to the request; each retry starts clean
+    pristine = copy_request(llm_request)  # the model call adds to the request; each retry starts clean
     note: str | None = None
     attempt = 0  # empty-answer retries spent
     stall_retried = False
