@@ -1,13 +1,18 @@
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
 
 from smart_home_agent.models import CartItem, UpsellSuggestion
-from smart_home_agent.session.central_units_asked import CentralUnitsAsked
+from smart_home_agent.session.state.central_units_asked import CentralUnitsAsked
 
 
 class SessionState(BaseModel):
-    """Everything the agent keeps about one conversation, stored whole under `STATE_KEY`."""
+    """Everything the agent keeps about one conversation, stored whole under `StateKey.HOMEPILOT`."""
+
+    # Cart bookkeeping: the model reads the cart through view_cart, never through the prompt.
+    CART_FIELDS: ClassVar[frozenset[str]] = frozenset(
+        {"cart", "cart_checked", "cart_changed_by_user", "central_units_asked"}
+    )
 
     language: str | None = None  # "en" | "de"
     user_ecosystems: list[str] = Field(default_factory=list)  # canonical ecosystems and voice assistants

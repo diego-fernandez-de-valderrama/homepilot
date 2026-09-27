@@ -12,7 +12,7 @@ from google.adk.tools import ToolContext
 
 from smart_home_agent.agent import AgentService, build_agent
 from smart_home_agent.agent.prompts import MEMORY_INSTRUCTION
-from smart_home_agent.session import PROFILE_KEY
+from smart_home_agent.session import StateKey
 from smart_home_agent.tools import ThreadedFunctionTool
 from tests.fakes import FakeProfileStore, FakeToolContext, services_for
 from tests.unit.test_cart_agent import PRODUCTS
@@ -105,4 +105,4 @@ def test_memory_rules_stay_in_the_prompt_when_the_first_profile_load_fails():
     agent = agent_service(llm, store)
     agent.chat("s1", "Hi")
     assert MEMORY_INSTRUCTION.strip().splitlines()[0] in str(llm.requests[-1].config.system_instruction)
-    assert agent._loop.run(agent._sessions.raw_state("s1", "customer"))[PROFILE_KEY] is None
+    assert agent._loop.run(agent._sessions.raw_state("s1", "customer"))[StateKey.PROFILE] is None

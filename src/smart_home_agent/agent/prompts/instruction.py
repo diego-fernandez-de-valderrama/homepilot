@@ -4,14 +4,7 @@ from smart_home_agent.agent.prompts.base_instruction import BASE_INSTRUCTION
 from smart_home_agent.agent.prompts.memory_instruction import MEMORY_INSTRUCTION
 from smart_home_agent.models import CustomerProfile
 from smart_home_agent.services import Vocabulary
-from smart_home_agent.session import (
-    CART_FIELDS,
-    PROFILE_KEY,
-    TURN_LANGUAGE_KEY,
-    SessionState,
-    StateHolder,
-    read_state,
-)
+from smart_home_agent.session import SessionState, StateHolder, StateKey, StateStore
 
 _LANGUAGE_NAMES = {"en": "English", "de": "German"}
 
@@ -19,14 +12,14 @@ _LANGUAGE_NAMES = {"en": "English", "de": "German"}
 def build_instruction(context: StateHolder) -> str:
     """ADK instruction provider (a callable, so no `{}` state templating). Sections in prompt order; a section that
     does not apply to this turn is None and left out."""
-    session = read_state(context.state)
-    memory = PROFILE_KEY in context.state  # the key exists (possibly None) only when the memory is enabled
+    session = StateStore.read(context.state)
+    memory = StateKey.PROFILE in context.state  # the key exists (possibly None) only when the memory is enabled
     sections = [
         BASE_INSTRUCTION,
         MEMORY_INSTRUCTION if memory else None,
         "# Catalog vocabulary\n" + Vocabulary.overview(),
-        _reply_language(context.state.get(TURN_LANGUAGE_KEY)),
-        _profile(context.state.get(PROFILE_KEY)) if memory else None,
+        _reply_language(context.state.get(StateKey.TURN_LANGUAGE)),
+        _profile(context.state.get(StateKey.PROFILE)) if memory else None,
         _session_facts(session),
         _last_search(session),
         _cart_status(session),
@@ -57,7 +50,7 @@ def _session_facts(session: SessionState) -> str:
     """What the customer said in this conversation (search results and the cart are left out)."""
     known = session.model_dump(
         mode="json",
-        exclude={"last_search", "candidate_products", "last_upsell", *CART_FIELDS},
+        exclude={"last_search", "candidate_products", "last_upsell", *SessionState.CART_FIELDS},
         exclude_none=True,
         exclude_defaults=True,
     )

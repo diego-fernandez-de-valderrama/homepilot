@@ -1,7 +1,7 @@
 from google.adk.tools import ToolContext
 
 from smart_home_agent.container import Services
-from smart_home_agent.session import load_state, save_state
+from smart_home_agent.session import StateStore
 from smart_home_agent.tools._base import HomePilotTool, ToolResult, tool_errors
 
 
@@ -26,9 +26,9 @@ class SearchProductsTool(HomePilotTool):
         """
         category_key = self.category(category)
         result = self._services.retrieval.semantic_search(query, category_key, max(1, min(limit, 20)))
-        session = load_state(tool_context)
+        session = StateStore.load(tool_context)
         session.last_search = {"tool": "search_products", "query": query, "category": category_key}
         session.candidate_products = [hit.product.id for hit in result.hits]
         session.current_category = category_key or session.current_category
-        save_state(tool_context, session)
+        StateStore.save(tool_context, session)
         return self.ok(**result.model_dump(mode="json"))

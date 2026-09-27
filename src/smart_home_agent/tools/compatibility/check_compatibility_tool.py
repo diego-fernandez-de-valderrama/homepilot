@@ -6,7 +6,7 @@ from google.adk.tools import ToolContext
 from smart_home_agent.container import Services
 from smart_home_agent.models import CompatibilityResult
 from smart_home_agent.services import Vocabulary
-from smart_home_agent.session import load_state
+from smart_home_agent.session import StateStore
 from smart_home_agent.tools._base import HomePilotTool, ToolResult, tool_errors
 
 _SETUP_KINDS = (RequirementKind.HUB, RequirementKind.GATEWAY, RequirementKind.SUBSCRIPTION)
@@ -49,7 +49,7 @@ class CheckCompatibilityTool(HomePilotTool):
         """
         if not 1 <= len(product_ids) <= self.MAX_PRODUCTS:
             raise ValueError(f"check between 1 and {self.MAX_PRODUCTS} products")
-        session = load_state(tool_context)
+        session = StateStore.load(tool_context)
         if owned_devices is None:
             owned_devices = session.owned_devices
         terms = Vocabulary.resolve_terms(requirements)

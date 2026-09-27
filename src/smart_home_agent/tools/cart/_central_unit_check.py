@@ -3,7 +3,7 @@ from typing import Any
 from google.adk.tools import ToolContext
 
 from smart_home_agent.container import Services
-from smart_home_agent.session import load_state
+from smart_home_agent.session import StateStore
 
 
 class CentralUnitCheck:
@@ -24,7 +24,7 @@ class CentralUnitCheck:
             changes = cart.changes("add", product_ids, quantities)
         except (ValueError, TypeError):
             return []
-        session = load_state(tool_context)
+        session = StateStore.load(tool_context)
         over = cart.central_units_over_one(session.cart, changes)
         asked = session.central_units_asked
         if asked is not None and asked.invocation_id != tool_context.invocation_id:

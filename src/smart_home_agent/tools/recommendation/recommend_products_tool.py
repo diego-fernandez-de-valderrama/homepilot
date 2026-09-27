@@ -6,7 +6,7 @@ from google.adk.tools import ToolContext
 from smart_home_agent.container import Services
 from smart_home_agent.models import Recommendation, RecommendationRequest
 from smart_home_agent.services import Vocabulary
-from smart_home_agent.session import SessionState, load_state, save_state
+from smart_home_agent.session import SessionState, StateStore
 from smart_home_agent.tools._base import HomePilotTool, ToolResult, tool_errors
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class RecommendProductsTool(HomePilotTool):
           owned_devices: Hubs/gateways the user already owns, e.g. ["Hue Bridge"]. Omit if unknown.
           limit: Maximum number of products per list (1-10).
         """
-        session = load_state(tool_context)
+        session = StateStore.load(tool_context)
         applied = self._session_defaults(session, max_price, must_support, owned_devices)
         request = self.validated(
             RecommendationRequest,
@@ -64,7 +64,7 @@ class RecommendProductsTool(HomePilotTool):
         )
         result = self._services.recommendation.recommend(request)
         self._remember_result(session, request, result)
-        save_state(tool_context, session)
+        StateStore.save(tool_context, session)
         self._log_commerce(result)
         return self.ok(applied_from_session=applied, **result.model_dump(mode="json"))
 

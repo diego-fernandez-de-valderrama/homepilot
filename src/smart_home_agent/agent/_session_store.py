@@ -4,7 +4,7 @@ from typing import Any
 from google.adk.events import Event
 from google.adk.sessions import InMemorySessionService, Session
 
-from smart_home_agent.session import SessionState, read_state
+from smart_home_agent.session import SessionState, StateStore
 
 
 class SessionStore:
@@ -38,7 +38,7 @@ class SessionStore:
         return dict(session.state) if session else {}
 
     async def session_state(self, session_id: str, user_id: str) -> SessionState:
-        return read_state(await self.raw_state(session_id, user_id))
+        return StateStore.read(await self.raw_state(session_id, user_id))
 
     async def append_event(self, session: Session, event: Event) -> None:
         await self.service.append_event(session, event)

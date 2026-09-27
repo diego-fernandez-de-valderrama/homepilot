@@ -30,7 +30,7 @@ from smart_home_agent.config import get_settings
 from smart_home_agent.container import build_container, build_profile_store
 from smart_home_agent.models import MAX_QUANTITY, CartConfirmation, CartView, CustomerSummary, RichContent
 from smart_home_agent.services import ProfileService
-from smart_home_agent.session import SessionState, detect_language
+from smart_home_agent.session import SessionState, TurnLanguageDetector
 from smart_home_agent.ui.components import (
     ADVISOR_AVATAR,
     TYPING_HTML,
@@ -577,7 +577,7 @@ def render_message(message: dict, debug: bool, is_last: bool = False) -> None:
 
 def reply_language(prompt: str | None) -> str | None:
     """Language for interface messages of this turn: the prompt's, else the conversation's."""
-    detected = detect_language(prompt) if prompt else None
+    detected = TurnLanguageDetector.detect(prompt) if prompt else None
     state = latest_state(st.session_state.messages)
     return detected or (state.language if state else None)
 

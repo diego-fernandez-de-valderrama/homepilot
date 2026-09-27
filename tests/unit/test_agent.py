@@ -9,7 +9,7 @@ from pydantic import SecretStr
 from smart_home_agent.agent import AgentService, TurnTrace, build_agent
 from smart_home_agent.agent.prompts import build_instruction
 from smart_home_agent.config import AgentSettings, Settings
-from smart_home_agent.session import STATE_KEY, TURN_LANGUAGE_KEY, detect_language
+from smart_home_agent.session import StateKey, TurnLanguageDetector
 from tests.fakes import product, services_for
 
 
@@ -34,7 +34,10 @@ def test_agent_builds_offline_with_all_tools():
 
 def test_instruction_contains_rules_vocabulary_and_session():
     context = SimpleNamespace(
-        state={STATE_KEY: {"budget_max": 150, "user_ecosystems": ["google_home"]}, TURN_LANGUAGE_KEY: "de"}
+        state={
+            StateKey.HOMEPILOT: {"budget_max": 150, "user_ecosystems": ["google_home"]},
+            StateKey.TURN_LANGUAGE: "de",
+        }
     )
     text = build_instruction(context)
     assert "Apple Siri is not Apple Home" in text
@@ -62,10 +65,10 @@ def test_instruction_frames_upselling_as_setup_completion():
 
 def test_instruction_keeps_the_cart_out_of_the_prompt():
     cart = {"cart": [{"product_id": "41234567", "quantity": 2}], "cart_checked": True}
-    text = build_instruction(SimpleNamespace(state={STATE_KEY: cart}))
+    text = build_instruction(SimpleNamespace(state={StateKey.HOMEPILOT: cart}))
     assert "41234567" not in text
     assert "# Cart status" not in text
-    changed = build_instruction(SimpleNamespace(state={STATE_KEY: {**cart, "cart_changed_by_user": True}}))
+    changed = build_instruction(SimpleNamespace(state={StateKey.HOMEPILOT: {**cart, "cart_changed_by_user": True}}))
     assert "changed the cart in the interface" in changed
     assert "call view_cart once" in build_instruction(SimpleNamespace(state={}))
 
@@ -77,14 +80,14 @@ def test_instruction_without_state():
 
 
 def test_language_detection():
-    assert detect_language("I need a thermostat compatible with Google Home") == "en"
-    assert detect_language("Ich suche ein Thermostat für Google Home bis 150 €") == "de"
-    assert detect_language("Und welches davon funktioniert auch mit Matter?") == "de"
+    assert TurnLanguageDetector.detect("I need a thermostat compatible with Google Home") == "en"
+    assert TurnLanguageDetector.detect("Ich suche ein Thermostat für Google Home bis 150 €") == "de"
+    assert TurnLanguageDetector.detect("Und welches davon funktioniert auch mit Matter?") == "de"
     assert (
-        detect_language("Compare 30173510 and 30387250") is None
-        or detect_language("Compare 30173510 and 30387250") == "en"
+        TurnLanguageDetector.detect("Compare 30173510 and 30387250") is None
+        or TurnLanguageDetector.detect("Compare 30173510 and 30387250") == "en"
     )
-    assert detect_language("ok") is None
+    assert TurnLanguageDetector.detect("ok") is None
 
 
 def test_trace_matches_calls_and_responses():
@@ -120,9 +123,9 @@ def test_trace_matches_calls_and_responses():
     ],
 )
 def test_language_is_not_decided_by_german_names(text, expected):
-    assert detect_language(text) == expected
+    assert TurnLanguageDetector.detect(text) == expected
 
 
 def test_greeting_with_a_german_name_is_not_german():
     # Without the name, "Hi, I am" is too little evidence for a decision.
-    assert detect_language("Hi, I am Jürgen") != "de"
+    assert TurnLanguageDetector.detect("Hi, I am Jürgen") != "de"

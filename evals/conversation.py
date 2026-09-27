@@ -25,7 +25,7 @@ from smart_home_agent.agent import AgentReply, ToolCallTrace
 from smart_home_agent.agent.model import announces_action
 from smart_home_agent.guardrail import Category
 from smart_home_agent.models import FactKind
-from smart_home_agent.session import detect_language
+from smart_home_agent.session import TurnLanguageDetector
 
 CATALOG_TOOLS = (
     "recommend_products",
@@ -245,7 +245,7 @@ def reply_language(language: str) -> Check:
     """Fails only when the reply is detectably in the other language (short replies give no signal)."""
 
     def test(ctx: TurnContext) -> str | None:
-        detected = detect_language(_plain_text(ctx.reply))
+        detected = TurnLanguageDetector.detect(_plain_text(ctx.reply))
         return f"reply language {detected}, expected {language}" if detected and detected != language else None
 
     return Check(f"language:{language}", test)

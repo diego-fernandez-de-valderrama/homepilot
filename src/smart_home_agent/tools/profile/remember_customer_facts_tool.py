@@ -1,7 +1,7 @@
 from google.adk.tools import ToolContext
 
 from smart_home_agent.services import ProfileService
-from smart_home_agent.session import PROFILE_KEY
+from smart_home_agent.session import StateKey
 from smart_home_agent.tools._base import HomePilotTool, ToolResult, tool_errors
 
 
@@ -57,7 +57,7 @@ class RememberCustomerFactsTool(HomePilotTool):
             no_longer_owned=no_longer_owned,
         )
         if update.added or update.retracted:  # the rest of this turn sees the new profile
-            tool_context.state[PROFILE_KEY] = update.profile.model_dump(mode="json")
+            tool_context.state[StateKey.PROFILE] = update.profile.model_dump(mode="json")
         return self.ok(
             added=[f"{f.kind.value}: {f.value}" for f in update.added],
             removed=[f"{f.kind.value}: {f.value}" for f in update.retracted],

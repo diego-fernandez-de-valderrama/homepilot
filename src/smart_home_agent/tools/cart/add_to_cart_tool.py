@@ -1,7 +1,7 @@
 from google.adk.tools import ToolContext
 
 from smart_home_agent.container import Services
-from smart_home_agent.session import CentralUnitsAsked, save_state
+from smart_home_agent.session import CentralUnitsAsked, StateStore
 from smart_home_agent.tools._base import ToolResult, tool_errors
 from smart_home_agent.tools.cart._cart_tool import CartTool
 from smart_home_agent.tools.cart._central_unit_check import CentralUnitCheck
@@ -39,7 +39,7 @@ class AddToCartTool(CartTool):
                 invocation_id=tool_context.invocation_id,
                 units={unit["product_id"]: unit["units_in_cart_after"] for unit in over},
             )
-            save_state(tool_context, session)
+            StateStore.save(tool_context, session)
             view = self._services.cart.view(session.cart)
             ids = self.product_ids(product_ids)
             result = ChangeReport.build(

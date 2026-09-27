@@ -5,7 +5,7 @@ import pytest
 from google.adk.tools import FunctionTool
 
 from smart_home_agent.models import CartItem
-from smart_home_agent.session import STATE_KEY, SessionState, read_state
+from smart_home_agent.session import SessionState, StateKey, StateStore
 from smart_home_agent.tools import ToolRegistry
 from tests.fakes import FakeToolContext, fact, product, requirement, services_for
 
@@ -61,7 +61,7 @@ def test_recommend_products_output_and_state(tools):
     assert result["best_match"] in {"t1", "t2"}
     assert {r["product"]["id"] for r in result["confirmed"]} == {"t1", "t2"}
     assert [r["product"]["id"] for r in result["unconfirmed"]] == ["t3"]
-    session = read_state(context.state)
+    session = StateStore.read(context.state)
     assert session.current_category == "heating_control"
     assert result["best_match"] in session.selected_products
     assert set(session.candidate_products) == {"t1", "t2", "t3"}
@@ -78,7 +78,7 @@ def test_recommended_accessories_are_known_to_the_session():
     context = FakeToolContext()
     result = recommend("thermostat", context, category="heating_control", must_support=["Google Home"])
     assert [a["product_id"] for a in result["accessories"]] == ["hub"]
-    assert "hub" in read_state(context.state).candidate_products
+    assert "hub" in StateStore.read(context.state).candidate_products
 
 
 def test_recommend_uses_session_preferences_as_defaults(tools):
@@ -156,7 +156,7 @@ def test_compare_products_updates_state(tools):
     context = FakeToolContext()
     result = tools["compare_products"](["t1", "t2"], context)
     assert result["status"] == "ok"
-    assert read_state(context.state).comparison_products == ["t1", "t2"]
+    assert StateStore.read(context.state).comparison_products == ["t1", "t2"]
 
 
 def test_get_evidence_contract(tools):
@@ -172,19 +172,19 @@ def test_remember_preferences_classifies_by_dimension(tools):
         context, language="DE", ecosystems=["HomeKit", "Alexa", "Zigbee"], owned_devices=["Hue Bridge"]
     )
     assert result["status"] == "ok"
-    session = read_state(context.state)
+    session = StateStore.read(context.state)
     assert session.language == "de"
     assert session.user_ecosystems == ["apple_home", "amazon_alexa"]
     assert session.user_protocols == ["zigbee"]
     assert session.owned_devices == ["philips_hue_bridge"]
-    assert STATE_KEY in context.state
+    assert StateKey.HOMEPILOT in context.state
 
 
 def cart_context(*pairs: tuple[str, int], changed: bool = False) -> FakeToolContext:
     session = SessionState(
         cart=[CartItem(product_id=pid, quantity=q) for pid, q in pairs], cart_changed_by_user=changed
     )
-    return FakeToolContext({STATE_KEY: session.model_dump(mode="json")})
+    return FakeToolContext({StateKey.HOMEPILOT: session.model_dump(mode="json")})
 
 
 def test_view_cart_syncs_the_flags(tools):
@@ -193,7 +193,7 @@ def test_view_cart_syncs_the_flags(tools):
     assert result["status"] == "ok"
     assert result["item_count"] == 2 and result["cart_total"] == 110.0
     assert result["items"][0]["title"] == "Product t1"
-    session = read_state(context.state)
+    session = StateStore.read(context.state)
     assert session.cart_checked and not session.cart_changed_by_user
     assert tools["view_cart"](cart_context())["note"] == "the cart is empty"
 
@@ -211,7 +211,7 @@ def test_add_to_cart_reports_what_is_left(tools):
     assert change["title"] == "Product t1" and "note" not in change
     assert [(i["product_id"], i["quantity"]) for i in result["remaining_items"]] == [("t2", 1), ("t1", 2)]
     assert "note" not in result
-    assert read_state(context.state).cart_checked
+    assert StateStore.read(context.state).cart_checked
 
 
 def test_add_several_products_in_one_change(tools):
@@ -269,7 +269,7 @@ def test_a_change_is_all_or_nothing(tools):
         tools["add_to_cart"]([], context),
     ):
         assert bad["status"] == "invalid_input"
-    assert read_state(context.state).cart == [CartItem(product_id="t1", quantity=1)]
+    assert StateStore.read(context.state).cart == [CartItem(product_id="t1", quantity=1)]
 
 
 def test_data_errors_are_not_reported_as_invalid_input():

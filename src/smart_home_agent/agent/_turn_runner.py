@@ -15,14 +15,7 @@ from smart_home_agent.agent.reply import AgentReply, TurnTrace
 from smart_home_agent.guardrail import GuardrailReport
 from smart_home_agent.models import CustomerProfile, RichContent
 from smart_home_agent.services import RichContentService
-from smart_home_agent.session import (
-    GUARDRAIL_KEY,
-    PROFILE_KEY,
-    TURN_LANGUAGE_KEY,
-    SessionState,
-    detect_language,
-    read_state,
-)
+from smart_home_agent.session import SessionState, StateKey, StateStore, TurnLanguageDetector
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +46,9 @@ class TurnRunner:
     async def chat(
         self, session_id: str, text: str, user_id: str, on_tool_call: Callable[[str], None] | None = None
     ) -> AgentReply:
-        language = detect_language(text)
+        language = TurnLanguageDetector.detect(text)
         message = types.Content(role="user", parts=[types.Part(text=text)])
-        state_delta = {TURN_LANGUAGE_KEY: language, GUARDRAIL_KEY: None}
+        state_delta = {StateKey.TURN_LANGUAGE: language, StateKey.GUARDRAIL: None}
         return await self._run(session_id, user_id, message, state_delta, language, on_tool_call)
 
     async def confirm(
@@ -76,7 +69,7 @@ class TurnRunner:
             state = await self._sessions.session_state(session_id, user_id)
             return AgentReply(text="", detected_language=None, trace=TurnTrace(), state=state, error="already applied")
         message = self._confirmations.answer(decisions)
-        return await self._run(session_id, user_id, message, {GUARDRAIL_KEY: None}, None, on_tool_call)
+        return await self._run(session_id, user_id, message, {StateKey.GUARDRAIL: None}, None, on_tool_call)
 
     async def _run(
         self,
@@ -103,17 +96,17 @@ class TurnRunner:
             return state_delta
         profile = await self._profiles.snapshot(user_id)
         if profile is not None:
-            return {**state_delta, PROFILE_KEY: profile}
-        if PROFILE_KEY not in await self._sessions.raw_state(session_id, user_id):
+            return {**state_delta, StateKey.PROFILE: profile}
+        if StateKey.PROFILE not in await self._sessions.raw_state(session_id, user_id):
             # Load failed before any snapshot: the key still marks the memory as enabled, so the prompt
             # keeps its memory rules while the memory tool is offered ("nothing stored" for this turn).
-            return {**state_delta, PROFILE_KEY: None}
+            return {**state_delta, StateKey.PROFILE: None}
         return state_delta
 
     async def _reply(self, collector: TurnCollector, state: dict[str, Any], language: str | None) -> AgentReply:
-        session_state = read_state(state)
-        report = state.get(GUARDRAIL_KEY)
-        profile = state.get(PROFILE_KEY)
+        session_state = StateStore.read(state)
+        report = state.get(StateKey.GUARDRAIL)
+        profile = state.get(StateKey.PROFILE)
         return AgentReply(
             text=collector.answer,
             detected_language=language,

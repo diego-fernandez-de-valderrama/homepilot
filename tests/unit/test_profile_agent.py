@@ -9,7 +9,7 @@ from google.genai import types
 
 from smart_home_agent.agent import AgentService, build_agent
 from smart_home_agent.agent.prompts import build_instruction
-from smart_home_agent.session import PROFILE_KEY
+from smart_home_agent.session import StateKey
 from smart_home_agent.tools import ToolRegistry
 from tests.fakes import FakeProfileStore, FakeToolContext, product, services_for
 from tests.unit.test_cart_agent import tool_responses
@@ -59,7 +59,7 @@ def test_memory_tool_stores_and_refreshes_the_turn_snapshot():
     assert result["status"] == "ok"
     assert result["added"] == ["name: Anna", "ecosystem: apple_home"]
     assert result["profile"] == ["name: Anna", "ecosystem: apple_home"]
-    assert [f["value"] for f in context.state[PROFILE_KEY]["facts"]] == ["Anna", "apple_home"]
+    assert [f["value"] for f in context.state[StateKey.PROFILE]["facts"]] == ["Anna", "apple_home"]
     assert {f.user_id for f in store.facts} == {"anna"}
 
 
@@ -70,7 +70,7 @@ def test_memory_tool_reports_rule_violations_as_invalid_input():
     assert result["status"] == "invalid_input" and "someone else" in result["message"]
     unquoted = memory_tool(store)(FakeToolContext(message="Add it to the cart"), "I own it", owned_devices=["x"])
     assert unquoted["status"] == "invalid_input"
-    assert store.facts == [] and PROFILE_KEY not in context.state
+    assert store.facts == [] and StateKey.PROFILE not in context.state
 
 
 def test_memory_tool_asks_for_clarification_on_ambiguous_terms():
@@ -89,7 +89,7 @@ def test_instruction_has_no_memory_section_when_the_memory_is_disabled():
 
 
 def test_instruction_shows_the_rules_and_the_stored_profile():
-    empty = build_instruction(SimpleNamespace(state={PROFILE_KEY: None}))
+    empty = build_instruction(SimpleNamespace(state={StateKey.PROFILE: None}))
     assert "# Remembering the customer" in empty
     assert "they are not owned until the\n    customer says they own them" in empty
     assert "facts about other people" in empty
@@ -100,7 +100,7 @@ def test_instruction_shows_the_rules_and_the_stored_profile():
         FakeToolContext(message="I use HomeKit", user_id="anna"), "I use HomeKit", ecosystems=["HomeKit"]
     )
     snapshot = store.load("anna").model_dump(mode="json")
-    text = build_instruction(SimpleNamespace(state={PROFILE_KEY: snapshot}))
+    text = build_instruction(SimpleNamespace(state={StateKey.PROFILE: snapshot}))
     assert '- ecosystem: apple_home ("HomeKit")' in text
 
 

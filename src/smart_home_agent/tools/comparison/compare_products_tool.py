@@ -1,7 +1,7 @@
 from google.adk.tools import ToolContext
 
 from smart_home_agent.container import Services
-from smart_home_agent.session import load_state, save_state
+from smart_home_agent.session import StateStore
 from smart_home_agent.tools._base import HomePilotTool, ToolResult, tool_errors
 
 
@@ -20,7 +20,7 @@ class CompareProductsTool(HomePilotTool):
           product_ids: 2 to 4 catalog product ids.
         """
         result = self._services.comparison.compare([pid.strip() for pid in product_ids])
-        session = load_state(tool_context)
+        session = StateStore.load(tool_context)
         session.comparison_products = [p.id for p in result.products]
-        save_state(tool_context, session)
+        StateStore.save(tool_context, session)
         return self.ok(**result.model_dump(mode="json"))

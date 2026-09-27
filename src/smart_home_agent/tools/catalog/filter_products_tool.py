@@ -5,7 +5,7 @@ from google.adk.tools import ToolContext
 from smart_home_agent.container import Services
 from smart_home_agent.models import ProductFilter, SortOrder
 from smart_home_agent.services import Vocabulary
-from smart_home_agent.session import load_state, save_state
+from smart_home_agent.session import StateStore
 from smart_home_agent.tools._base import HomePilotTool, ToolResult, tool_errors
 
 
@@ -53,11 +53,11 @@ class FilterProductsTool(HomePilotTool):
             limit=max(1, min(limit, 50)),
         )
         total, products = self._services.catalog.filter_products(criteria)
-        session = load_state(tool_context)
+        session = StateStore.load(tool_context)
         session.last_search = {"tool": "filter_products", **criteria.model_dump(mode="json")}
         session.candidate_products = [p.id for p in products]
         session.current_category = criteria.category or session.current_category
-        save_state(tool_context, session)
+        StateStore.save(tool_context, session)
         return self.ok(
             criteria=criteria.model_dump(mode="json"),
             total=total,

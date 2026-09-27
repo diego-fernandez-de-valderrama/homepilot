@@ -4,7 +4,7 @@ from typing import Any
 from google.adk.tools import BaseTool, ToolContext
 
 from smart_home_agent.container import Services
-from smart_home_agent.session import save_state
+from smart_home_agent.session import StateStore
 from smart_home_agent.tools.cart._cart_tool import CartTool
 from smart_home_agent.tools.cart._change_report import ChangeReport
 from smart_home_agent.tools.cart.confirmed_tools import CONFIRMED_TOOLS
@@ -30,7 +30,7 @@ class CartResultCallback:
         if confirmation is None and tool_response.get("status") == "needs_clarification":
             return None  # the add refused several central units at once, without asking the customer
         session = CartTool.synced_state(tool_context)
-        save_state(tool_context, session)
+        StateStore.save(tool_context, session)
         status, message = ("awaiting_confirmation", _AWAITING) if confirmation is None else ("rejected", _REJECTED)
         ids = CartTool.product_ids(args.get("product_ids"))
 

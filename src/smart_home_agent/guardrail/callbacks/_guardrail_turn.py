@@ -8,14 +8,7 @@ from google.adk.agents.callback_context import CallbackContext
 from smart_home_agent.guardrail.callbacks._content import content_text
 from smart_home_agent.guardrail.replies import ResponseType, pick_response
 from smart_home_agent.guardrail.report import GuardrailReport
-from smart_home_agent.session import (
-    GUARDRAIL_KEY,
-    GUARDRAIL_LAST_REPLY_KEY,
-    TURN_LANGUAGE_KEY,
-    SessionState,
-    detect_language,
-    read_state,
-)
+from smart_home_agent.session import SessionState, StateKey, StateStore, TurnLanguageDetector
 
 
 class GuardrailTurn:
@@ -28,19 +21,19 @@ class GuardrailTurn:
 
     @property
     def session(self) -> SessionState:
-        return read_state(self._context.state)
+        return StateStore.read(self._context.state)
 
     def load_report(self) -> GuardrailReport:
-        return GuardrailReport.model_validate(self._context.state.get(GUARDRAIL_KEY) or {})
+        return GuardrailReport.model_validate(self._context.state.get(StateKey.GUARDRAIL) or {})
 
     def save_report(self, report: GuardrailReport) -> None:
-        self._context.state[GUARDRAIL_KEY] = report.model_dump(mode="json")
+        self._context.state[StateKey.GUARDRAIL] = report.model_dump(mode="json")
 
     def deterministic_reply(self, kind: ResponseType, rng: random.Random | None) -> str:
         """A reply of `kind` in the turn's language, never the same variant as the previous deterministic reply."""
         state = self._context.state
-        reply = pick_response(kind, self._language(), state.get(GUARDRAIL_LAST_REPLY_KEY), rng)
-        state[GUARDRAIL_LAST_REPLY_KEY] = reply
+        reply = pick_response(kind, self._language(), state.get(StateKey.GUARDRAIL_LAST_REPLY), rng)
+        state[StateKey.GUARDRAIL_LAST_REPLY] = reply
         return reply
 
     def tool_responses(self) -> list[dict[str, Any]]:
@@ -54,4 +47,8 @@ class GuardrailTurn:
 
     def _language(self) -> str | None:
         state = self._context.state
-        return state.get(TURN_LANGUAGE_KEY) or read_state(state).language or detect_language(self.user_text)
+        return (
+            state.get(StateKey.TURN_LANGUAGE)
+            or StateStore.read(state).language
+            or TurnLanguageDetector.detect(self.user_text)
+        )

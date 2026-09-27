@@ -1,6 +1,6 @@
 from google.adk.tools import ToolContext
 
-from smart_home_agent.session import save_state
+from smart_home_agent.session import StateStore
 from smart_home_agent.tools._base import ToolResult, tool_errors
 from smart_home_agent.tools.cart._cart_tool import CartTool
 
@@ -14,7 +14,7 @@ class ViewCartTool(CartTool):
         """
         session = self.synced_state(tool_context)
         view = self._services.cart.view(session.cart)
-        save_state(tool_context, session)
+        StateStore.save(tool_context, session)
         result = self.ok(items=view.for_model(), item_count=view.item_count, cart_total=view.total)
         if not view.lines:
             result["note"] = "the cart is empty"

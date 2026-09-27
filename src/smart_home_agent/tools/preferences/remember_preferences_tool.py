@@ -2,7 +2,7 @@ from catalog_ingestion.domain.enums import Dimension
 from google.adk.tools import ToolContext
 
 from smart_home_agent.services import Vocabulary
-from smart_home_agent.session import load_state, save_state
+from smart_home_agent.session import StateStore
 from smart_home_agent.tools._base import HomePilotTool, ToolResult, tool_errors
 
 
@@ -35,7 +35,7 @@ class RememberPreferencesTool(HomePilotTool):
           owned_devices: Hubs/gateways the user owns, e.g. ["Hue Bridge"]. Pass [] if they own none.
           requirements: Other stated needs in free text, e.g. ["battery powered", "outdoor use"].
         """
-        session = load_state(tool_context)
+        session = StateStore.load(tool_context)
         if language is not None:
             session.language = language.strip().lower()[:2] or None
         if ecosystems is not None or protocols is not None:
@@ -55,5 +55,5 @@ class RememberPreferencesTool(HomePilotTool):
             session.owned_devices = self.devices(owned_devices)
         if requirements is not None:
             session.requirements = [r.strip() for r in requirements if r.strip()]
-        save_state(tool_context, session)
+        StateStore.save(tool_context, session)
         return self.ok(session=session.model_dump(mode="json", exclude={"last_search", "candidate_products"}))

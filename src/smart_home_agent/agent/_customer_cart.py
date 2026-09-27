@@ -6,7 +6,7 @@ from smart_home_agent.agent._session_store import SessionStore
 from smart_home_agent.agent._turn_collector import ConfirmationRequest
 from smart_home_agent.models import CartConfirmation, CartView
 from smart_home_agent.services import CartService
-from smart_home_agent.session import STATE_KEY, SessionState, read_state
+from smart_home_agent.session import SessionState, StateKey, StateStore
 from smart_home_agent.tools import CONFIRMED_TOOLS
 
 
@@ -32,13 +32,13 @@ class CustomerCart:
         cart = self._cart
         async with self._sessions.lock(session_id, user_id):  # never interleaved with a running turn of this session
             session = await self._sessions.get_or_create(session_id, user_id)
-            current = read_state(session.state)
+            current = StateStore.read(session.state)
             current.cart = await asyncio.to_thread(cart.set_quantity, current.cart, product_id, quantity)
             current.cart_changed_by_user = True
             event = Event(
                 author="user",
                 invocation_id=Event.new_id(),
-                actions=EventActions(state_delta={STATE_KEY: current.model_dump(mode="json")}),
+                actions=EventActions(state_delta={StateKey.HOMEPILOT: current.model_dump(mode="json")}),
             )
             await self._sessions.append_event(session, event)
 
