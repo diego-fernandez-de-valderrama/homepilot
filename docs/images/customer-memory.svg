@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 430" width="1000" height="430" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="430" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+
+  <!-- message -->
+  <g filter="url(#shadow)">
+    <path d="M42,120 H218 a12,12 0 0 1 12,12 V198 a12,12 0 0 1 -12,12 H86 L64,228 L68,210 H42 a12,12 0 0 1 -12,-12 V132 a12,12 0 0 1 12,-12 z" fill="#f0fdfa" stroke="#0d9488" stroke-width="1.5"/>
+  </g>
+  <text x="130" y="152" text-anchor="middle" font-size="13.5" font-weight="600" fill="#134e4a">"I have a Hue Bridge,</text>
+  <text x="130" y="172" text-anchor="middle" font-size="13.5" font-weight="600" fill="#134e4a">my sister uses</text>
+  <text x="130" y="192" text-anchor="middle" font-size="13.5" font-weight="600" fill="#134e4a">Alexa."</text>
+  <line x1="232" y1="165" x2="262" y2="165" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- agent -->
+  <g filter="url(#shadow)"><rect x="266" y="130" width="160" height="70" rx="12" fill="#0f172a"/></g>
+  <text x="346" y="160" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Agent picks facts</text>
+  <text x="346" y="180" text-anchor="middle" font-size="12" fill="#cbd5e1">and quotes the words</text>
+  <line x1="428" y1="165" x2="458" y2="165" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- check 1 -->
+  <g filter="url(#shadow)"><rect x="462" y="115" width="150" height="100" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/></g>
+  <path d="M478,130 l8,-4 l8,4 v7 c0,6 -4,9 -8,11 c-4,-2 -8,-5 -8,-11 z" fill="#2563eb"/>
+  <text x="502" y="144" font-size="14" font-weight="700" fill="#1e3a8a">Own words?</text>
+  <text x="478" y="170" font-size="12" fill="#1e40af">the quote must be</text>
+  <text x="478" y="187" font-size="12" fill="#1e40af">in this very message</text>
+  <line x1="614" y1="165" x2="644" y2="165" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- check 2 -->
+  <g filter="url(#shadow)"><rect x="648" y="115" width="150" height="100" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/></g>
+  <path d="M664,130 l8,-4 l8,4 v7 c0,6 -4,9 -8,11 c-4,-2 -8,-5 -8,-11 z" fill="#2563eb"/>
+  <text x="688" y="144" font-size="14" font-weight="700" fill="#1e3a8a">About them?</text>
+  <text x="664" y="170" font-size="12" fill="#1e40af">not a friend, family</text>
+  <text x="664" y="187" font-size="12" fill="#1e40af">member or a gift</text>
+  <line x1="800" y1="165" x2="834" y2="165" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+
+  <!-- memory -->
+  <g filter="url(#shadow)">
+    <path d="M838,128 V200 A66,12 0 0 0 970,200 V128" fill="#ecfeff" stroke="#0891b2" stroke-width="1.5"/>
+    <ellipse cx="904" cy="128" rx="66" ry="12" fill="#cffafe" stroke="#0891b2" stroke-width="1.5"/>
+  </g>
+  <text x="904" y="165" text-anchor="middle" font-size="14" font-weight="700" fill="#164e63">Memory</text>
+  <text x="904" y="184" text-anchor="middle" font-size="11.5" fill="#155e75">fact + the quote</text>
+
+  <rect x="834" y="56" width="140" height="30" rx="15" fill="#dcfce7" stroke="#16a34a"/>
+  <text x="904" y="76" text-anchor="middle" font-size="12" font-weight="700" fill="#166534">owns a Hue Bridge</text>
+  <line x1="904" y1="88" x2="904" y2="112" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+  <!-- drops -->
+  <line x1="537" y1="217" x2="537" y2="268" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow-gray)"/>
+  <g filter="url(#shadow)"><rect x="452" y="272" width="170" height="66" rx="33" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/></g>
+  <text x="537" y="299" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">Not stored</text>
+  <text x="537" y="318" text-anchor="middle" font-size="11" fill="#475569">guesses, cart, tool results</text>
+
+  <line x1="723" y1="217" x2="723" y2="268" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow-gray)"/>
+  <g filter="url(#shadow)"><rect x="638" y="272" width="170" height="66" rx="33" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/></g>
+  <text x="723" y="299" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">Not stored</text>
+  <text x="723" y="318" text-anchor="middle" font-size="11" fill="#475569">"my sister uses Alexa"</text>
+
+  <!-- next conversation -->
+  <line x1="904" y1="216" x2="904" y2="266" stroke="#0891b2" stroke-width="2" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="834" y="270" width="140" height="74" rx="12" fill="#ffffff" stroke="#0891b2" stroke-width="1.5"/></g>
+  <text x="904" y="295" text-anchor="middle" font-size="13" font-weight="700" fill="#164e63">Next visit</text>
+  <text x="904" y="314" text-anchor="middle" font-size="11.5" fill="#155e75">the agent already</text>
+  <text x="904" y="330" text-anchor="middle" font-size="11.5" fill="#155e75">knows it</text>
+
+  <line x1="30" y1="370" x2="970" y2="370" stroke="#e2e8f0"/>
+  <text x="500" y="400" text-anchor="middle" font-size="13" fill="#0f172a"><tspan font-weight="700">"I sold my bridge"</tspan> retracts the fact: it is kept for the record but no longer used.</text>
+</svg>

@@ -4,6 +4,9 @@ A conversational shopping assistant for smart home products, built with **Google
 
 Gemini understands the request, picks tools and writes the answer. **It is never the source of truth.** Every price, spec, compatibility statement, requirement and piece of evidence comes from PostgreSQL (structured truth) or Qdrant (semantic discovery only), through deterministic code.
 
+New here? The illustrated [flow guide](docs/README.md) explains the main flows (a conversation turn, recommendation,
+compatibility, cart, customer memory, safety net) at a high level, one picture per flow.
+
 ---
 
 ## Contents

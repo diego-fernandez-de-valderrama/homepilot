@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420" width="1000" height="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+    <marker id="arrow-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#e11d48"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="420" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+
+  <!-- message -->
+  <g filter="url(#shadow)">
+    <path d="M42,100 H156 a12,12 0 0 1 12,12 V178 a12,12 0 0 1 -12,12 H84 L64,206 L68,190 H42 a12,12 0 0 1 -12,-12 V112 a12,12 0 0 1 12,-12 z" fill="#f0fdfa" stroke="#0d9488" stroke-width="1.5"/>
+  </g>
+  <text x="99" y="140" text-anchor="middle" font-size="14" font-weight="700" fill="#134e4a">Message</text>
+  <text x="99" y="160" text-anchor="middle" font-size="11.5" fill="#115e59">from the customer</text>
+  <line x1="170" y1="145" x2="206" y2="145" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- input gate -->
+  <g filter="url(#shadow)"><rect x="210" y="85" width="180" height="120" rx="14" fill="#fff1f2" stroke="#e11d48" stroke-width="2"/></g>
+  <path d="M228,102 l9,-4.5 l9,4.5 v8 c0,6.5 -4.5,10 -9,12 c-4.5,-2 -9,-5.5 -9,-12 z" fill="#e11d48"/>
+  <text x="254" y="116" font-size="15" font-weight="700" fill="#881337">Input check</text>
+  <text x="228" y="146" font-size="12" fill="#9f1239">compares its meaning</text>
+  <text x="228" y="163" font-size="12" fill="#9f1239">with example messages,</text>
+  <text x="228" y="180" font-size="12" fill="#9f1239">no AI answer needed</text>
+
+  <line x1="392" y1="145" x2="436" y2="145" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="414" y="136" text-anchor="middle" font-size="11.5" font-weight="600" fill="#15803d">passes</text>
+
+  <!-- agent -->
+  <g filter="url(#shadow)"><rect x="440" y="85" width="160" height="120" rx="14" fill="#0f172a"/></g>
+  <text x="520" y="128" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">Agent answers</text>
+  <text x="520" y="150" text-anchor="middle" font-size="12" fill="#cbd5e1">Gemini + tools,</text>
+  <text x="520" y="167" text-anchor="middle" font-size="12" fill="#cbd5e1">following its rules</text>
+  <rect x="475" y="178" width="90" height="18" rx="9" fill="#fbbf24"/>
+  <text x="520" y="191" text-anchor="middle" font-size="10.5" font-weight="700" fill="#78350f">Gemini</text>
+
+  <line x1="602" y1="145" x2="636" y2="145" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- output gate -->
+  <g filter="url(#shadow)"><rect x="640" y="85" width="180" height="120" rx="14" fill="#fff1f2" stroke="#e11d48" stroke-width="2"/></g>
+  <path d="M658,102 l9,-4.5 l9,4.5 v8 c0,6.5 -4.5,10 -9,12 c-4.5,-2 -9,-5.5 -9,-12 z" fill="#e11d48"/>
+  <text x="684" y="116" font-size="15" font-weight="700" fill="#881337">Answer check</text>
+  <text x="658" y="146" font-size="12" fill="#9f1239">tests the reply against</text>
+  <text x="658" y="163" font-size="12" fill="#9f1239">the catalog and the</text>
+  <text x="658" y="180" font-size="12" fill="#9f1239">safety rules</text>
+
+  <line x1="822" y1="145" x2="856" y2="145" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="839" y="136" text-anchor="middle" font-size="11.5" font-weight="600" fill="#15803d">ok</text>
+
+  <!-- customer -->
+  <g filter="url(#shadow)"><rect x="860" y="95" width="110" height="100" rx="14" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/></g>
+  <circle cx="915" cy="122" r="10" fill="#0d9488"/>
+  <path d="M898,152 a17,13 0 0 1 34,0 z" fill="#0d9488"/>
+  <text x="915" y="176" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">Customer</text>
+
+  <!-- block paths -->
+  <line x1="300" y1="207" x2="300" y2="246" stroke="#e11d48" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow-rose)"/>
+  <g filter="url(#shadow)"><rect x="200" y="250" width="200" height="74" rx="37" fill="#ffffff" stroke="#e11d48" stroke-width="1.5"/></g>
+  <text x="300" y="276" text-anchor="middle" font-size="13" font-weight="700" fill="#9f1239">Blocked</text>
+  <text x="300" y="294" text-anchor="middle" font-size="11.5" fill="#9f1239">wiring work or attempts to</text>
+  <text x="300" y="310" text-anchor="middle" font-size="11.5" fill="#9f1239">override the instructions</text>
+
+  <line x1="730" y1="207" x2="730" y2="246" stroke="#e11d48" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow-rose)"/>
+  <g filter="url(#shadow)"><rect x="630" y="250" width="200" height="74" rx="37" fill="#ffffff" stroke="#e11d48" stroke-width="1.5"/></g>
+  <text x="730" y="276" text-anchor="middle" font-size="13" font-weight="700" fill="#9f1239">Replaced</text>
+  <text x="730" y="294" text-anchor="middle" font-size="11.5" fill="#9f1239">made-up product, false claim,</text>
+  <text x="730" y="310" text-anchor="middle" font-size="11.5" fill="#9f1239">wiring steps, off-topic</text>
+
+  <path d="M402,287 H540" fill="none" stroke="#e11d48" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <path d="M832,287 H915 V199" fill="none" stroke="#e11d48" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow-rose)"/>
+  <path d="M540,287 C560,287 560,345 600,345 H915 V287" fill="none" stroke="#e11d48" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="530" y="275" text-anchor="end" font-size="11.5" fill="#9f1239">fixed safe reply</text>
+  <text x="880" y="278" text-anchor="middle" font-size="11.5" fill="#9f1239">safe answer</text>
+
+  <line x1="30" y1="368" x2="970" y2="368" stroke="#e2e8f0"/>
+  <text x="500" y="396" text-anchor="middle" font-size="13" fill="#0f172a"><tspan font-weight="700">When in doubt, the message passes:</tspan> unclear messages and a failing check never block the conversation.</text>
+</svg>
