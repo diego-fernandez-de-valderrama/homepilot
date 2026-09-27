@@ -32,8 +32,9 @@ from tests.fakes import FakeCatalog, fact, product
 from tests.unit.test_rich import BASIC, PRO, UPSELL
 
 APP = Path(streamlit_app.__file__)
-# Streamlit's 3 s default is too short for a cold first run (imports and bytecode compilation).
-TIMEOUT = 15
+# Streamlit's 3 s default is too short for a cold first run: in a fresh virtualenv the first dataframe imports and
+# compiles pandas/pyarrow inside the script (about 15 s). Only an upper bound; warm runs take well under a second.
+TIMEOUT = 60
 
 
 def test_empty_state_renders_without_backend():
