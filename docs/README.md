@@ -26,6 +26,16 @@ tools return. A **safety net** checks every message before the AI sees it and ev
 
 Read them in order, or jump straight to the one you need; each page links to the next.
 
+## How the agent reads the catalog
+
+A closer look at how the AI gets its facts from the two databases.
+
+| Page | The question it answers |
+|---|---|
+| [How the agent looks things up (RAG)](rag.md) | How does an AI that knows nothing about the shop answer with real catalog data? |
+| [Search by meaning (Qdrant)](semantic-search.md) | How does "something to keep the living room warm" find thermostats? |
+| [When the agent uses PostgreSQL](catalog-database.md) | Which feature reads which database, and why is PostgreSQL the source of truth? |
+
 ## Three promises behind every flow
 
 - **Facts come from the catalog, not from the AI.** Prices, compatibility and requirements are read from the
