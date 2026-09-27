@@ -6,10 +6,8 @@ upgrade that is not the recommender's upsell) gets no entry, and the UI then dro
 
 from collections.abc import Sequence
 
-from smart_home_agent.models import rich
-from smart_home_agent.models.product import CAPABILITY_DIMENSIONS, Product
-from smart_home_agent.models.recommendation import UpsellSuggestion
-from smart_home_agent.models.rich import ProductCompatibility, RichContent
+from smart_home_agent.answer_tags import CompareBlock, CompatibilityBlock, TagParser, UpgradeBlock
+from smart_home_agent.models import CAPABILITY_DIMENSIONS, Product, ProductCompatibility, RichContent, UpsellSuggestion
 from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.services import vocabulary
 from smart_home_agent.services.comparison import MAX_PRODUCTS, MIN_PRODUCTS, compare
@@ -56,27 +54,27 @@ class RichContentService:
     ) -> RichContent | None:
         """`must_support`/`owned_devices`: the customer's canonical setup from the session; `last_upsell`: the
         recommender's latest upsell, the only pair an <upgrade/> may show. None when there is no tag."""
-        segments = rich.parse(text)
-        ids = rich.referenced_ids(segments)
+        segments = TagParser.parse(text)
+        ids = TagParser.referenced_ids(segments)
         if not ids:
             return None
         products = {p.id: p for p in self._catalog.get_products(ids)}
         content = RichContent(products=products)
         for segment in segments:
             match segment:
-                case rich.CompatibilityBlock(product_id) if product_id in products:
+                case CompatibilityBlock(product_id) if product_id in products:
                     content.compatibility[product_id] = product_compatibility(
                         products[product_id], must_support, owned_devices
                     )
-                case rich.CompareBlock(block_ids):
+                case CompareBlock(block_ids):
                     known = [products[pid] for pid in block_ids if pid in products]
                     if MIN_PRODUCTS <= len(known) <= MAX_PRODUCTS:
-                        content.comparisons[rich.compare_key(block_ids)] = compare(known)
-                case rich.UpgradeBlock(from_id, to_id):
+                        content.comparisons[RichContent.compare_key(block_ids)] = compare(known)
+                case UpgradeBlock(from_id, to_id):
                     if (
                         last_upsell is not None
                         and (last_upsell.base_product_id, last_upsell.product_id) == (from_id, to_id)
                         and {from_id, to_id} <= products.keys()
                     ):
-                        content.upgrades[rich.upgrade_key(from_id, to_id)] = last_upsell
+                        content.upgrades[RichContent.upgrade_key(from_id, to_id)] = last_upsell
         return content

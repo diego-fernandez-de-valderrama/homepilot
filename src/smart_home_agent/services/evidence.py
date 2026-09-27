@@ -2,8 +2,7 @@
 
 from catalog_ingestion.domain.enums import FactSource, Method
 
-from smart_home_agent.models.evidence import Evidence, EvidenceResult
-from smart_home_agent.models.product import Product
+from smart_home_agent.models import Evidence, EvidenceResult, Product
 from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.services import vocabulary
 from smart_home_agent.services.compatibility import ProductNotFoundError

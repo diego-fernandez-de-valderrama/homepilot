@@ -17,12 +17,18 @@ import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
 
 from smart_home_agent.agent import DEFAULT_USER, AgentReply, AgentService, build_agent
+from smart_home_agent.answer_tags import (
+    CompareBlock,
+    CompatibilityBlock,
+    ItemsBlock,
+    PlainTextRenderer,
+    TagParser,
+    TextSegment,
+    UpgradeBlock,
+)
 from smart_home_agent.config import get_settings
 from smart_home_agent.container import build_container, build_profile_store
-from smart_home_agent.models import rich
-from smart_home_agent.models.cart import MAX_QUANTITY, CartConfirmation, CartView
-from smart_home_agent.models.profile import CustomerSummary
-from smart_home_agent.models.rich import RichContent
+from smart_home_agent.models import MAX_QUANTITY, CartConfirmation, CartView, CustomerSummary, RichContent
 from smart_home_agent.services.profile import ProfileService
 from smart_home_agent.session import SessionState, detect_language
 from smart_home_agent.ui.components import (
@@ -523,27 +529,27 @@ def render_answer(text: str, content: RichContent | None) -> None:
     """Markdown with the answer tags replaced by catalog components. A tag without resolved data is dropped
     (blocks) or shown as its id (inline); the raw tag is never shown."""
     if content is None:
-        st.markdown(rich.to_plain(text, {}))
+        st.markdown(PlainTextRenderer({}).render(text))
         return
-    segments = rich.parse(text)
-    in_blocks = rich.block_ids(segments)
+    segments = TagParser.parse(text)
+    in_blocks = TagParser.block_ids(segments)
     missing = missing_images(card_image_urls(list(content.products.values())))  # one cached check per answer
     for segment in segments:
         match segment:
-            case rich.TextSegment(body):
+            case TextSegment(body):
                 st.markdown(answer_markdown(body, content.products, in_blocks, missing), unsafe_allow_html=True)
-            case rich.ItemsBlock(ids):
+            case ItemsBlock(ids):
                 products = [content.products[pid] for pid in ids if pid in content.products]
                 if products:
                     st.html(product_cards_html(products, missing))
-            case rich.CompareBlock(ids):
-                if (comparison := content.comparisons.get(rich.compare_key(ids))) is not None:
+            case CompareBlock(ids):
+                if (comparison := content.comparisons.get(RichContent.compare_key(ids))) is not None:
                     st.html(comparison_html(comparison))
-            case rich.CompatibilityBlock(product_id):
+            case CompatibilityBlock(product_id):
                 if (compatibility := content.compatibility.get(product_id)) is not None:
                     st.html(compatibility_html(content.products[product_id], compatibility))
-            case rich.UpgradeBlock(from_id, to_id):
-                if (upsell := content.upgrades.get(rich.upgrade_key(from_id, to_id))) is not None:
+            case UpgradeBlock(from_id, to_id):
+                if (upsell := content.upgrades.get(RichContent.upgrade_key(from_id, to_id))) is not None:
                     st.html(upgrade_html(content.products[from_id], content.products[to_id], upsell))
 
 

@@ -1,6 +1,6 @@
 import pytest
 
-from smart_home_agent.models.cart import MAX_QUANTITY, CartChange, CartItem
+from smart_home_agent.models import MAX_QUANTITY, CartChange, CartItem
 from smart_home_agent.services.cart import CartChangeError, CartService, NotInCartError, is_central_unit
 from smart_home_agent.services.compatibility import ProductNotFoundError
 from tests.fakes import FakeCatalog, product

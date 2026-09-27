@@ -4,7 +4,7 @@ from typing import Any
 from google.adk.tools import ToolContext
 
 from smart_home_agent.container import Services
-from smart_home_agent.models.recommendation import RecommendationRequest
+from smart_home_agent.models import RecommendationRequest
 from smart_home_agent.services import vocabulary
 from smart_home_agent.session import load_state, save_state
 from smart_home_agent.tools._common import ToolResult, ok, resolve_category, resolve_devices, tool_errors, tool_input

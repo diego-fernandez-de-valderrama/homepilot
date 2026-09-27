@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.sql import func
 
 from smart_home_agent.memory.models import CustomerFactRecord
-from smart_home_agent.models.profile import CustomerFact, CustomerProfile, CustomerSummary, FactKind, NewFact
+from smart_home_agent.models import CustomerFact, CustomerProfile, CustomerSummary, FactKind, NewFact
 
 
 class ProfileStore(Protocol):

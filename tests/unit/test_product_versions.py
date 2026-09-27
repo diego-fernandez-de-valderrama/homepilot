@@ -1,5 +1,5 @@
-from smart_home_agent.models import rich
-from smart_home_agent.models.rich import RichContent
+from smart_home_agent.answer_tags import PlainTextRenderer
+from smart_home_agent.models import RichContent
 from smart_home_agent.repositories.postgres import own_variant
 from smart_home_agent.tools import build_tools
 from tests.fakes import FakeToolContext, fact, product, services_for
@@ -24,9 +24,9 @@ def test_lists_name_the_version_and_inline_items_show_the_title():
     assert content.names() == {WHITE.id: "Access Point (Weiß)", ANTHRACITE.id: "Access Point"}
     tag = f'<item id="{WHITE.id}"/>'
     # Inline, the model names the version in its own words; "(Title)" right after the tag is an echo.
-    plain = rich.to_plain(f"Take the {tag} (Access Point) in white.", content.titles(), content.names())
+    plain = PlainTextRenderer(content.titles(), content.names()).render(f"Take the {tag} (Access Point) in white.")
     assert plain == "Take the Access Point in white."
-    listed = rich.to_plain(f'<items ids="{WHITE.id},{ANTHRACITE.id}"/>', content.titles(), content.names())
+    listed = PlainTextRenderer(content.titles(), content.names()).render(f'<items ids="{WHITE.id},{ANTHRACITE.id}"/>')
     assert listed == "- Access Point (Weiß)\n- Access Point"
 
 
@@ -52,7 +52,7 @@ def test_ui_shows_which_version_a_product_is():
 
 
 def test_blocks_name_the_version():
-    from smart_home_agent.models.recommendation import UpsellSuggestion
+    from smart_home_agent.models import UpsellSuggestion
     from smart_home_agent.services.comparison import compare
     from smart_home_agent.services.rich_content import product_compatibility
     from smart_home_agent.ui import components
@@ -74,7 +74,7 @@ def test_blocks_name_the_version():
 
 
 def test_cart_results_name_the_version():
-    from smart_home_agent.models.cart import CartItem
+    from smart_home_agent.models import CartItem
     from smart_home_agent.tools.cart import change_result
 
     cart = services_for([WHITE, ANTHRACITE]).cart

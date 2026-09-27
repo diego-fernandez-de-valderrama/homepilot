@@ -9,7 +9,7 @@ from catalog_ingestion.domain.enums import Dimension, FactStatus
 from smart_home_agent.guardrail.output._compatibility_terms import terms_in
 from smart_home_agent.guardrail.output.product_lookup import ProductLookup
 from smart_home_agent.guardrail.output.violation import Violation
-from smart_home_agent.models.product import Product
+from smart_home_agent.models import Product
 
 # Compatibility: positive claims only; hedged or negated sentences are left to the model's wording.
 _CLAIM = re.compile(

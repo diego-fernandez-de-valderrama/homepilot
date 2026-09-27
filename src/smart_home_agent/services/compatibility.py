@@ -13,8 +13,14 @@ from collections.abc import Sequence
 from catalog_ingestion.domain.enums import FactStatus, Necessity, RequirementKind
 from catalog_ingestion.vocabulary.compatibility import surface_forms
 
-from smart_home_agent.models.compatibility import CompatibilityResult, RequirementCheck, RequirementStatus, TermCheck
-from smart_home_agent.models.product import Product, ProductRequirement
+from smart_home_agent.models import (
+    CompatibilityResult,
+    Product,
+    ProductRequirement,
+    RequirementCheck,
+    RequirementStatus,
+    TermCheck,
+)
 from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.services import vocabulary
 from smart_home_agent.services.accessories import AccessoryService

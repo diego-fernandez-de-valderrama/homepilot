@@ -2,8 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from smart_home_agent.models.cart import CartItem
-from smart_home_agent.models.recommendation import UpsellSuggestion
+from smart_home_agent.models import CartItem, UpsellSuggestion
 from smart_home_agent.session.central_units_asked import CentralUnitsAsked
 
 

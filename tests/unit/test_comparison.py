@@ -1,8 +1,7 @@
 import pytest
 from catalog_ingestion.domain.enums import FactStatus
 
-from smart_home_agent.models.comparison import NOT_LISTED
-from smart_home_agent.models.product import Spec
+from smart_home_agent.models import NOT_LISTED, Spec
 from smart_home_agent.services.comparison import ComparisonService, compare
 from smart_home_agent.services.compatibility import ProductNotFoundError
 from tests.fakes import FakeCatalog, fact, product, requirement

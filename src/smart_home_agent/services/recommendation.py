@@ -17,10 +17,11 @@ catalog attributes, not from the product).
 
 from catalog_ingestion.domain.enums import FactStatus
 
-from smart_home_agent.models.compatibility import CompatibilityResult
-from smart_home_agent.models.product import Product
-from smart_home_agent.models.recommendation import (
+from smart_home_agent.models import (
     AccessorySuggestion,
+    CompatibilityResult,
+    Product,
+    ProductFilter,
     RankedProduct,
     Recommendation,
     RecommendationRequest,
@@ -28,7 +29,6 @@ from smart_home_agent.models.recommendation import (
     VersionOption,
     VersionStatus,
 )
-from smart_home_agent.models.search import ProductFilter
 from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.services import compatibility, ranking, vocabulary
 from smart_home_agent.services.accessories import AccessoryService

@@ -2,7 +2,7 @@
 
 from smart_home_agent.agent.prompts.base_instruction import BASE_INSTRUCTION
 from smart_home_agent.agent.prompts.memory_instruction import MEMORY_INSTRUCTION
-from smart_home_agent.models.profile import CustomerProfile
+from smart_home_agent.models import CustomerProfile
 from smart_home_agent.services.vocabulary import vocabulary_overview
 from smart_home_agent.session import (
     CART_FIELDS,

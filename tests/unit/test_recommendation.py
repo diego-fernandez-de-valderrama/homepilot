@@ -2,7 +2,7 @@ from typing import Any
 
 from catalog_ingestion.domain.enums import FactStatus
 
-from smart_home_agent.models.recommendation import RecommendationRequest
+from smart_home_agent.models import RecommendationRequest
 from tests.fakes import fact, product, requirement, services_for
 
 CONFIRMED_CHEAP = product("cheap", price=55.0, facts=[fact("google_home"), fact("wifi")])

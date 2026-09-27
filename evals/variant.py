@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel
 
 from evals.upsell import CASES as UPSELL_CASES
-from smart_home_agent.models.recommendation import Recommendation, RecommendationRequest
+from smart_home_agent.models import Recommendation, RecommendationRequest
 
 
 def _case(need: str, category: str, **fields: object) -> RecommendationRequest:

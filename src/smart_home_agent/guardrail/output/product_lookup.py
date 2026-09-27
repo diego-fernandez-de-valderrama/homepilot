@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from smart_home_agent.models.product import Product
+from smart_home_agent.models import Product
 
 
 class ProductLookup(Protocol):

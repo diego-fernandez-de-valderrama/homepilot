@@ -1,7 +1,6 @@
 """Candidate discovery: semantic (Qdrant) and structured (PostgreSQL), merged by product id."""
 
-from smart_home_agent.models.product import Product
-from smart_home_agent.models.search import ProductFilter, SearchCandidate, SearchHit, SearchResult
+from smart_home_agent.models import Product, ProductFilter, SearchCandidate, SearchHit, SearchResult
 from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.repositories.qdrant import SemanticIndex
 

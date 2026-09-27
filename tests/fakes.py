@@ -11,10 +11,20 @@ from google.genai import types
 
 from smart_home_agent.config import AgentSettings
 from smart_home_agent.container import Services
-from smart_home_agent.models.evidence import Evidence, FieldProvenance
-from smart_home_agent.models.product import CompatibilityFact, Product, ProductRequirement, Spec
-from smart_home_agent.models.profile import CustomerFact, CustomerProfile, CustomerSummary, NewFact
-from smart_home_agent.models.search import ProductFilter, SearchCandidate
+from smart_home_agent.models import (
+    CompatibilityFact,
+    CustomerFact,
+    CustomerProfile,
+    CustomerSummary,
+    Evidence,
+    FieldProvenance,
+    NewFact,
+    Product,
+    ProductFilter,
+    ProductRequirement,
+    SearchCandidate,
+    Spec,
+)
 from smart_home_agent.services.filtering import rejection_reason
 
 

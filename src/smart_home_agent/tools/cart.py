@@ -20,7 +20,7 @@ from typing import Any
 from google.adk.tools import BaseTool, ToolContext
 
 from smart_home_agent.container import Services
-from smart_home_agent.models.cart import CartAction, CartView
+from smart_home_agent.models import CartAction, CartView
 from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.services.cart import CartChangeError
 from smart_home_agent.session import CentralUnitsAsked, SessionState, load_state, save_state

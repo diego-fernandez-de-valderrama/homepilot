@@ -7,9 +7,15 @@ import pytest
 from evals import conversation as ev
 from smart_home_agent.agent import AgentReply, TurnTrace
 from smart_home_agent.guardrail import Category, GuardrailDecision, GuardrailReport, Violation
-from smart_home_agent.models.cart import CartChangeLine, CartConfirmation, CartItem
-from smart_home_agent.models.profile import CustomerFact, CustomerProfile, FactKind
-from smart_home_agent.models.rich import RichContent
+from smart_home_agent.models import (
+    CartChangeLine,
+    CartConfirmation,
+    CartItem,
+    CustomerFact,
+    CustomerProfile,
+    FactKind,
+    RichContent,
+)
 from smart_home_agent.session import SessionState
 from tests.fakes import product
 

@@ -13,8 +13,7 @@ from smart_home_agent.agent._session_store import SessionStore
 from smart_home_agent.agent._turn_collector import TurnCollector
 from smart_home_agent.agent.reply import AgentReply, TurnTrace
 from smart_home_agent.guardrail import GuardrailReport
-from smart_home_agent.models.profile import CustomerProfile
-from smart_home_agent.models.rich import RichContent
+from smart_home_agent.models import CustomerProfile, RichContent
 from smart_home_agent.services.rich_content import RichContentService
 from smart_home_agent.session import (
     GUARDRAIL_KEY,

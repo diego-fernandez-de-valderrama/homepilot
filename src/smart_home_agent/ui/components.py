@@ -17,12 +17,19 @@ import streamlit as st
 from catalog_ingestion.domain.enums import FactStatus
 from catalog_ingestion.vocabulary import categories as category_vocabulary
 
-from smart_home_agent.models import rich
-from smart_home_agent.models.cart import CartChangeLine, CartConfirmation, CartLine, CartView
-from smart_home_agent.models.comparison import NOT_LISTED, ComparisonResult
-from smart_home_agent.models.product import Product, ProductSummary
-from smart_home_agent.models.recommendation import UpsellSuggestion
-from smart_home_agent.models.rich import ProductCompatibility
+from smart_home_agent.answer_tags import ProseRenderer
+from smart_home_agent.models import (
+    NOT_LISTED,
+    CartChangeLine,
+    CartConfirmation,
+    CartLine,
+    CartView,
+    ComparisonResult,
+    Product,
+    ProductCompatibility,
+    ProductSummary,
+    UpsellSuggestion,
+)
 from smart_home_agent.services import vocabulary
 from smart_home_agent.session import SessionState
 
@@ -267,8 +274,8 @@ def answer_markdown(
 ) -> str:
     """Markdown of one text segment for `st.markdown(unsafe_allow_html=True)`: the model's text has its "<"
     escaped (so it can never inject HTML), and each inline <item/> becomes a chip."""
-    body = rich.strip_echoed_titles(body, {pid: p.title for pid, p in products.items()})
-    return rich.render_prose(
+    body = ProseRenderer.strip_echoed_titles(body, {pid: p.title for pid, p in products.items()})
+    return ProseRenderer.render(
         body,
         lambda text: text.replace("<", "&lt;"),
         lambda pid: item_chip_html(products.get(pid), pid, pid in shown_in_blocks, missing_images),

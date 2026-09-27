@@ -16,8 +16,7 @@ from dataclasses import dataclass
 
 from catalog_ingestion.domain.enums import Dimension
 
-from smart_home_agent.models.profile import (
-    SINGLE_VALUED,
+from smart_home_agent.models import (
     CustomerFact,
     CustomerProfile,
     CustomerSummary,
@@ -215,7 +214,7 @@ class ProfileService:
             if (fact.kind, fact.value) in active and active[(fact.kind, fact.value)].id not in retract_ids:
                 unchanged.append(fact.value)
                 continue
-            if fact.kind in SINGLE_VALUED:  # the new value supersedes the previous one
+            if fact.kind.is_single_valued:  # the new value supersedes the previous one
                 retract_ids += [f.id for f in current.active() if f.kind is fact.kind and f.id not in retract_ids]
             to_add.append(fact)
 

@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from smart_home_agent.config import Settings
 from smart_home_agent.memory.database import alembic_config, create_memory_engine, ensure_database, upgrade_to_head
 from smart_home_agent.memory.models import Base
-from smart_home_agent.models.profile import FactKind, NewFact
+from smart_home_agent.models import FactKind, NewFact
 from smart_home_agent.repositories.profile import ProfileRepository
 from smart_home_agent.services.profile import ProfileService
 

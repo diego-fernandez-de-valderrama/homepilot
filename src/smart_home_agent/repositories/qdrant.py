@@ -12,7 +12,7 @@ from catalog_ingestion.retrieval.embeddings import Embedder
 from catalog_ingestion.storage.qdrant.repository import point_id
 from qdrant_client import QdrantClient, models
 
-from smart_home_agent.models.search import SearchCandidate
+from smart_home_agent.models import SearchCandidate
 
 
 class SemanticIndex(Protocol):

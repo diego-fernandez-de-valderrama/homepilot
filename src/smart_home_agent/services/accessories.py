@@ -9,9 +9,7 @@ Requirements without a safe mapping (generic `smart_hub`, partner solutions) get
 
 from collections.abc import Sequence
 
-from smart_home_agent.models.compatibility import AccessorySuggestion, RequirementCheck
-from smart_home_agent.models.product import Product
-from smart_home_agent.models.search import ProductFilter
+from smart_home_agent.models import AccessorySuggestion, Product, ProductFilter, RequirementCheck
 from smart_home_agent.repositories.postgres import CatalogReader
 
 HUB_CATEGORY = "hub_gateway"

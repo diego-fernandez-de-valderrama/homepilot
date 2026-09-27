@@ -2,9 +2,7 @@ from pydantic import BaseModel, Field
 
 from smart_home_agent.agent.reply.turn_trace import TurnTrace
 from smart_home_agent.guardrail import GuardrailReport
-from smart_home_agent.models.cart import CartConfirmation
-from smart_home_agent.models.profile import CustomerProfile
-from smart_home_agent.models.rich import RichContent
+from smart_home_agent.models import CartConfirmation, CustomerProfile, RichContent
 from smart_home_agent.session import SessionState
 
 

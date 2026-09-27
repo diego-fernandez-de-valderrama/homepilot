@@ -1,7 +1,6 @@
 """Hard constraints evaluated on PostgreSQL values (the same rules the repository applies in SQL)."""
 
-from smart_home_agent.models.product import Product
-from smart_home_agent.models.search import ProductFilter
+from smart_home_agent.models import Product, ProductFilter
 
 
 def brand_matches(brand: str | None, wanted: list[str]) -> bool:

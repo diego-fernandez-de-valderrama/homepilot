@@ -1,5 +1,5 @@
 from evals.upsell import binding_rule, evaluate, guard_failures, report
-from smart_home_agent.models.recommendation import RecommendationRequest
+from smart_home_agent.models import RecommendationRequest
 from tests.fakes import fact, product, requirement, services_for
 
 PRODUCTS = [

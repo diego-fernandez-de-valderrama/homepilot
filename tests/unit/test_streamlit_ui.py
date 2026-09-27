@@ -6,7 +6,7 @@ from catalog_ingestion.domain.enums import FactStatus
 from streamlit.testing.v1 import AppTest
 
 from smart_home_agent.config import get_settings
-from smart_home_agent.models.cart import CartChangeLine, CartConfirmation, CartItem
+from smart_home_agent.models import CartChangeLine, CartConfirmation, CartItem
 from smart_home_agent.services.cart import CartService
 from smart_home_agent.services.comparison import compare
 from smart_home_agent.services.rich_content import product_compatibility
@@ -261,7 +261,7 @@ def test_confirmation_card_for_several_products():
 def _confirmation_script(decided: bool) -> None:
     import streamlit as st
 
-    from smart_home_agent.models.cart import CartChangeLine, CartConfirmation
+    from smart_home_agent.models import CartChangeLine, CartConfirmation
     from smart_home_agent.ui.streamlit_app import render_confirmations
 
     st.session_state.setdefault("expired", set())
@@ -352,7 +352,7 @@ def test_new_conversation_keeps_the_customer(memory_off):
 def test_picker_lists_stored_customers_most_recent_first_with_fact_counts():
     from datetime import UTC, datetime
 
-    from smart_home_agent.models.profile import CustomerSummary
+    from smart_home_agent.models import CustomerSummary
 
     stored = [
         CustomerSummary(user_id="ben", active_facts=1, total_facts=1, last_activity=datetime(2026, 9, 26, tzinfo=UTC)),

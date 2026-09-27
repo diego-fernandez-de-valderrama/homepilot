@@ -12,8 +12,7 @@ from smart_home_agent.agent._session_store import SessionStore
 from smart_home_agent.agent._turn_runner import TurnRunner
 from smart_home_agent.agent.constants import DEFAULT_USER
 from smart_home_agent.agent.reply import AgentReply
-from smart_home_agent.models.cart import CartView
-from smart_home_agent.models.profile import CustomerProfile
+from smart_home_agent.models import CartView, CustomerProfile
 from smart_home_agent.services.cart import CartService
 from smart_home_agent.services.profile import ProfileService
 from smart_home_agent.services.rich_content import RichContentService

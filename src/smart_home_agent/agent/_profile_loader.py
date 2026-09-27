@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import Any
 
-from smart_home_agent.models.profile import CustomerProfile
+from smart_home_agent.models import CustomerProfile
 from smart_home_agent.services.profile import ProfileService
 
 logger = logging.getLogger(__name__)

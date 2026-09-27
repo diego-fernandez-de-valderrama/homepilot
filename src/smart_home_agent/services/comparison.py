@@ -4,8 +4,14 @@ from collections.abc import Callable, Sequence
 
 from catalog_ingestion.domain.enums import FactStatus
 
-from smart_home_agent.models.comparison import NOT_LISTED, ComparisonResult, ComparisonRow, RowGroup
-from smart_home_agent.models.product import CAPABILITY_DIMENSIONS, Product
+from smart_home_agent.models import (
+    CAPABILITY_DIMENSIONS,
+    NOT_LISTED,
+    ComparisonResult,
+    ComparisonRow,
+    Product,
+    RowGroup,
+)
 from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.services import vocabulary
 from smart_home_agent.services.compatibility import ProductNotFoundError, term_status

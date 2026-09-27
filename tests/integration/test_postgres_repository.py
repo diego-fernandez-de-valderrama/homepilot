@@ -5,8 +5,7 @@ from catalog_ingestion.domain.enums import FactStatus
 from sqlalchemy import text
 from sqlalchemy.exc import InternalError
 
-from smart_home_agent.models.product import Product
-from smart_home_agent.models.search import ProductFilter
+from smart_home_agent.models import Product, ProductFilter
 from smart_home_agent.services import compatibility, vocabulary
 
 pytestmark = pytest.mark.integration

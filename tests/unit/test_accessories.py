@@ -1,4 +1,4 @@
-from smart_home_agent.models.compatibility import RequirementCheck
+from smart_home_agent.models import RequirementCheck
 from smart_home_agent.services.accessories import AccessoryService
 from smart_home_agent.services.compatibility import check_requirement
 from tests.fakes import FakeCatalog, product, requirement

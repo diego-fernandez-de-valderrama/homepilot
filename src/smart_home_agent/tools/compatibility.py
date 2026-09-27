@@ -2,7 +2,7 @@ from catalog_ingestion.domain.enums import RequirementKind
 from google.adk.tools import ToolContext
 
 from smart_home_agent.container import Services
-from smart_home_agent.models.compatibility import CompatibilityResult
+from smart_home_agent.models import CompatibilityResult
 from smart_home_agent.services import vocabulary
 from smart_home_agent.session import load_state
 from smart_home_agent.tools._common import ToolResult, ok, resolve_devices, tool_errors

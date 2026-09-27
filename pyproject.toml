@@ -33,10 +33,21 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes ar
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 # Evaluation code depends on the application, never the other way around.
 "evals".msg = "`smart_home_agent` must not import the evaluation harnesses (only `evals/` and `tests/` may)"
+# Models are imported from `smart_home_agent.models`; its subpackages are an internal layout.
+"smart_home_agent.models.cart".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.comparison".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.compatibility".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.evidence".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.product".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.profile".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.recommendation".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.rich_content".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.search".msg = "import from `smart_home_agent.models` instead"
 
 [tool.ruff.lint.per-file-ignores]
 "evals/**" = ["TID251"]
 "tests/**" = ["TID251"]
+"src/smart_home_agent/models/**" = ["TID251"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["smart_home_agent", "evals"]

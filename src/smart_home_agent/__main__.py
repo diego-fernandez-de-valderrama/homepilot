@@ -15,11 +15,10 @@ import sys
 import uuid
 from typing import TYPE_CHECKING
 
+from smart_home_agent.answer_tags import PlainTextRenderer
 from smart_home_agent.config import get_settings
 from smart_home_agent.container import build_container
-from smart_home_agent.models.cart import CartConfirmation
-from smart_home_agent.models.recommendation import RecommendationRequest
-from smart_home_agent.models.rich import to_plain
+from smart_home_agent.models import CartConfirmation, RecommendationRequest
 
 if TYPE_CHECKING:
     from smart_home_agent.agent import AgentReply
@@ -121,7 +120,8 @@ def _print_reply(reply: "AgentReply") -> None:
     guardrail = reply.guardrail
     verdict = guardrail.input.category if guardrail and guardrail.input else "n/a"
     replaced = f", reply: {guardrail.response_type}" if guardrail and guardrail.response_type else ""
-    text = to_plain(reply.text, reply.rich.titles(), reply.rich.names()) if reply.rich else to_plain(reply.text, {})
+    renderer = PlainTextRenderer(reply.rich.titles(), reply.rich.names()) if reply.rich else PlainTextRenderer({})
+    text = renderer.render(reply.text)
     print(f"\n{text}\n  [tools: {tools}] [guardrail: {verdict}{replaced}]\n")
 
 

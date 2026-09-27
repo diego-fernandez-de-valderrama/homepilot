@@ -12,9 +12,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from smart_home_agent.models.compatibility import CompatibilityResult
-from smart_home_agent.models.product import UPGRADE_DIMENSIONS, Product
-from smart_home_agent.models.recommendation import UpsellSuggestion
+from smart_home_agent.models import UPGRADE_DIMENSIONS, CompatibilityResult, Product, UpsellSuggestion
 from smart_home_agent.services import vocabulary
 
 WEIGHT_RELEVANCE = 0.6

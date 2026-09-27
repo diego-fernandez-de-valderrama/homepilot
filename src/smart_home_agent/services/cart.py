@@ -12,7 +12,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from smart_home_agent.models.cart import (
+from smart_home_agent.models import (
     MAX_QUANTITY,
     CartAction,
     CartChange,
@@ -21,8 +21,8 @@ from smart_home_agent.models.cart import (
     CartItem,
     CartLine,
     CartView,
+    ProductSummary,
 )
-from smart_home_agent.models.product import ProductSummary
 from smart_home_agent.repositories.postgres import CatalogReader
 from smart_home_agent.services.compatibility import ProductNotFoundError
 

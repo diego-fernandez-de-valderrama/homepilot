@@ -3,7 +3,7 @@ from typing import cast
 from google.adk.tools import ToolContext
 
 from smart_home_agent.container import Services
-from smart_home_agent.models.search import ProductFilter, SortOrder
+from smart_home_agent.models import ProductFilter, SortOrder
 from smart_home_agent.services import vocabulary
 from smart_home_agent.session import load_state, save_state
 from smart_home_agent.tools._common import ToolResult, ok, resolve_category, tool_errors, tool_input

@@ -3,8 +3,18 @@
 from catalog_ingestion.domain.enums import FactStatus
 
 from smart_home_agent.agent import AgentService, build_agent
-from smart_home_agent.models import rich
-from smart_home_agent.models.recommendation import UpsellSuggestion
+from smart_home_agent.answer_tags import (
+    CompareBlock,
+    CompatibilityBlock,
+    ItemsBlock,
+    PlainTextRenderer,
+    ProseRenderer,
+    TagParser,
+    TagSanitizer,
+    TextSegment,
+    UpgradeBlock,
+)
+from smart_home_agent.models import RichContent, UpsellSuggestion
 from smart_home_agent.services.rich_content import RichContentService
 from tests.fakes import FakeCatalog, fact, product, services_for
 from tests.unit.test_guardrail_agent import ScriptedLlm, settings, text_response
@@ -38,27 +48,30 @@ def resolver() -> RichContentService:
 
 
 def test_parse_splits_blocks_and_keeps_inline_items_in_text():
-    segments = rich.parse(ANSWER)
+    segments = TagParser.parse(ANSWER)
     assert segments == [
-        rich.TextSegment(f'The <item id="{BASIC.id}"/> fits your budget.'),
-        rich.ItemsBlock((BASIC.id, PRO.id)),
-        rich.CompatibilityBlock(PRO.id),
-        rich.UpgradeBlock(BASIC.id, PRO.id),
-        rich.CompareBlock((BASIC.id, PRO.id)),
+        TextSegment(f'The <item id="{BASIC.id}"/> fits your budget.'),
+        ItemsBlock((BASIC.id, PRO.id)),
+        CompatibilityBlock(PRO.id),
+        UpgradeBlock(BASIC.id, PRO.id),
+        CompareBlock((BASIC.id, PRO.id)),
     ]
-    assert rich.referenced_ids(segments) == [BASIC.id, PRO.id]
+    assert TagParser.referenced_ids(segments) == [BASIC.id, PRO.id]
 
 
 def test_unknown_tags_malformed_ids_and_code_blocks_stay_text():
     text = f'<b>hi</b> <items ids="tado-x"/> <item id="123"/>\n```\n<items ids="{BASIC.id}"/>\n```'
-    segments = rich.parse(text)
-    assert segments == [rich.TextSegment(text)]
-    assert rich.referenced_ids(segments) == []
-    assert rich.replace_items(f'```<item id="{BASIC.id}"/>```', lambda pid: "X") == f'```<item id="{BASIC.id}"/>```'
+    segments = TagParser.parse(text)
+    assert segments == [TextSegment(text)]
+    assert TagParser.referenced_ids(segments) == []
+    assert (
+        ProseRenderer.replace_items(f'```<item id="{BASIC.id}"/>```', lambda pid: "X")
+        == f'```<item id="{BASIC.id}"/>```'
+    )
 
 
 def test_to_plain_never_shows_raw_tags():
-    plain = rich.to_plain(ANSWER, {BASIC.id: BASIC.title})
+    plain = PlainTextRenderer({BASIC.id: BASIC.title}).render(ANSWER)
     assert "<" not in plain
     assert plain.startswith("The Acme Basic Thermostat fits your budget.")
     assert f"- {PRO.id}" in plain  # no title known: the id, never an invented name
@@ -92,8 +105,8 @@ def test_resolve_against_setup_keeps_unknown_unknown():
         "google_home": FactStatus.SUPPORTED,
         "apple_home": FactStatus.UNKNOWN,
     }
-    assert content.upgrades[rich.upgrade_key(BASIC.id, PRO.id)] == UPSELL
-    assert rich.compare_key((BASIC.id, PRO.id)) in content.comparisons
+    assert content.upgrades[RichContent.upgrade_key(BASIC.id, PRO.id)] == UPSELL
+    assert RichContent.compare_key((BASIC.id, PRO.id)) in content.comparisons
 
 
 def test_resolve_without_setup_shows_the_products_own_facts():
@@ -134,8 +147,8 @@ def test_agent_reply_carries_resolved_content():
 
 
 def test_block_ids_are_the_products_displayed_by_components():
-    segments = rich.parse(f'<items ids="{BASIC.id}"/>\nThe <item id="{PRO.id}"/> is pricier.')
-    assert rich.block_ids(segments) == {BASIC.id}
+    segments = TagParser.parse(f'<items ids="{BASIC.id}"/>\nThe <item id="{PRO.id}"/> is pricier.')
+    assert TagParser.block_ids(segments) == {BASIC.id}
 
 
 def test_titles_echoed_next_to_their_own_tag_are_removed():
@@ -147,12 +160,12 @@ def test_titles_echoed_next_to_their_own_tag_are_removed():
         f"The {BASIC.title} {tag} fits.",
         f"The {tag} ({BASIC.title}) fits.",
     ):
-        assert rich.strip_echoed_titles(echoed, titles) == f"The {tag} fits."
+        assert ProseRenderer.strip_echoed_titles(echoed, titles) == f"The {tag} fits."
     partial = f"The {tag} ({BASIC.title} in anthracite) fits."
-    assert rich.strip_echoed_titles(partial, titles) == f"The {tag} (in anthracite) fits."
+    assert ProseRenderer.strip_echoed_titles(partial, titles) == f"The {tag} (in anthracite) fits."
     other = f"The {tag} is cheaper than the Acme Pro Thermostat."
-    assert rich.strip_echoed_titles(other, titles) == other  # only the product's own title, only next to it
-    assert rich.to_plain(f"The {tag} {BASIC.title} fits.", titles) == f"The {BASIC.title} fits."
+    assert ProseRenderer.strip_echoed_titles(other, titles) == other  # only the product's own title, only next to it
+    assert PlainTextRenderer(titles).render(f"The {tag} {BASIC.title} fits.") == f"The {BASIC.title} fits."
 
 
 def test_strip_invalid_tags_removes_what_would_never_render():
@@ -161,16 +174,16 @@ def test_strip_invalid_tags_removes_what_would_never_render():
         f'<items ids="hue-bridge"/>\n<compare ids="{BASIC.id}"/>\n<upgrade from="{PRO.id}" to="{BASIC.id}"/>\n'
         f"The <item>Hue Bridge</item> (<item id='x'>) is required <items ids=\"{BASIC.id}\""
     )
-    assert rich.strip_invalid_tags(text, upsell=(BASIC.id, PRO.id)) == (
+    assert TagSanitizer((BASIC.id, PRO.id)).strip_invalid(text) == (
         f'Add a. Then <item id="{BASIC.id}"/> works.\nThe Hue Bridge is required'
     )
 
 
 def test_strip_invalid_tags_keeps_valid_tags_and_code():
     code = '```\n<item id="hue"/>\n```'
-    assert rich.strip_invalid_tags(ANSWER, upsell=(BASIC.id, PRO.id)) == ANSWER
-    assert rich.strip_invalid_tags(code) == code
-    assert rich.strip_invalid_tags(ANSWER) == ANSWER.replace(f'<upgrade from="{BASIC.id}" to="{PRO.id}"/>\n', "")
+    assert TagSanitizer((BASIC.id, PRO.id)).strip_invalid(ANSWER) == ANSWER
+    assert TagSanitizer().strip_invalid(code) == code
+    assert TagSanitizer().strip_invalid(ANSWER) == ANSWER.replace(f'<upgrade from="{BASIC.id}" to="{PRO.id}"/>\n', "")
 
 
 def test_invalid_tags_never_reach_the_interface_or_the_history():
@@ -194,21 +207,21 @@ def test_answer_of_only_invalid_tags_is_replaced_by_the_fallback():
 
 def test_upgrade_attributes_in_either_order_are_kept():
     text = 'Better: <upgrade to="22222222" from="11111111"/>'
-    assert rich.strip_invalid_tags(text, ("11111111", "22222222")) == text
-    assert rich.parse(text)[-1] == rich.UpgradeBlock("11111111", "22222222")
+    assert TagSanitizer(("11111111", "22222222")).strip_invalid(text) == text
+    assert TagParser.parse(text)[-1] == UpgradeBlock("11111111", "22222222")
 
 
 def test_a_tag_split_over_lines_is_joined_not_left_as_raw_text():
     text = 'Options:\n<items ids="11111111,\n22222222"/>\nDone.'
-    stripped = rich.strip_invalid_tags(text)
+    stripped = TagSanitizer().strip_invalid(text)
     assert '<items ids="11111111, 22222222"/>' in stripped
-    assert rich.ItemsBlock(("11111111", "22222222")) in rich.parse(text)
+    assert ItemsBlock(("11111111", "22222222")) in TagParser.parse(text)
 
 
 def test_echoed_title_keeps_the_parenthesis_of_the_surrounding_text():
     titles = {"11111111": "Acme Thermostat"}
     text = 'Two options (the Acme Thermostat <item id="11111111"/>) fit.'
-    assert rich.strip_echoed_titles(text, titles) == 'Two options (the <item id="11111111"/>) fit.'
-    assert rich.strip_echoed_titles('Acme Thermostat (<item id="11111111"/>) fits.', titles) == (
+    assert ProseRenderer.strip_echoed_titles(text, titles) == 'Two options (the <item id="11111111"/>) fit.'
+    assert ProseRenderer.strip_echoed_titles('Acme Thermostat (<item id="11111111"/>) fits.', titles) == (
         '<item id="11111111"/> fits.'
     )

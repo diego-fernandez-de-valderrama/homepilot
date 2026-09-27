@@ -18,9 +18,15 @@ from catalog_ingestion.vocabulary.requirements import term_by_canonical
 from sqlalchemy import ColumnElement, ColumnExpressionArgument, Engine, Select, and_, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
-from smart_home_agent.models.evidence import Evidence, FieldProvenance
-from smart_home_agent.models.product import CompatibilityFact, Product, ProductRequirement, Spec
-from smart_home_agent.models.search import ProductFilter
+from smart_home_agent.models import (
+    CompatibilityFact,
+    Evidence,
+    FieldProvenance,
+    Product,
+    ProductFilter,
+    ProductRequirement,
+    Spec,
+)
 
 
 class CatalogReader(Protocol):

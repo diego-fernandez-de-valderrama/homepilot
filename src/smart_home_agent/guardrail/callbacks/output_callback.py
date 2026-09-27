@@ -1,4 +1,4 @@
-"""`after_model_callback`: removes answer tags that would never be rendered (`rich.strip_invalid_tags`), then checks
+"""`after_model_callback`: removes answer tags that would never be rendered (`TagSanitizer`), then checks
 the final text answer and replaces it with a fallback when a critical check fails.
 
 The returned response is what ADK records, so the next model call never sees a removed tag or a rejected answer.
@@ -11,11 +11,11 @@ import random
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmResponse
 
+from smart_home_agent.answer_tags import TagSanitizer
 from smart_home_agent.guardrail.callbacks._content import content_text, model_reply, with_text
 from smart_home_agent.guardrail.callbacks._fallback import fallback_type
 from smart_home_agent.guardrail.callbacks._guardrail_turn import GuardrailTurn
 from smart_home_agent.guardrail.output import OutputValidator, Violation
-from smart_home_agent.models import rich
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class OutputGuardrailCallback:
         turn = GuardrailTurn(callback_context)
         session = turn.session
         upsell = session.last_upsell
-        cleaned = rich.strip_invalid_tags(text, (upsell.base_product_id, upsell.product_id) if upsell else None)
+        cleaned = TagSanitizer((upsell.base_product_id, upsell.product_id) if upsell else None).strip_invalid(text)
         if cleaned != text:
             logger.info("answer: invalid tags removed")
         violations: list[Violation] = []

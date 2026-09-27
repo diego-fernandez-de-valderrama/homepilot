@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from smart_home_agent.models.search import ProductFilter
+from smart_home_agent.models import ProductFilter
 from smart_home_agent.services.filtering import brand_matches, rejection_reason
 from tests.fakes import FakeCatalog, fact, product
 
