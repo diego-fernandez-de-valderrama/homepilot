@@ -1,5 +1,5 @@
+from evals.upsell import binding_rule, evaluate, guard_failures, report
 from smart_home_agent.models.recommendation import RecommendationRequest
-from smart_home_agent.upsell_eval import binding_rule, evaluate, guard_failures, report
 from tests.fakes import fact, product, requirement, services_for
 
 PRODUCTS = [
@@ -48,7 +48,7 @@ def test_guards_catch_an_upsell_without_an_advantage_reason():
 
 
 def test_uplift_does_not_add_up_alternatives():
-    from smart_home_agent.upsell_eval import CaseResult
+    from evals.upsell import CaseResult
 
     def case(upsell: str | None, delta: float, hubs: float) -> CaseResult:
         return CaseResult(

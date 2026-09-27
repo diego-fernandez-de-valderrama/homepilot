@@ -1,6 +1,6 @@
 """Product version evaluation: how recommendations handle products sold in several versions (measurement only).
 
-uv run python -m smart_home_agent variant-eval
+uv run python -m evals variant
 
 Versions of one product (another color, size, pack or brightness) share the catalog title. Runs the real
 recommendation pipeline (one query embedding per case, no chat model) over the upselling cases plus cases
@@ -16,8 +16,8 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel
 
+from evals.upsell import CASES as UPSELL_CASES
 from smart_home_agent.models.recommendation import Recommendation, RecommendationRequest
-from smart_home_agent.upsell_eval import CASES as UPSELL_CASES
 
 
 def _case(need: str, category: str, **fields: object) -> RecommendationRequest:

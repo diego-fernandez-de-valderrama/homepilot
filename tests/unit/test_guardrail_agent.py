@@ -15,13 +15,13 @@ from google.adk.models import BaseLlm, LlmRequest, LlmResponse
 from google.genai import types
 from pydantic import Field, SecretStr
 
+from evals.guardrail import EmbeddingFixture
+from evals.guardrail_cases import OUTPUT_CASES
 from smart_home_agent.agent.orchestrator import AgentService, build_agent
 from smart_home_agent.config import AgentSettings, Settings
 from smart_home_agent.container import guardrail_thresholds
 from smart_home_agent.guardrail.categories import Category
 from smart_home_agent.guardrail.classifier import SemanticGuardrail
-from smart_home_agent.guardrail.eval import EmbeddingFixture
-from smart_home_agent.guardrail.eval_set import OUTPUT_CASES
 from smart_home_agent.guardrail.responses import RESPONSES, ResponseType
 from tests.fakes import fact, product, services_for
 

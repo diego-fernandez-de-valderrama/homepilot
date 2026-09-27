@@ -1,6 +1,6 @@
 """Upselling KPI evaluation over a fixed set of recommendation requests (measurement only).
 
-uv run python -m smart_home_agent upsell-eval
+uv run python -m evals upsell
 
 Runs the real recommendation pipeline (one query embedding per case, no chat model) and reports:
 - upsell offer rate: share of recommendations (with a best match) that carry an upsell;

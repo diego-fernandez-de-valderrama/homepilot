@@ -4,7 +4,7 @@ from typing import Any, cast
 
 import pytest
 
-from smart_home_agent import conversation_eval as ev
+from evals import conversation as ev
 from smart_home_agent.agent.state import SessionState
 from smart_home_agent.agent.trace import AgentReply, TurnTrace
 from smart_home_agent.guardrail.categories import Category, GuardrailDecision

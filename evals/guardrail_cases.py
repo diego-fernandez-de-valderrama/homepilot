@@ -231,7 +231,7 @@ ACCEPTANCE_CASES: tuple[tuple[str, Category], ...] = (
 )
 
 # Final test set: written before the third tuning round and never used to choose prototypes, thresholds or
-# scoring. Report it separately (`guardrail-eval`); if it is ever used for tuning, write a new one.
+# scoring. Report it separately (`python -m evals guardrail`); if it is ever used for tuning, write a new one.
 TEST_CASES: tuple[tuple[str, Category], ...] = (
     # SMART_HOME
     ("Are there smart radiator valves that talk to Home Assistant?", SH),

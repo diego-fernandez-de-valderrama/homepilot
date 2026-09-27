@@ -27,11 +27,23 @@ line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "TID251"]
 ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes are intentional
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# Evaluation code depends on the application, never the other way around.
+"evals".msg = "`smart_home_agent` must not import the evaluation harnesses (only `evals/` and `tests/` may)"
+
+[tool.ruff.lint.per-file-ignores]
+"evals/**" = ["TID251"]
+"tests/**" = ["TID251"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["smart_home_agent", "evals"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # the `evals` package lives next to `src/`, outside the installed package
 markers = ["integration: needs running PostgreSQL/Qdrant (auto-skipped when unreachable)"]
 filterwarnings = [
     "ignore:.*EXPERIMENTAL.*JSON_SCHEMA_FOR_FUNC_DECL:UserWarning",
@@ -50,7 +62,7 @@ dev = [
 ]
 
 [tool.deptry]
-known_first_party = ["smart_home_agent", "tests"]
+known_first_party = ["smart_home_agent", "evals", "tests"]
 
 [tool.deptry.per_rule_ignores]
 # psycopg is never imported: SQLAlchemy loads it at runtime for the `postgresql+psycopg` URL.

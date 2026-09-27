@@ -1,6 +1,6 @@
 """Conversation regression evaluation: fixed EN/DE conversations through the real agent (live chat model).
 
-uv run python -m smart_home_agent conversation-eval [--case NAME] [--repeat N]
+uv run python -m evals conversation [--case NAME] [--repeat N]
 
 Every turn is checked with deterministic rules on what the agent did, never on its wording: which tools it
 called and with which resolved canonical ids, the guardrail decision, the reply language, shown products, cart

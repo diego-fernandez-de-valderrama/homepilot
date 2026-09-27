@@ -1,5 +1,5 @@
+from evals.variant import evaluate, guard_failures, report
 from smart_home_agent.models.recommendation import RecommendationRequest
-from smart_home_agent.variant_eval import evaluate, guard_failures, report
 from tests.fakes import fact, product, services_for
 
 PRODUCTS = [

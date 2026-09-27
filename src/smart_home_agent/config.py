@@ -37,7 +37,7 @@ class AgentSettings(BaseSettings):
     # (no prototype embedding at startup, every message goes straight to the agent as before).
     guardrail_enabled: bool = True
     # Minimum cosine similarity per category and minimum lead over the second category; below either
-    # the decision is UNCERTAIN and the message is allowed. Calibrated with `guardrail-eval --sweep`.
+    # the decision is UNCERTAIN and the message is allowed. Calibrated with `python -m evals guardrail --sweep`.
     # Scale of the CLASSIFICATION embedding space (see README "Tuning study").
     guardrail_threshold_smart_home: float = Field(default=0.70, ge=0.0, le=1.0)
     guardrail_threshold_electrical: float = Field(default=0.78, ge=0.0, le=1.0)

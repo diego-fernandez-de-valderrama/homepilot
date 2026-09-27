@@ -5,10 +5,8 @@ uv run python -m smart_home_agent check
 uv run python -m smart_home_agent init-memory
 uv run python -m smart_home_agent smoke
 uv run python -m smart_home_agent chat [--user ID]
-uv run python -m smart_home_agent guardrail-eval [--sweep] [--record]
-uv run python -m smart_home_agent upsell-eval
-uv run python -m smart_home_agent variant-eval
-uv run python -m smart_home_agent conversation-eval [--case NAME ...] [--repeat N]
+
+Evaluations live in the separate `evals` package: `uv run python -m evals --help`.
 """
 
 import argparse
@@ -138,79 +136,16 @@ def _ask(change: CartConfirmation) -> bool:
     return answer.strip().lower() in {"y", "yes", "j", "ja"}
 
 
-def guardrail_eval(sweep: bool, record: bool) -> int:
-    """Embeds prototypes and evaluation cases (a few batched embedding calls, no chat model)."""
-    from smart_home_agent.guardrail.eval import run
-
-    return run(get_settings(), do_sweep=sweep, record=record)
-
-
-def upsell_eval() -> int:
-    """Upselling KPI over a fixed request set (one embedding per case, no chat model)."""
-    from smart_home_agent.upsell_eval import evaluate, report
-
-    container = build_container(get_settings())
-    results = evaluate(container.services.recommendation.recommend)
-    print(report(results))
-    return 1 if any(r.guard_failures for r in results) else 0
-
-
-def variant_eval() -> int:
-    """Product version grouping over a fixed request set (one embedding per case, no chat model)."""
-    from smart_home_agent.variant_eval import evaluate, report
-
-    container = build_container(get_settings())
-    results = evaluate(container.services.recommendation.recommend)
-    print(report(results))
-    return 1 if any(r.guard_failures for r in results) else 0
-
-
-def conversation_eval(names: list[str] | None, repeat: int) -> int:
-    """Fixed conversations through the real agent (live chat model); deterministic checks per turn."""
-    from smart_home_agent.agent.orchestrator import AgentService, build_agent
-    from smart_home_agent.container import build_profile_store
-    from smart_home_agent.conversation_eval import EVAL_USER, evaluate, regressions, report, select
-
-    conversations = select(names)
-    settings = get_settings()
-    container = build_container(settings)
-    services = container.services
-    agent = build_agent(services, settings, container.guardrail)
-    service = AgentService(agent, settings.agent.app_name, services.rich_content, services.cart, services.profile)
-    results = []
-    used: list[str] = []
-    try:
-        results = evaluate(service, conversations, repeat, used_user_ids=used)
-    finally:
-        # Every run used its own customer id; remove what the memory conversations stored, also after a crash,
-        # and customers left over by earlier crashed evaluations (the generated id format only).
-        if (store := build_profile_store(settings)) is not None:
-            leftovers = [c.user_id for c in store.customers() if EVAL_USER.match(c.user_id)]
-            store.delete_customers(list(dict.fromkeys([*used, *leftovers])))
-    print(report(results, conversations))
-    return 1 if regressions(results) else 0
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(prog="smart_home_agent")
     commands = {
         "check": check,
         "init-memory": init_memory,
         "smoke": smoke,
-        "upsell-eval": upsell_eval,
-        "variant-eval": variant_eval,
     }
-    parser.add_argument("command", choices=[*commands, "chat", "guardrail-eval", "conversation-eval"])
-    parser.add_argument("--sweep", action="store_true", help="guardrail-eval: print score separation per category")
-    parser.add_argument("--record", action="store_true", help="guardrail-eval: rewrite the offline test fixture")
+    parser.add_argument("command", choices=[*commands, "chat"])
     parser.add_argument("--user", default="customer", help="chat: customer id (each customer has their own memory)")
-    parser.add_argument("--case", action="append", help="conversation-eval: run only this conversation (repeatable)")
-    parser.add_argument("--repeat", type=int, default=1, help="conversation-eval: runs per conversation")
     args = parser.parse_args()
-    if args.command == "conversation-eval":
-        return conversation_eval(args.case, max(1, args.repeat))
-    if args.command == "guardrail-eval":
-        return guardrail_eval(args.sweep, args.record)
     if args.command == "chat":
         return chat(args.user)
     return commands[args.command]()

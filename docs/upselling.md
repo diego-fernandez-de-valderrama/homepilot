@@ -88,7 +88,7 @@ The `<upgrade>` block only renders for the pair stored in `last_upsell` (`servic
 
 ## Measuring the KPI
 
-`uv run python -m smart_home_agent upsell-eval` (`upsell_eval.py`) runs 29 fixed EN/DE requests (4 with stated hub ownership) through the real pipeline. It makes one embedding call per request and no chat model call. It reports:
+`uv run python -m evals upsell` (`evals/upsell.py`) runs 29 fixed EN/DE requests (4 with stated hub ownership) through the real pipeline. It makes one embedding call per request and no chat model call. It reports:
 
 | Metric | Definition |
 |---|---|
@@ -139,5 +139,5 @@ Differences left out, because the data cannot back them:
 | `models/recommendation.py` | `UpsellSuggestion`, `AccessorySuggestion`, `Recommendation` |
 | `tools/recommend.py` | tool, session state, commerce log line |
 | `agent/prompts.py` | presentation rules |
-| `upsell_eval.py` | KPI evaluation cases and report |
-| `tests/unit/test_ranking.py`, `test_recommendation.py`, `test_accessories.py`, `test_compatibility.py`, `test_upsell_eval.py` | unit tests |
+| `evals/upsell.py` | KPI evaluation cases and report |
+| `tests/unit/test_ranking.py`, `test_recommendation.py`, `test_accessories.py`, `test_compatibility.py`, `tests/evals/test_upsell_eval.py` | unit tests |

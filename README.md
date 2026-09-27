@@ -50,10 +50,9 @@ PostgreSQL + Qdrant                      the containers of catalog-ingestion (no
 src/smart_home_agent/
 ├── config.py            AgentSettings (AGENT_*) + reused GEMINI_/POSTGRES_/QDRANT_ settings
 ├── container.py         composition root (engine, Qdrant client, embedder, services)
-├── __main__.py          `check`, `smoke`, `chat`, `guardrail-eval` commands
+├── __main__.py          `check`, `init-memory`, `smoke`, `chat` commands
 ├── agent/               orchestrator.py, prompts.py (rules + guardrails), state.py, language.py, trace.py
-├── guardrail/           classifier.py, prototypes.py, responses.py, output_check.py, callbacks.py,
-│                        eval.py + eval_set.py (measurement only)
+├── guardrail/           classifier.py, prototypes.py, responses.py, output_check.py, callbacks.py
 ├── tools/               recommend.py, catalog.py (search/filter/get), compatibility.py, comparison.py,
 │                        evidence.py, preferences.py, _common.py (error handling, input resolution)
 ├── services/            vocabulary.py, retrieval.py, filtering.py, compatibility.py, ranking.py,
@@ -61,6 +60,15 @@ src/smart_home_agent/
 ├── repositories/        postgres.py, qdrant.py
 ├── models/              product.py, evidence.py, search.py, compatibility.py, comparison.py, recommendation.py
 └── ui/streamlit_app.py
+
+evals/                   evaluation harnesses (`uv run python -m evals ...`), outside the installed package;
+                         `smart_home_agent` never imports them (ruff TID251)
+├── __main__.py          `guardrail`, `upsell`, `variant`, `conversation` commands
+├── guardrail.py         guardrail metrics, threshold sweep, fixture recording
+├── guardrail_cases.py   guardrail evaluation, acceptance, test and output cases
+├── upsell.py            upselling KPI cases and report
+├── variant.py           product version grouping cases and report
+└── conversation.py      regression conversations through the live agent
 ```
 
 There is a single agent (no multi-agent setup). The layers only call downward: the agent never touches the database, tools never run SQL, and Streamlit holds no business logic.
@@ -216,7 +224,7 @@ The business KPI is measured per `recommend_products` call with a best match:
 | Setup fit | cases with stated ownership whose best match still needs a hub the customer lacks |
 | Guard metrics (must be 0) | upsell over budget, not confirmed, not pricier, without an advantage reason; hub attached to another product |
 
-`uv run python -m smart_home_agent upsell-eval` runs 29 fixed EN/DE requests (`upsell_eval.py`) through the real pipeline (one embedding each, no chat model), prints these metrics and exits with 1 if a guard metric is not 0. Each `recommend_products` call also logs one `commerce ...` line (best match, upsell and delta, hubs, bundle totals), so the same numbers can be computed from real sessions.
+`uv run python -m evals upsell` runs 29 fixed EN/DE requests (`evals/upsell.py`) through the real pipeline (one embedding each, no chat model), prints these metrics and exits with 1 if a guard metric is not 0. Each `recommend_products` call also logs one `commerce ...` line (best match, upsell and delta, hubs, bundle totals), so the same numbers can be computed from real sessions.
 
 Current measurement (29 cases): upsell offer rate 1/29, attach rate 31%, all guard metrics 0. The binding rule is `loses_capability` in 17 cases and `no_advantage` in 6: pricier products of the same type usually lack a capability the best match has confirmed. Details and history in [`docs/upselling.md`](docs/upselling.md).
 
@@ -419,7 +427,7 @@ The full write-up, with all rounds, variants and numbers, is `docs/guardrail-tun
    - 8 more own-edit prototypes ("please ignore my previous request", "remove the price limit"). Two of round 4's test messages had shown this gap, so 10 fresh test cases (8 own edits, 2 injections) were written *before* measuring. All of them are handled correctly.
    - The product owner decided to stop blocking OFF_TOPIC at input and keep it in the output check. Off-topic answers are now measured separately on 16 long sample answers.
 
-Current results (`guardrail-eval`):
+Current results (`python -m evals guardrail`):
 
 | | Evaluation set (171) | Test set (68) |
 |---|---|---|
@@ -435,8 +443,8 @@ With `CLASSIFICATION` embeddings, every small-talk, follow-up and conversation-c
 The test set was partly used in round 5 (two of its misses identified the own-edit gap), so it is no longer fully untouched. The round-5 additions are. Write new held-out cases before the next tuning round.
 
 ```bash
-uv run python -m smart_home_agent guardrail-eval --sweep    # metrics, confusion matrix, score separation
-uv run python -m smart_home_agent guardrail-eval --record   # refresh tests/fixtures/guardrail_embeddings.json
+uv run python -m evals guardrail --sweep    # metrics, confusion matrix, score separation
+uv run python -m evals guardrail --record   # refresh tests/fixtures/guardrail_embeddings.json
 ```
 
 The tests run the real classifier offline on the recorded embeddings in `tests/fixtures/guardrail_embeddings.json` (about 2.8 MB). Re-record the fixture after editing prototypes or evaluation cases, or after changing `GEMINI_EMBEDDING_MODEL`/`DIM`.
@@ -503,8 +511,8 @@ uv sync
 uv run python -m smart_home_agent init-memory   # customer memory database (create + migrate, idempotent)
 uv run python -m smart_home_agent check    # PostgreSQL/Qdrant counts, embedding model, memory revision
 uv run python -m smart_home_agent smoke    # recommendation pipeline only (1 embedding call, no chat model)
-uv run python -m smart_home_agent upsell-eval   # upselling KPI over 29 fixed requests (no chat model)
-uv run python -m smart_home_agent conversation-eval   # regression conversations through the live agent (chat model)
+uv run python -m evals upsell   # upselling KPI over 29 fixed requests (no chat model)
+uv run python -m evals conversation   # regression conversations through the live agent (chat model)
 uv run streamlit run src/smart_home_agent/ui/streamlit_app.py
 ```
 
@@ -536,7 +544,7 @@ uv run deptry .                # every imported package is declared, none is unu
 | Filtering | Price, category, brand, protocols, invalid ranges. |
 | Comparison | Structured rows, "not listed", unknown vs unsupported, capability differences, input validation. |
 | Ranking and recommendation | Compatibility gate before upselling; the budget is never exceeded; no upsell that loses a capability, has no verifiable advantage or crosses product types; owned-hub fit in the ranking; structured matches found even when semantic search misses them. |
-| Conversation evaluation | The checks and the runner of `conversation-eval` on scripted replies: resolved criteria from both search tools, wrong concepts, blocks, language, follow-ups, cart confirmation, memory, known issues vs regressions. |
+| Conversation evaluation | The checks and the runner of `python -m evals conversation` on scripted replies: resolved criteria from both search tools, wrong concepts, blocks, language, follow-ups, cart confirmation, memory, known issues vs regressions. |
 | Tools | ADK declarations, input/output contracts, error statuses, session state; several units of a hub, gateway, controller or starter set are refused with `needs_clarification` before any confirmation card. |
 | Agent | Offline build, instruction content, language detection, trace. |
 | Vocabulary and evidence | Term resolution and provenance lookup. |
@@ -554,7 +562,7 @@ uv run deptry .                # every imported package is declared, none is unu
 
 ### Conversation regression evaluation
 
-The unit tests never call the chat model, so they cannot notice when a prompt change makes the agent behave differently. `conversation-eval` does: it runs 20 fixed EN/DE conversations (`conversation_eval.py`, 37 turns, about 2 minutes) through the real agent, guardrail and tools, and checks every turn with deterministic rules on what the agent *did*, never on its wording:
+The unit tests never call the chat model, so they cannot notice when a prompt change makes the agent behave differently. `python -m evals conversation` does: it runs 20 fixed EN/DE conversations (`evals/conversation.py`, 37 turns, about 2 minutes) through the real agent, guardrail and tools, and checks every turn with deterministic rules on what the agent *did*, never on its wording:
 
 | Conversation(s) | What must hold |
 |---|---|
@@ -573,9 +581,9 @@ The unit tests never call the chat model, so they cannot notice when a prompt ch
 Every turn must also produce an answer that the output check did not have to replace and that does not stop at announcing work ("give me a moment to search"). Checks read the tools' own echo of what they ran (`request` of `recommend_products`, `criteria` of `filter_products`), so either search tool passes. A failing turn is reported with its tool calls and arguments and any pending cart change.
 
 ```bash
-uv run python -m smart_home_agent conversation-eval                      # all conversations, exit 1 on a regression
-uv run python -m smart_home_agent conversation-eval --case wiring_de     # one conversation (repeatable flag)
-uv run python -m smart_home_agent conversation-eval --repeat 3           # separates FLAKY from FAIL
+uv run python -m evals conversation                      # all conversations, exit 1 on a regression
+uv run python -m evals conversation --case wiring_de     # one conversation (repeatable flag)
+uv run python -m evals conversation --repeat 3           # separates FLAKY from FAIL
 ```
 
 The chat model is not deterministic, so run it before and after every prompt or tool change, and repeat a failing case before treating it as a regression. Each run uses its own customer id (`eval-...`), and the command deletes those customers' stored facts afterwards.
@@ -636,6 +644,6 @@ Agent: Bosch Smart Home Heizkörper-Thermostat II (55.00 EUR, radiator thermosta
 | `404 model not found` from the chat model | Check `AGENT_MODEL` against the models available to your key. |
 | 429 / quota errors | Free-tier limits. Chat model calls are retried silently with exponential backoff (`AGENT_MODEL_RETRIES`); if they keep failing, the UI shows a friendly "please try again" notice (technical detail in the developer panel) and keeps the conversation. For embeddings, set `GEMINI_EMBEDDING_REQUESTS_PER_MINUTE`. |
 | Log `model returned no content ... retry 1 of 3` / `agent error event: The model returned no content (finish_reason=STOP with empty parts)` | Gemini 2.5 ended a call with no output at all. The main trigger was its dynamic thinking: keep `AGENT_THINKING_BUDGET=0` (the default); with `-1` (dynamic) about half of the harder live prompts came back empty. Remaining cases are retried silently: each retry adds a one-line note to its copy of the request (an identical retry gets the same empty answer), never to the conversation, and tools are not run again. Only after all retries does the customer see the friendly notice. |
-| Log `model announced an action without doing it ...; retrying once` | The model answered "give me a moment, I will search ..." without calling a tool (the customer would have to push it on). The answer is retried once with a note asking it to do the work now; the note never reaches the conversation. If this shows up often after a prompt change, run `conversation-eval --repeat 3`: its `no_announced_action` check fails turns where the retry did not help. |
+| Log `model announced an action without doing it ...; retrying once` | The model answered "give me a moment, I will search ..." without calling a tool (the customer would have to push it on). The answer is retried once with a note asking it to do the work now; the note never reaches the conversation. If this shows up often after a prompt change, run `python -m evals conversation --repeat 3`: its `no_announced_action` check fails turns where the retry did not help. |
 | Answers in the wrong language | Very short or mixed messages give no language hint; the model then follows the conversation. Ask explicitly ("answer in English"). |
 | `UserWarning: [EXPERIMENTAL] ... JSON_SCHEMA_FOR_FUNC_DECL` | Emitted by ADK 2.x when building tool schemas. It is filtered in `smart_home_agent/agent/__init__.py`; if you still see it, the code imported ADK tools without importing `smart_home_agent.agent` first. Harmless. |

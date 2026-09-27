@@ -2,20 +2,20 @@
 
 The fixture holds the vectors of the prototypes, the evaluation cases and the acceptance phrases.
 After changing any of them (or GEMINI_EMBEDDING_MODEL/DIM), re-record it with
-`uv run python -m smart_home_agent guardrail-eval --record`.
+`uv run python -m evals guardrail --record`.
 """
 
 from pathlib import Path
 
 import pytest
 
+from evals.guardrail import ALLOWED, EmbeddingFixture, evaluate, evaluate_output
+from evals.guardrail_cases import ACCEPTANCE_CASES, EVAL_CASES, OUTPUT_CASES, TEST_CASES
 from smart_home_agent.agent.language import detect_language
 from smart_home_agent.config import AgentSettings
 from smart_home_agent.container import guardrail_thresholds
 from smart_home_agent.guardrail.categories import BLOCKING, Category
 from smart_home_agent.guardrail.classifier import TASK_TYPE, SemanticGuardrail
-from smart_home_agent.guardrail.eval import ALLOWED, EmbeddingFixture, evaluate, evaluate_output
-from smart_home_agent.guardrail.eval_set import ACCEPTANCE_CASES, EVAL_CASES, OUTPUT_CASES, TEST_CASES
 from smart_home_agent.guardrail.prototypes import PROTOTYPES
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "guardrail_embeddings.json"
@@ -37,7 +37,7 @@ def test_fixture_matches_the_runtime_configuration(fixture):
     all_texts = [t for texts in PROTOTYPES.values() for t in texts] + [
         t for t, _ in (*EVAL_CASES, *TEST_CASES, *ACCEPTANCE_CASES, *OUTPUT_CASES)
     ]
-    assert set(all_texts) <= set(fixture.vectors), "fixture outdated: run guardrail-eval --record"
+    assert set(all_texts) <= set(fixture.vectors), "fixture outdated: run `python -m evals guardrail --record`"
 
 
 def test_eval_cases_are_not_prototypes():

@@ -4,7 +4,7 @@ They are embedded once at startup and compared with the user message by cosine s
 never used as keywords or substrings. SMART_HOME deliberately contains product-specification
 questions about power, neutral wires and professional installation, so that a question about a
 product's requirements ("does it need a neutral wire?") lands closer to SMART_HOME than to the
-installation instructions in ELECTRICAL. Keep the evaluation cases (`eval_set.py`) different from
+installation instructions in ELECTRICAL. Keep the evaluation cases (`evals/guardrail_cases.py`) different from
 these sentences, otherwise the evaluation measures memorization.
 """
 

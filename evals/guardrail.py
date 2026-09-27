@@ -1,8 +1,8 @@
 """Guardrail evaluation (measurement only, nothing is trained).
 
-uv run python -m smart_home_agent guardrail-eval             # metrics with the configured thresholds
-uv run python -m smart_home_agent guardrail-eval --sweep     # plus score separation per category
-uv run python -m smart_home_agent guardrail-eval --record    # also refresh the offline test fixture
+uv run python -m evals guardrail             # metrics with the configured thresholds
+uv run python -m evals guardrail --sweep     # plus score separation per category
+uv run python -m evals guardrail --record    # also refresh the offline test fixture
 
 Every text (prototypes, evaluation and acceptance cases) is embedded once; all metrics are then
 computed locally from those vectors.
@@ -16,6 +16,7 @@ from pathlib import Path
 from catalog_ingestion.llm.client import GeminiClient
 from pydantic import BaseModel
 
+from evals.guardrail_cases import ACCEPTANCE_CASES, EVAL_CASES, OUTPUT_CASES, TEST_CASES
 from smart_home_agent.config import Settings
 from smart_home_agent.container import guardrail_thresholds
 from smart_home_agent.guardrail.categories import BLOCKING, Category, GuardrailDecision
@@ -26,7 +27,6 @@ from smart_home_agent.guardrail.classifier import (
     blocked_categories,
     gemini_embed,
 )
-from smart_home_agent.guardrail.eval_set import ACCEPTANCE_CASES, EVAL_CASES, OUTPUT_CASES, TEST_CASES
 from smart_home_agent.guardrail.prototypes import PROTOTYPES
 
 FIXTURE_PATH = Path("tests/fixtures/guardrail_embeddings.json")
@@ -44,7 +44,7 @@ class EmbeddingFixture(BaseModel):
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         missing = [t for t in texts if t not in self.vectors]
         if missing:
-            raise KeyError(f"not in the embedding fixture (run `guardrail-eval --record`): {missing}")
+            raise KeyError(f"not in the embedding fixture (run `python -m evals guardrail --record`): {missing}")
         return [self.vectors[t] for t in texts]
 
     def guardrail(self, thresholds: GuardrailThresholds) -> SemanticGuardrail:
