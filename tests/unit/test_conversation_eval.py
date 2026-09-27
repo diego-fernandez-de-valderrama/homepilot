@@ -1,6 +1,8 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
+
+import pytest
 
 from smart_home_agent import conversation_eval as ev
 from smart_home_agent.agent.state import SessionState
@@ -220,3 +222,17 @@ def test_shown_products_come_from_the_resolved_tags():
     assert _check(ev.shows_products(), shown) is None
     assert _check(ev.shows_products(), _reply()) == "no catalog product shown"
     assert _check(ev.shows_no_products(), shown) == "products shown: 11111111"
+
+
+def test_user_ids_are_recorded_before_a_run_can_fail():
+    class Failing:
+        def chat(self, session_id, text, user_id):
+            raise ConnectionError("quota")
+
+        def confirm(self, session_id, decisions, user_id):
+            raise ConnectionError("quota")
+
+    used: list[str] = []
+    with pytest.raises(ConnectionError):
+        ev.evaluate(cast(ev.ConversationService, Failing()), ev.CONVERSATIONS[:1], used_user_ids=used)
+    assert len(used) == 1 and ev.EVAL_USER.match(used[0])

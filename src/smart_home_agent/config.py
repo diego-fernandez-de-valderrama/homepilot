@@ -58,6 +58,10 @@ class AgentSettings(BaseSettings):
     memory_enabled: bool = True
     memory_db: str = "homepilot_memory"
 
+    # The Streamlit testing controls (customer picker, developer panel, "Stored data about me") list every stored
+    # customer and their facts to anyone with the URL: set AGENT_UI_DEV_TOOLS=false for any shared deployment.
+    ui_dev_tools: bool = True
+
 
 @dataclass(frozen=True, slots=True)
 class Settings:

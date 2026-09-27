@@ -104,7 +104,7 @@ def run_turn(start: TurnStarter, progress: DeltaGenerator) -> AgentReply:
 
 # Session keys that survive "New conversation" and a customer switch (the customer and the picker widgets).
 _CUSTOMER_KEYS = frozenset(
-    {"customer_id", "known_customers", "hp-customer-pick", "hp-customer-new", "hp-customer-options"}
+    {"customer_id", "known_customers", "hp-customer-pick", "hp-customer-new", "hp-customer-options", "hp-debug"}
 )
 NEW_CUSTOMER = "__new_customer__"  # picker option that asks for a new customer id
 
@@ -131,7 +131,12 @@ def current_cart() -> CartView:
     message the service is not built yet and the new session's cart is empty anyway."""
     if not st.session_state.messages:
         return CartView()
-    return get_agent_service().cart(st.session_state.session_id, st.session_state.customer_id)
+    try:
+        return get_agent_service().cart(st.session_state.session_id, st.session_state.customer_id)
+    except Exception:  # the UI must survive backend failures: the page still shows the conversation
+        logger.exception("reading the cart failed")
+        st.toast("The cart could not be loaded right now.", icon=":material/error:")
+        return CartView()
 
 
 def change_quantity(product_id: str, quantity: int) -> None:
@@ -342,22 +347,30 @@ def create_customer() -> None:
 
 @st.cache_resource(show_spinner=False)
 def get_customer_directory() -> ProfileService | None:
-    """Reads the customer memory only (no Gemini or Qdrant), so the picker works before the first message."""
-    store = build_profile_store(get_settings())
+    """Reads the customer memory only (no Gemini or Qdrant), so the picker and the stored-data dialog work before
+    the first message. A short connect timeout: the picker is drawn on every rerun."""
+    store = build_profile_store(get_settings(), connect_timeout=2)
     return ProfileService(store) if store is not None else None
+
+
+_DIRECTORY_RETRY_SECONDS = 60.0
+_directory_down_until = 0.0  # process-wide: after a failure, reruns skip the database for a while
 
 
 @st.cache_data(ttl=5, show_spinner=False)
 def stored_customers() -> list[CustomerSummary] | None:
     """Customers with stored facts, most recently active first; None when the memory is off or unreachable.
-    Cached for a few seconds, so reruns (every click) do not query the database each time."""
+    Cached for a few seconds, so reruns (every click) do not query the database each time; after a failure the
+    database is not asked again for a minute, so an unreachable memory never stalls every interaction."""
+    global _directory_down_until
     directory = get_customer_directory()
-    if directory is None:
+    if directory is None or time.monotonic() < _directory_down_until:
         return None
     try:
         return directory.customers()
     except Exception:
         logger.warning("customer memory: listing the customers failed", exc_info=True)
+        _directory_down_until = time.monotonic() + _DIRECTORY_RETRY_SECONDS
         return None
 
 
@@ -416,13 +429,14 @@ def render_customer_picker(stored: list[CustomerSummary] | None, busy: bool) -> 
 @st.dialog("Stored data about this customer", width="large")
 def show_customer_memory(customer_id: str) -> None:
     """Developer view: everything the memory database holds about the customer, retracted facts included."""
+    directory = get_customer_directory()  # memory only: no agent (Gemini, Qdrant) needed for this view
+    if directory is None:
+        st.info("The customer memory is disabled (AGENT_MEMORY_ENABLED=false).")
+        return
     try:
-        profile = get_agent_service().profile(customer_id, include_retracted=True)
+        profile = directory.profile(customer_id, include_retracted=True)
     except Exception as exc:  # the memory database may be down or not initialized
         st.error(f"The customer memory could not be read: {type(exc).__name__}: {exc}")
-        return
-    if profile is None:
-        st.info("The customer memory is disabled (AGENT_MEMORY_ENABLED=false).")
         return
     st.markdown(f"**Customer:** `{customer_id}` · {len(profile.active())} active, {len(profile.facts)} total facts")
     if not profile.facts:
@@ -452,14 +466,23 @@ def show_customer_memory(customer_id: str) -> None:
 def render_sidebar(busy: bool) -> bool:
     """The dark rail: developer and testing controls only (customer content lives in the customer panel).
     Returns the developer toggle."""
+    debug = False
     with st.sidebar:
         st.html('<p class="hp-rail-brand"><span class="hp-rail-brand__mark"></span>HomePilot</p>')
-        st.html('<p class="hp-rail-label">Testing</p>')
-        render_customer_picker(stored_customers(), busy)
-        st.html('<p class="hp-rail-label">Developer</p>')
-        debug = st.toggle("Developer panel", key="hp-debug", help="Show language, tools, candidates and compatibility.")
-        if debug and st.button("Stored data about me", icon=":material/person_search:", width="stretch"):
-            show_customer_memory(st.session_state.customer_id)
+        if get_settings().agent.ui_dev_tools:  # they expose every stored customer: off in shared deployments
+            st.html('<p class="hp-rail-label">Testing</p>')
+            render_customer_picker(stored_customers(), busy)
+            st.html('<p class="hp-rail-label">Developer</p>')
+            debug = st.toggle(
+                "Developer panel",
+                key="hp-debug",
+                help="Show language, tools, candidates and compatibility.",
+                disabled=busy,
+            )
+            if debug and st.button(
+                "Stored data about me", icon=":material/person_search:", width="stretch", disabled=busy
+            ):
+                show_customer_memory(st.session_state.customer_id)
         st.html('<p class="hp-rail-footer">Answers based on the HomePilot catalog · EN / DE</p>')
     return debug
 
@@ -616,7 +639,9 @@ def main() -> None:
         if awaiting_decision
         else "Ask about smart home products..."
     )
-    prompt = st.chat_input(placeholder, submit_mode="disable", disabled=awaiting_decision)
+    typed = st.chat_input(placeholder, submit_mode="disable", disabled=awaiting_decision)
+    # A welcome tile's prompt runs in the next script run, so `busy` covers it like a typed message.
+    prompt = typed or st.session_state.pop("pending_prompt", None)
     if prompt:  # guard only (the input is disabled then): the open changes stay unconfirmed, never sent later
         st.session_state.expired |= {c.request_id for c in open_confirmations()}
     decisions = None if prompt else ready_decisions()
@@ -655,12 +680,11 @@ def main() -> None:
         st.rerun()
 
     if not messages and not prompt:
-        welcome = st.empty()
-        with welcome.container():
+        with st.empty().container():
             st.html(intro_html())
-            prompt = suggestion_tiles(SUGGESTIONS)
-        if prompt:
-            welcome.empty()
+            if tile := suggestion_tiles(SUGGESTIONS):
+                st.session_state.pending_prompt = tile
+                st.rerun()
     if not prompt:
         return
 
@@ -677,4 +701,5 @@ def main() -> None:
     st.rerun()
 
 
-main()
+if __name__ == "__main__":  # `streamlit run` executes the script as __main__; importing it has no side effects
+    main()

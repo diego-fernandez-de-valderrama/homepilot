@@ -6,6 +6,7 @@ from catalog_ingestion.domain.enums import FactStatus
 from streamlit.testing.v1 import AppTest
 
 from smart_home_agent.agent.state import SessionState
+from smart_home_agent.config import get_settings
 from smart_home_agent.models.cart import CartChangeLine, CartConfirmation, CartItem
 from smart_home_agent.services.cart import CartService
 from smart_home_agent.services.comparison import compare
@@ -288,13 +289,16 @@ def test_deciding_a_change_keeps_every_element_in_place():
     assert _slot_keys(open_app) == _slot_keys(decided_app)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def memory_off(monkeypatch):
-    """Picker tests without the real memory database: no stored customers, only this session's."""
+    """UI tests without the real memory database: no stored customers, only this session's. Autouse, so no
+    AppTest here depends on a reachable database. The settings are cached, so their cache is cleared too."""
     monkeypatch.setenv("AGENT_MEMORY_ENABLED", "false")
+    get_settings.cache_clear()
     st.cache_resource.clear()
     st.cache_data.clear()
     yield
+    get_settings.cache_clear()
     st.cache_resource.clear()
     st.cache_data.clear()
 
@@ -412,24 +416,23 @@ def test_stored_data_button_only_in_developer_mode():
 
 
 def _customer_memory_dialog() -> None:
-    from smart_home_agent.services.profile import ProfileService
     from smart_home_agent.ui import streamlit_app as app
+
+    app.show_customer_memory("anna")
+
+
+def test_customer_memory_dialog_lists_active_and_retracted_facts(monkeypatch):
+    from smart_home_agent.services.profile import ProfileService
+    from smart_home_agent.ui import streamlit_app
     from tests.fakes import FakeProfileStore
 
     service = ProfileService(FakeProfileStore())
     service.remember("anna", "s1", "I use Alexa", "I use Alexa", ecosystems=["Alexa"])
     service.remember("anna", "s2", "I sold my Hue Bridge", "I sold my Hue Bridge", owned_devices=["Hue Bridge"])
     service.remember("anna", "s2", "I sold my Hue Bridge", "I sold my Hue Bridge", no_longer_owned=["Hue Bridge"])
+    # The dialog reads the memory only (no agent, no Gemini); monkeypatch restores the module afterwards.
+    monkeypatch.setattr(streamlit_app, "get_customer_directory", lambda: service)
 
-    class Agent:  # stands in for AgentService (no Gemini, no database)
-        def profile(self, user_id: str, include_retracted: bool = True):
-            return service.profile(user_id, include_retracted)
-
-    setattr(app, "get_agent_service", Agent)  # noqa: B010 (a plain assignment does not type-check)
-    app.show_customer_memory("anna")
-
-
-def test_customer_memory_dialog_lists_active_and_retracted_facts():
     app = AppTest.from_function(_customer_memory_dialog).run()
     assert not app.exception
     assert any("`anna` · 1 active, 2 total facts" in m.value for m in app.markdown)
@@ -491,3 +494,11 @@ def test_unknown_applied_state_never_reopens_a_cart_change(monkeypatch):
     assert streamlit_app.applied_confirmations("s1", ["r1", "r2"], "anna") == {"r1", "r2"}
     monkeypatch.setattr(streamlit_app, "get_agent_service", Known)
     assert streamlit_app.applied_confirmations("s1", ["r1", "r2"], "anna") == {"r1"}
+
+
+def test_developer_tools_can_be_switched_off(monkeypatch):
+    monkeypatch.setenv("AGENT_UI_DEV_TOOLS", "false")
+    get_settings.cache_clear()
+    app = AppTest.from_file(str(APP)).run()
+    assert not app.exception
+    assert list(app.toggle) == [] and list(app.selectbox) == []  # no picker, no developer panel

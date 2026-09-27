@@ -206,7 +206,8 @@ _MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]()<>#+!|$~])")
 
 def _markdown_literal(value: str) -> str:
     """Text placed between HTML tags inside markdown is still parsed as markdown: neutralize its syntax."""
-    return _MARKDOWN_SPECIAL.sub(r"\\\1", html.escape(value))
+    # quote=False: only text nodes use this, and "&#x27;" would get its "#" escaped and show up literally.
+    return _MARKDOWN_SPECIAL.sub(r"\\\1", html.escape(value, quote=False))
 
 
 def _image_html(product: Product, missing_images: frozenset[str], css_class: str) -> str:

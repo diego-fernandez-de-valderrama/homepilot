@@ -85,12 +85,13 @@ def guardrail_thresholds(settings: AgentSettings) -> GuardrailThresholds:
     )
 
 
-def build_profile_store(settings: Settings) -> ProfileRepository | None:
+def build_profile_store(settings: Settings, connect_timeout: int = 10) -> ProfileRepository | None:
     """The customer memory store (None when AGENT_MEMORY_ENABLED=false). No network call until first used.
     Writable, in its own database: the catalog engine stays read-only."""
     if not settings.agent.memory_enabled:
         return None
-    return ProfileRepository(create_session_factory(create_memory_engine(settings.postgres, settings.agent.memory_db)))
+    engine = create_memory_engine(settings.postgres, settings.agent.memory_db, connect_timeout)
+    return ProfileRepository(create_session_factory(engine))
 
 
 def build_container(settings: Settings) -> Container:

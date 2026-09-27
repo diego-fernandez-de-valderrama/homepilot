@@ -169,7 +169,7 @@ def conversation_eval(names: list[str] | None, repeat: int) -> int:
     """Fixed conversations through the real agent (live chat model); deterministic checks per turn."""
     from smart_home_agent.agent.orchestrator import AgentService, build_agent
     from smart_home_agent.container import build_profile_store
-    from smart_home_agent.conversation_eval import evaluate, regressions, report, select
+    from smart_home_agent.conversation_eval import EVAL_USER, evaluate, regressions, report, select
 
     conversations = select(names)
     settings = get_settings()
@@ -178,12 +178,15 @@ def conversation_eval(names: list[str] | None, repeat: int) -> int:
     agent = build_agent(services, settings, container.guardrail)
     service = AgentService(agent, settings.agent.app_name, services.rich_content, services.cart, services.profile)
     results = []
+    used: list[str] = []
     try:
-        results = evaluate(service, conversations, repeat)
+        results = evaluate(service, conversations, repeat, used_user_ids=used)
     finally:
-        # Every run used its own customer id; remove what the memory conversations stored.
-        if (store := build_profile_store(settings)) is not None and results:
-            store.delete_customers([r.user_id for r in results])
+        # Every run used its own customer id; remove what the memory conversations stored, also after a crash,
+        # and customers left over by earlier crashed evaluations (the generated id format only).
+        if (store := build_profile_store(settings)) is not None:
+            leftovers = [c.user_id for c in store.customers() if EVAL_USER.match(c.user_id)]
+            store.delete_customers(list(dict.fromkeys([*used, *leftovers])))
     print(report(results, conversations))
     return 1 if regressions(results) else 0
 

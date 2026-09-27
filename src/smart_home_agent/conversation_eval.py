@@ -602,18 +602,27 @@ def run_conversation(service: ConversationService, conversation: Conversation, u
     )
 
 
+EVAL_USER = re.compile(r"^eval-[0-9a-f]{12}$")  # customer ids `evaluate` creates (default prefix)
+
+
 def evaluate(
     service: ConversationService,
     conversations: Sequence[Conversation] = CONVERSATIONS,
     repeat: int = 1,
     user_prefix: str = "eval",
+    used_user_ids: list[str] | None = None,
 ) -> list[ConversationResult]:
-    """Each run gets its own customer id (`<user_prefix>-<random>`), so stored memory never leaks between runs."""
-    return [
-        run_conversation(service, conversation, f"{user_prefix}-{uuid.uuid4().hex[:12]}")
-        for conversation in conversations
-        for _ in range(repeat)
-    ]
+    """Each run gets its own customer id (`<user_prefix>-<random>`), so stored memory never leaks between runs.
+    Each id is appended to `used_user_ids` before its run starts, so a caller can clean up even when a run
+    raises (quota, network, Ctrl+C) and no result is returned."""
+    results: list[ConversationResult] = []
+    for conversation in conversations:
+        for _ in range(repeat):
+            user_id = f"{user_prefix}-{uuid.uuid4().hex[:12]}"
+            if used_user_ids is not None:
+                used_user_ids.append(user_id)
+            results.append(run_conversation(service, conversation, user_id))
+    return results
 
 
 def report(results: Sequence[ConversationResult], conversations: Sequence[Conversation] = CONVERSATIONS) -> str:

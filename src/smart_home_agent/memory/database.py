@@ -17,9 +17,11 @@ def memory_url(settings: PostgresSettings, database: str) -> URL:
     return settings.url.set(database=database)
 
 
-def create_memory_engine(settings: PostgresSettings, database: str) -> Engine:
+def create_memory_engine(settings: PostgresSettings, database: str, connect_timeout: int = 10) -> Engine:
     """Writable engine (unlike the catalog engine, which is read-only)."""
-    return create_engine(memory_url(settings, database), pool_pre_ping=True, connect_args={"connect_timeout": 10})
+    return create_engine(
+        memory_url(settings, database), pool_pre_ping=True, connect_args={"connect_timeout": connect_timeout}
+    )
 
 
 def ensure_database(settings: PostgresSettings, database: str) -> bool:
