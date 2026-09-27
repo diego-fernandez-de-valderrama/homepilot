@@ -72,7 +72,6 @@ _CATEGORY_SYNONYMS: dict[str, str] = {
     "bulb": "smart_bulb",
     "light bulb": "smart_bulb",
     "smart bulb": "smart_bulb",
-    "lampe": "smart_bulb",
     "glühbirne": "smart_bulb",
     "plug": "smart_plug",
     "smart plug": "smart_plug",
@@ -118,6 +117,7 @@ _AMBIGUOUS_CATEGORIES: dict[str, tuple[str, ...]] = {
     "light": ("smart_bulb", "ceiling_light", "lamp", "outdoor_light", "led_strip", "led_panel"),
     "licht": ("smart_bulb", "ceiling_light", "lamp", "outdoor_light", "led_strip", "led_panel"),
     "leuchte": ("ceiling_light", "lamp", "outdoor_light"),
+    "lampe": ("smart_bulb", "lamp"),  # German "Lampe" is both a bulb and a lamp
 }
 
 # Concepts that users often confuse. Used only for explanatory notes; they never change a status.
@@ -142,8 +142,10 @@ _TERMS_BY_LABEL: dict[str, str] = {_key(t.label): t.canonical for t in compatibi
 
 
 def _singular(value: str) -> list[str]:
+    """The value and its possible singulars. "n" is tried before "en", so "Lampen"/"Leuchten" reach "Lampe"/
+    "Leuchte" (like their singular) before "lamp"/"leucht"."""
     forms = [value]
-    for suffix in ("en", "es", "s", "e"):
+    for suffix in ("n", "en", "es", "s", "e"):
         if value.endswith(suffix) and len(value) > len(suffix) + 3:
             forms.append(value[: -len(suffix)])
     return forms

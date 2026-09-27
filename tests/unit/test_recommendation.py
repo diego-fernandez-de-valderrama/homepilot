@@ -224,3 +224,19 @@ def test_stated_ownership_prefers_the_product_that_fits_the_customers_hub():
     assert best(None) == "hue"
     assert best(["philips_hue_bridge"]) == "hue"
     assert best(["bosch_smart_home_controller"]) == "bosch"
+
+
+def test_confirmed_list_stays_within_the_limit_with_the_upsell():
+    middle = product("middle", price=70.0, facts=[fact("google_home"), fact("wifi")])
+    request = RecommendationRequest(
+        need="radiator thermostat", category="heating_control", max_price=150, must_support=["google_home"], limit=2
+    )
+    scores = {"cheap": 0.9, "middle": 0.88, "premium": 0.85}
+    result = services_for([CONFIRMED_CHEAP, middle, CONFIRMED_PREMIUM], scores).recommendation.recommend(request)
+    ids = [r.product.id for r in result.confirmed]
+    assert result.upsell is not None and result.upsell.product_id in ids
+    assert len(ids) <= 2 and ids[0] == result.confirmed[0].product.id
+
+    single = _recommend(limit=1)
+    assert single.upsell is not None
+    assert [r.product.id for r in single.confirmed] == ["cheap", single.upsell.product_id]  # best + upsell

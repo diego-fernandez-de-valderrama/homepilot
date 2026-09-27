@@ -6,7 +6,7 @@ from smart_home_agent.agent import state
 from smart_home_agent.container import Services
 from smart_home_agent.models.search import ProductFilter, SortOrder
 from smart_home_agent.services import vocabulary
-from smart_home_agent.tools._common import ToolResult, ok, resolve_category, tool_errors
+from smart_home_agent.tools._common import ToolResult, ok, resolve_category, tool_errors, tool_input
 
 
 def make_search_products(services: Services):
@@ -65,7 +65,8 @@ def make_filter_products(services: Services):
           sort: "completeness" (default), "price_asc" or "price_desc".
           limit: Number of results (1-50).
         """
-        criteria = ProductFilter(
+        criteria = tool_input(
+            ProductFilter,
             category=resolve_category(category),
             min_price=min_price,
             max_price=max_price,

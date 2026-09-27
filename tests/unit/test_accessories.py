@@ -39,3 +39,16 @@ def test_accessory_status_follows_ownership():
     [missing] = SERVICE.for_product(THERMOSTAT, _checks(["philips_hue_bridge"]))
     assert missing.status == "missing"
     assert SERVICE.for_product(THERMOSTAT, _checks(["homematic_ip_access_point"])) == []
+
+
+def test_hub_prices_and_availability_are_read_fresh():
+    catalog = FakeCatalog([ACCESS_POINT, ACCESS_POINT_2, THERMOSTAT])
+    service = AccessoryService(catalog)
+    first = service.hub_for("homematic_ip_access_point")
+    assert first is not None and first.id == "ap"
+    catalog.products["ap"] = ACCESS_POINT.model_copy(update={"price": 79.0})  # re-ingest: new price
+    hub = service.hub_for("homematic_ip_access_point")
+    assert hub is not None and hub.id == "ap2"
+    del catalog.products["ap2"]  # deactivated
+    hub = service.hub_for("homematic_ip_access_point")
+    assert hub is not None and (hub.id, hub.price) == ("ap", 79.0)

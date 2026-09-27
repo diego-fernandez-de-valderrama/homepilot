@@ -129,7 +129,9 @@ class CartService:
                 if units is None or (pid in merged and merged[pid] is None):
                     merged[pid] = None  # "all units" wins over any partial amount of the same product
                 else:
-                    merged[pid] = (merged.get(pid) or 0) + units
+                    total = (merged.get(pid) or 0) + units
+                    # A line holds at most MAX_QUANTITY units: removing that many (or more) removes all of them.
+                    merged[pid] = None if total >= MAX_QUANTITY else total
         return [CartChange(product_id=pid, quantity=quantity) for pid, quantity in merged.items()]
 
     def apply(self, items: Sequence[CartItem], action: CartAction, changes: Sequence[CartChange]) -> list[CartItem]:

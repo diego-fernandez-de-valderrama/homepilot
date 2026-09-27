@@ -7,7 +7,7 @@ from smart_home_agent.agent import state
 from smart_home_agent.container import Services
 from smart_home_agent.models.recommendation import RecommendationRequest
 from smart_home_agent.services import vocabulary
-from smart_home_agent.tools._common import ToolResult, ok, resolve_category, resolve_devices, tool_errors
+from smart_home_agent.tools._common import ToolResult, ok, resolve_category, resolve_devices, tool_errors, tool_input
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,8 @@ def make_recommend_products(services: Services):
             owned_devices = session.owned_devices
             applied["owned_devices"] = owned_devices
 
-        request = RecommendationRequest(
+        request = tool_input(
+            RecommendationRequest,
             need=need,
             category=resolve_category(category),
             max_price=max_price,

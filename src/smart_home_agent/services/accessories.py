@@ -35,25 +35,28 @@ def _is_bare_hub(product: Product, keywords: Sequence[str]) -> bool:
 
 
 class AccessoryService:
+    """Only the ids of the matching hub products are cached (per requirement, for the process lifetime); price
+    and availability are read from PostgreSQL on every call, so a re-ingest never shows a stale price or an
+    inactive hub."""
+
     def __init__(self, catalog: CatalogReader) -> None:
         self._catalog = catalog
-        self._hubs: list[Product] | None = None  # loaded once, on first use
+        self._hub_ids: dict[str, list[str]] = {}  # canonical requirement id -> bare hub product ids
 
-    def _hub_products(self) -> list[Product]:
-        if self._hubs is None:
-            _, products = self._catalog.filter_products(
-                ProductFilter(category=HUB_CATEGORY, sort="price_asc", limit=500)
-            )
-            self._hubs = [p for p in products if p.price is not None]
-        return self._hubs
+    def _candidate_ids(self, canonical_item: str, keywords: Sequence[str]) -> list[str]:
+        if canonical_item not in self._hub_ids:
+            _, products = self._catalog.filter_products(ProductFilter(category=HUB_CATEGORY, limit=500))
+            self._hub_ids[canonical_item] = [p.id for p in products if _is_bare_hub(p, keywords)]
+        return self._hub_ids[canonical_item]
 
     def hub_for(self, canonical_item: str) -> Product | None:
         """Cheapest bare hub product for a canonical requirement id, or None without a safe mapping."""
         keywords = HUB_TITLE_KEYWORDS.get(canonical_item)
         if not keywords:
             return None
-        matches = [p for p in self._hub_products() if _is_bare_hub(p, keywords)]
-        return min(matches, key=lambda p: (p.price or 0.0, p.id)) if matches else None
+        ids = self._candidate_ids(canonical_item, keywords)
+        current = [p for p in self._catalog.get_products(ids) if p.price is not None] if ids else []
+        return min(current, key=lambda p: (p.price or 0.0, p.id)) if current else None
 
     def for_product(self, product: Product, requirements: Sequence[RequirementCheck]) -> list[AccessorySuggestion]:
         """Hub suggestions for the required hubs of `product` that are `missing` or `unverified`."""

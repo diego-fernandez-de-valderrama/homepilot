@@ -142,3 +142,16 @@ def test_owned_devices_with_the_brand_still_resolve():
 def test_vocabulary_overview_does_not_offer_the_generic_hub():
     hubs_line = next(line for line in vocabulary.vocabulary_overview().splitlines() if line.startswith("Hubs"))
     assert "smart_hub" not in hubs_line and "philips_hue_bridge" in hubs_line
+
+
+@pytest.mark.parametrize("word", ["Lampe", "Lampen"])
+def test_lampe_is_ambiguous_in_singular_and_plural(word):
+    with pytest.raises(TermResolutionError) as error:
+        vocabulary.resolve_category(word)
+    assert set(error.value.options) == {"smart_bulb", "lamp"}
+
+
+def test_leuchten_resolves_like_leuchte():
+    with pytest.raises(TermResolutionError) as error:
+        vocabulary.resolve_category("Leuchten")
+    assert "lamp" in error.value.options

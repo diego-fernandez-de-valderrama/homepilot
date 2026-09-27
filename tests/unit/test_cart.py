@@ -107,3 +107,10 @@ def test_describe_a_pending_change(cart):
     assert unknown.lines[0].product is None and unknown.total is None
     malformed = cart.describe("r4", "add", {"product_ids": ["a"], "quantities": [1, 2]}, [])
     assert [line.product_id for line in malformed.lines] == ["a"]  # still shown; the tool reports the error
+
+
+def test_merged_removal_of_a_full_line_or_more_means_all_units(cart):
+    [change] = cart.changes("remove", ["a", "a"], [60, 60])
+    assert change.quantity is None
+    [partial] = cart.changes("remove", ["a", "a"], [2, 3])
+    assert partial.quantity == 5

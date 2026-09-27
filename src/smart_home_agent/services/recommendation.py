@@ -157,8 +157,11 @@ class RecommendationService:
         shown = confirmed_products[: request.limit]
         if upsell and upsell.product_id not in {c.product.id for c in shown}:
             target = next(c for c in confirmed if c.product.id == upsell.product_id)
-            # The upsell is the version the agent must present, so it takes its product's slot.
-            shown = [c for c in shown if c.product.title != target.product.title] + [target]
+            # The upsell is the version the agent must present, so it takes its product's slot, or the last
+            # slot: the list stays within the limit, except that the best match and its upsell are always both
+            # listed (a limit of 1 shows 2).
+            others = [c for c in shown if c.product.title != target.product.title]
+            shown = [*others[: max(request.limit - 1, 1)], target]
         listed_unconfirmed = unconfirmed_products[: request.limit]
         versions = self._other_versions([*shown, *listed_unconfirmed], results, criteria, terms, request)
 

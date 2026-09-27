@@ -270,3 +270,20 @@ def test_a_change_is_all_or_nothing(tools):
     ):
         assert bad["status"] == "invalid_input"
     assert read_state(context.state).cart == [CartItem(product_id="t1", quantity=1)]
+
+
+def test_data_errors_are_not_reported_as_invalid_input():
+    from pydantic import BaseModel
+
+    from smart_home_agent.tools._common import tool_errors
+
+    class Stored(BaseModel):
+        price: float
+
+    @tool_errors
+    def broken() -> dict:
+        Stored.model_validate({"price": "not a number"})  # corrupt stored document, not the tool's arguments
+        return {"status": "ok"}
+
+    result = broken()
+    assert result["status"] == "error" and "could not be completed" in result["message"]
