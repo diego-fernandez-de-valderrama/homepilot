@@ -7,6 +7,7 @@ each product and what is left in the cart, also when it failed or the customer c
 (`cart_result_callback` covers the calls the tool never ran).
 """
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -185,8 +186,12 @@ def make_cart_result_callback(
         session = _synced(tool_context)
         state.save(tool_context, session)
         status, message = ("awaiting_confirmation", _AWAITING) if confirmation is None else ("rejected", _REJECTED)
-        view = services.cart.view(session.cart)
         ids = _ids(args.get("product_ids"))
-        return change_result(status, action, ids, view, view, message, catalog=services.catalog)
+
+        def build() -> dict[str, Any]:  # database reads: off the shared agent event loop
+            view = services.cart.view(session.cart)
+            return change_result(status, action, ids, view, view, message, catalog=services.catalog)
+
+        return await asyncio.to_thread(build)
 
     return cart_result

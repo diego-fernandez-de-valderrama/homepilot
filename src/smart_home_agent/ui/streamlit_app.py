@@ -562,6 +562,14 @@ def show_failure(language: str | None, debug: bool, detail: str | None) -> None:
         st.caption(f"Developer detail: {detail}")
 
 
+def applied_confirmations(session_id: str, request_ids: list[str], customer_id: str) -> set[str]:
+    try:
+        return get_agent_service().applied_confirmations(session_id, request_ids, customer_id)
+    except Exception:  # unknown: treat every change as applied rather than risk applying one twice
+        logger.exception("reading the applied cart changes failed")
+        return set(request_ids)
+
+
 def answer_turn(start: TurnStarter, debug: bool, language: str | None) -> bool:
     """Runs a turn in a new assistant message and stores it. The model call is already retried silently
     (agent/model.py), so a failure is shown as a friendly notice:
@@ -634,9 +642,12 @@ def main() -> None:
         render_message(decision, debug)
         confirm = partial(get_agent_service().submit_confirmation, session_id, decisions, customer_id)
         if not answer_turn(confirm, debug, reply_language(None)):
-            messages.pop()  # the cards open again, so the customer can retry
-            st.session_state.submitted -= set(decisions)
-            for request_id in decisions:
+            # The turn may have failed after a cart change was applied: only the others open again for a retry.
+            retry = set(decisions) - applied_confirmations(session_id, list(decisions), customer_id)
+            if len(retry) == len(decisions):
+                messages.pop()  # nothing happened: the cards open again, so the customer can retry
+            st.session_state.submitted -= retry
+            for request_id in retry:
                 st.session_state.decisions.pop(request_id, None)
             return
         if any(decisions[r] for r in adds):  # show the customer what they just added

@@ -110,8 +110,13 @@ def build_container(settings: Settings) -> Container:
     profiles = build_profile_store(settings)
     guardrail = None
     if settings.agent.guardrail_enabled:
-        # Prototype embeddings are computed once here (startup) and cached in memory.
-        guardrail = SemanticGuardrail.create(gemini_embed(gemini), guardrail_thresholds(settings.agent))
+        # Prototype embeddings are computed once here (startup) and cached in memory. Like every guardrail
+        # failure, a failed startup embedding fails open: the agent runs without the input check (the
+        # deterministic output check and the prompt's rules stay) instead of not starting at all.
+        try:
+            guardrail = SemanticGuardrail.create(gemini_embed(gemini), guardrail_thresholds(settings.agent))
+        except Exception:
+            logger.exception("input guardrail disabled: embedding its prototypes failed")
     return Container(
         services=Services.create(catalog, index, settings.agent, profiles),
         catalog=catalog,

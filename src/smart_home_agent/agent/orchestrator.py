@@ -138,6 +138,9 @@ class AgentService:
         self._profiles = profiles
         self._sessions = InMemorySessionService()
         self._runner = Runner(app_name=app_name, agent=agent, session_service=self._sessions, auto_create_session=True)
+        # One turn or cart edit at a time per session: each writes the whole SessionState, so interleaving
+        # (a Streamlit rerun starting a new turn, a cart edit during a turn) would lose updates.
+        self._session_locks: dict[tuple[str, str], asyncio.Lock] = {}
         self._loop = asyncio.new_event_loop()
         threading.Thread(target=self._loop.run_forever, name="homepilot-agent-loop", daemon=True).start()
 
@@ -196,7 +199,15 @@ class AgentService:
         on_tool_call: Callable[[str], None] | None = None,
     ) -> AgentReply:
         """Answers ADK's confirmation requests (request id -> confirmed). A message without text: the input
-        guardrail skips it and the reply language of the previous message stays."""
+        guardrail skips it and the reply language of the previous message stays.
+
+        A request that was already answered and applied (e.g. by a turn that failed after the tool ran) is
+        skipped, so retrying a failed confirmation never applies a cart change twice."""
+        applied = await self.applied_confirmations_async(session_id, list(decisions), user_id)
+        decisions = {request_id: ok for request_id, ok in decisions.items() if request_id not in applied}
+        if not decisions:
+            state = await self.state_async(session_id, user_id)
+            return AgentReply(text="", detected_language=None, trace=TurnTrace(), state=state, error="already applied")
         parts = [
             types.Part(
                 function_response=types.FunctionResponse(
@@ -217,8 +228,30 @@ class AgentService:
         language: str | None,
         on_tool_call: Callable[[str], None] | None,
     ) -> AgentReply:
-        if (profile := await self._profile_snapshot(user_id)) is not None:
-            state_delta = {**state_delta, PROFILE_KEY: profile}
+        async with self._lock(session_id, user_id):
+            return await self._locked_turn(session_id, user_id, message, state_delta, language, on_tool_call)
+
+    def _lock(self, session_id: str, user_id: str) -> asyncio.Lock:
+        """Created on the agent loop (callers are coroutines running there), so no extra locking is needed."""
+        return self._session_locks.setdefault((user_id, session_id), asyncio.Lock())
+
+    async def _locked_turn(
+        self,
+        session_id: str,
+        user_id: str,
+        message: types.Content,
+        state_delta: dict[str, Any],
+        language: str | None,
+        on_tool_call: Callable[[str], None] | None,
+    ) -> AgentReply:
+        if self._profiles is not None:
+            profile = await self._profile_snapshot(user_id)
+            if profile is not None:
+                state_delta = {**state_delta, PROFILE_KEY: profile}
+            elif PROFILE_KEY not in await self._state_dict(session_id, user_id):
+                # Load failed before any snapshot: the key still marks the memory as enabled, so the prompt
+                # keeps its memory rules while the memory tool is offered ("nothing stored" for this turn).
+                state_delta = {**state_delta, PROFILE_KEY: None}
         trace = TurnTrace()
         answer: list[str] = []
         requests: list[tuple[str, str, dict[str, Any]]] = []  # (request id, tool name, tool args)
@@ -299,6 +332,42 @@ class AgentService:
             return None
         return self._profiles.profile(user_id, include_retracted)
 
+    async def _state_dict(self, session_id: str, user_id: str) -> dict[str, Any]:
+        session = await self._sessions.get_session(app_name=self._app_name, user_id=user_id, session_id=session_id)
+        return dict(session.state) if session else {}
+
+    def applied_confirmations(self, session_id: str, request_ids: list[str], user_id: str = DEFAULT_USER) -> set[str]:
+        return self._run(self.applied_confirmations_async(session_id, request_ids, user_id))
+
+    async def applied_confirmations_async(
+        self, session_id: str, request_ids: list[str], user_id: str = DEFAULT_USER
+    ) -> set[str]:
+        """Confirmation requests that were answered and whose cart tool then ran (or was cancelled) in this
+        session: the tool's function response follows the customer's answer. Such a request must not be
+        answered again."""
+        session = await self._sessions.get_session(app_name=self._app_name, user_id=user_id, session_id=session_id)
+        if session is None:
+            return set()
+        wanted = set(request_ids)
+        originals: dict[str, str] = {}  # confirmation request id -> id of the paused cart tool call
+        answered_at: dict[str, int] = {}  # confirmation request id -> index of the customer's answer
+        for index, event in enumerate(session.events):
+            for call in event.get_function_calls():
+                if call.name == REQUEST_CONFIRMATION_FUNCTION_CALL_NAME and call.id in wanted:
+                    original = (call.args or {}).get("originalFunctionCall") or {}
+                    if original.get("id"):
+                        originals[call.id] = original["id"]
+            for response in event.get_function_responses():
+                if response.name == REQUEST_CONFIRMATION_FUNCTION_CALL_NAME and response.id in wanted:
+                    answered_at.setdefault(response.id, index)
+        applied: set[str] = set()
+        for request_id, start in answered_at.items():
+            original_id = originals.get(request_id)
+            later = session.events[start + 1 :]
+            if original_id and any(r.id == original_id for e in later for r in e.get_function_responses()):
+                applied.add(request_id)
+        return applied
+
     async def state_async(self, session_id: str, user_id: str = DEFAULT_USER) -> SessionState:
         session = await self._sessions.get_session(app_name=self._app_name, user_id=user_id, session_id=session_id)
         return read_state(session.state) if session else SessionState()
@@ -324,16 +393,18 @@ class AgentService:
         event and flagged, so the next instruction tells the model to call view_cart again."""
         if self._cart is None:
             raise RuntimeError("AgentService was created without a cart service.")
-        session = await self._session(session_id, user_id)
-        current = read_state(session.state)
-        current.cart = self._cart.set_quantity(current.cart, product_id, quantity)
-        current.cart_changed_by_user = True
-        event = Event(
-            author="user",
-            invocation_id=Event.new_id(),
-            actions=EventActions(state_delta={STATE_KEY: current.model_dump(mode="json")}),
-        )
-        await self._sessions.append_event(session, event)
+        cart = self._cart
+        async with self._lock(session_id, user_id):  # never interleaved with a running turn of this session
+            session = await self._session(session_id, user_id)
+            current = read_state(session.state)
+            current.cart = await asyncio.to_thread(cart.set_quantity, current.cart, product_id, quantity)
+            current.cart_changed_by_user = True
+            event = Event(
+                author="user",
+                invocation_id=Event.new_id(),
+                actions=EventActions(state_delta={STATE_KEY: current.model_dump(mode="json")}),
+            )
+            await self._sessions.append_event(session, event)
 
     async def _session(self, session_id: str, user_id: str) -> Session:
         session = await self._sessions.get_session(app_name=self._app_name, user_id=user_id, session_id=session_id)

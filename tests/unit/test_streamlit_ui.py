@@ -474,3 +474,20 @@ def test_failed_turn_shows_the_notice_and_the_detail_only_to_developers():
     app.query_params["debug"] = "1"
     app.run()
     assert any("Developer detail: The model returned no content" in c.value for c in app.caption)
+
+
+def test_unknown_applied_state_never_reopens_a_cart_change(monkeypatch):
+    from smart_home_agent.ui import streamlit_app
+
+    class Broken:
+        def applied_confirmations(self, session_id, request_ids, customer_id):
+            raise ConnectionError("agent loop stuck")
+
+    class Known:
+        def applied_confirmations(self, session_id, request_ids, customer_id):
+            return {"r1"}
+
+    monkeypatch.setattr(streamlit_app, "get_agent_service", Broken)
+    assert streamlit_app.applied_confirmations("s1", ["r1", "r2"], "anna") == {"r1", "r2"}
+    monkeypatch.setattr(streamlit_app, "get_agent_service", Known)
+    assert streamlit_app.applied_confirmations("s1", ["r1", "r2"], "anna") == {"r1"}
