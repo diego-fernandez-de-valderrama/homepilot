@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 410" width="1000" height="410" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="410" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+
+  <!-- column labels -->
+  <text x="30" y="40" font-size="11" font-weight="700" letter-spacing="1.2" fill="#94a3b8">SOURCES</text>
+  <text x="300" y="130" font-size="11" font-weight="700" letter-spacing="1.2" fill="#94a3b8">AI PROPOSES</text>
+  <text x="550" y="130" font-size="11" font-weight="700" letter-spacing="1.2" fill="#94a3b8">FACT CHECK</text>
+  <text x="790" y="40" font-size="11" font-weight="700" letter-spacing="1.2" fill="#94a3b8">RESULT</text>
+
+  <!-- catalog direct path (drawn first, under the boxes) -->
+  <path d="M230,95 H786" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="510" y="85" text-anchor="middle" font-size="12" fill="#15803d">read directly and always trusted (catalog wins any conflict)</text>
+
+  <!-- checked-against path -->
+  <path d="M230,300 H635 V264" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <text x="440" y="318" text-anchor="middle" font-size="12" fill="#1d4ed8">every quote is compared with the original text</text>
+
+  <!-- catalog -->
+  <g filter="url(#shadow)"><rect x="30" y="55" width="200" height="100" rx="12" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/></g>
+  <text x="48" y="84" font-size="15" font-weight="700" fill="#0f172a">Catalog data</text>
+  <text x="48" y="106" font-size="12.5" fill="#475569">title, description and</text>
+  <text x="48" y="124" font-size="12.5" fill="#475569">attributes from the zip</text>
+  <rect x="48" y="132" width="86" height="16" rx="8" fill="#ccfbf1"/>
+  <text x="91" y="144" text-anchor="middle" font-size="10.5" font-weight="600" fill="#0f766e">always used</text>
+
+  <!-- web page -->
+  <g filter="url(#shadow)"><rect x="30" y="225" width="200" height="100" rx="12" fill="#ffffff" stroke="#0d9488" stroke-width="1.5" stroke-dasharray="6 4"/></g>
+  <text x="48" y="254" font-size="15" font-weight="700" fill="#0f172a">Product web page</text>
+  <text x="48" y="276" font-size="12.5" fill="#475569">fetched only when the</text>
+  <text x="48" y="294" font-size="12.5" fill="#475569">catalog data is thin</text>
+  <rect x="48" y="302" width="96" height="16" rx="8" fill="#f1f5f9"/>
+  <text x="96" y="314" text-anchor="middle" font-size="10.5" font-weight="600" fill="#475569">only if needed</text>
+
+  <!-- inputs to Gemini -->
+  <path d="M230,125 C265,125 265,175 296,175" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M230,255 C265,255 265,225 296,225" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Gemini -->
+  <g filter="url(#shadow)"><rect x="300" y="145" width="180" height="115" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/></g>
+  <text x="318" y="174" font-size="15" font-weight="700" fill="#92400e">Gemini</text>
+  <text x="318" y="196" font-size="12.5" fill="#78350f">reads both sources and</text>
+  <text x="318" y="214" font-size="12.5" fill="#78350f">proposes summaries and</text>
+  <text x="318" y="232" font-size="12.5" fill="#78350f">facts, each with a quote</text>
+  <text x="318" y="250" font-size="12.5" fill="#78350f">as proof</text>
+
+  <line x1="482" y1="202" x2="546" y2="202" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- fact check -->
+  <g filter="url(#shadow)"><rect x="550" y="145" width="170" height="115" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2.5"/></g>
+  <path d="M568,160 l8,-4 l8,4 v7 c0,6 -4,9 -8,11 c-4,-2 -8,-5 -8,-11 z" fill="#2563eb"/>
+  <text x="592" y="174" font-size="15" font-weight="700" fill="#1e3a8a">Fact check</text>
+  <text x="568" y="196" font-size="12.5" fill="#1e40af">Is the quote really in</text>
+  <text x="568" y="214" font-size="12.5" fill="#1e40af">the source? Does it</text>
+  <text x="568" y="232" font-size="12.5" fill="#1e40af">name the claim, and</text>
+  <text x="568" y="250" font-size="12.5" fill="#1e40af">not deny it?</text>
+
+  <!-- outcomes -->
+  <path d="M722,180 C755,180 755,150 786,150" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="752" y="200" font-size="11.5" font-weight="600" fill="#15803d">proven</text>
+  <path d="M722,235 C755,235 755,290 786,290" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow-gray)"/>
+  <text x="748" y="286" text-anchor="end" font-size="11.5" font-weight="600" fill="#64748b">no proof</text>
+
+  <g filter="url(#shadow)"><rect x="790" y="55" width="180" height="145" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/></g>
+  <circle cx="815" cy="80" r="10" fill="#16a34a"/>
+  <path d="M810,80 l4,4 l7,-8" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="832" y="85" font-size="15" font-weight="700" fill="#14532d">Verified product</text>
+  <text x="806" y="120" font-size="12.5" fill="#166534">catalog facts + proven</text>
+  <text x="806" y="138" font-size="12.5" fill="#166534">AI facts, each with its</text>
+  <text x="806" y="156" font-size="12.5" fill="#166534">source, quote and a</text>
+  <text x="806" y="174" font-size="12.5" fill="#166534">confidence score</text>
+
+  <g filter="url(#shadow)"><rect x="790" y="255" width="180" height="80" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/></g>
+  <circle cx="815" cy="280" r="10" fill="#94a3b8"/>
+  <path d="M811,276 l8,8 M819,276 l-8,8" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>
+  <text x="832" y="285" font-size="15" font-weight="700" fill="#334155">Dropped</text>
+  <text x="806" y="308" font-size="12.5" fill="#475569">guesses, contradictions</text>
+  <text x="806" y="325" font-size="12.5" fill="#475569">and unproven claims</text>
+
+  <!-- footer -->
+  <line x1="30" y1="355" x2="970" y2="355" stroke="#e2e8f0"/>
+  <text x="500" y="385" text-anchor="middle" font-size="13" fill="#0f172a"><tspan font-weight="700">Unknown stays unknown:</tspan> a fact nobody states is never guessed as "works with" or "does not work with".</text>
+</svg>

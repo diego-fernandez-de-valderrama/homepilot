@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 480" width="1000" height="480" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#d97706"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="480" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+
+  <!-- Internet group -->
+  <rect x="250" y="18" width="350" height="122" rx="14" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="264" y="38" font-size="11" font-weight="700" letter-spacing="1.2" fill="#94a3b8">INTERNET</text>
+
+  <g filter="url(#shadow)"><rect x="268" y="50" width="150" height="72" rx="12" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/></g>
+  <text x="343" y="80" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Product pages</text>
+  <text x="343" y="100" text-anchor="middle" font-size="12" fill="#475569">the shop website</text>
+
+  <g filter="url(#shadow)"><rect x="436" y="50" width="150" height="72" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/></g>
+  <text x="511" y="80" text-anchor="middle" font-size="14" font-weight="700" fill="#92400e">Gemini API</text>
+  <text x="511" y="100" text-anchor="middle" font-size="12" fill="#92400e">Google AI</text>
+
+  <!-- Docker group -->
+  <rect x="680" y="18" width="300" height="444" rx="14" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="694" y="38" font-size="11" font-weight="700" letter-spacing="1.2" fill="#94a3b8">DOCKER, ON YOUR MACHINE</text>
+
+  <!-- PostgreSQL -->
+  <g filter="url(#shadow)">
+    <path d="M720,72 V202 A110,16 0 0 0 940,202 V72" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <ellipse cx="830" cy="72" rx="110" ry="16" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  </g>
+  <text x="830" y="118" text-anchor="middle" font-size="17" font-weight="700" fill="#1e3a8a">PostgreSQL</text>
+  <text x="830" y="140" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1d4ed8">the source of truth</text>
+  <text x="830" y="166" text-anchor="middle" font-size="12" fill="#1e40af">products, prices, facts and</text>
+  <text x="830" y="183" text-anchor="middle" font-size="12" fill="#1e40af">their sources, page cache, runs</text>
+
+  <!-- Qdrant -->
+  <g filter="url(#shadow)">
+    <path d="M720,262 V392 A110,16 0 0 0 940,392 V262" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.5"/>
+    <ellipse cx="830" cy="262" rx="110" ry="16" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  </g>
+  <text x="830" y="308" text-anchor="middle" font-size="17" font-weight="700" fill="#4c1d95">Qdrant</text>
+  <text x="830" y="330" text-anchor="middle" font-size="12.5" font-weight="600" fill="#6d28d9">the search index</text>
+  <text x="830" y="356" text-anchor="middle" font-size="12" fill="#5b21b6">one vector per product, to find</text>
+  <text x="830" y="373" text-anchor="middle" font-size="12" fill="#5b21b6">products by meaning</text>
+
+  <!-- input zip -->
+  <g filter="url(#shadow)">
+    <path d="M30,200 H125 L150,225 V290 H30 Z" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <path d="M125,200 V225 H150" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+  </g>
+  <text x="90" y="252" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">products.zip</text>
+  <text x="90" y="272" text-anchor="middle" font-size="12" fill="#64748b">the input</text>
+
+  <line x1="152" y1="245" x2="296" y2="245" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="224" y="236" text-anchor="middle" font-size="12" fill="#475569">read once per run</text>
+
+  <!-- the tool -->
+  <g filter="url(#shadow)"><rect x="300" y="190" width="250" height="110" rx="14" fill="#0f172a"/></g>
+  <text x="425" y="232" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">catalog-ingestion</text>
+  <text x="425" y="255" text-anchor="middle" font-size="13" fill="#cbd5e1">uv run catalog-ingestion ingest</text>
+  <text x="425" y="278" text-anchor="middle" font-size="12" fill="#94a3b8">prepare, enrich, store, index</text>
+
+  <!-- internet arrows -->
+  <line x1="343" y1="124" x2="343" y2="186" stroke="#0d9488" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <text x="335" y="152" text-anchor="end" font-size="12" fill="#0f766e">page text,</text>
+  <text x="335" y="168" text-anchor="end" font-size="12" fill="#0f766e">only when needed</text>
+
+  <line x1="511" y1="124" x2="511" y2="186" stroke="#d97706" stroke-width="2" marker-end="url(#arrow-amber)"/>
+  <text x="520" y="152" font-size="12" fill="#b45309">summaries, facts,</text>
+  <text x="520" y="168" font-size="12" fill="#b45309">search vectors</text>
+
+  <!-- store arrows -->
+  <line x1="552" y1="205" x2="716" y2="205" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="614" y="196" text-anchor="middle" font-size="12" fill="#1d4ed8">saves everything</text>
+
+  <line x1="552" y1="285" x2="716" y2="285" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <text x="614" y="276" text-anchor="middle" font-size="12" fill="#6d28d9">saves the vectors</text>
+
+  <!-- agent -->
+  <g filter="url(#shadow)"><rect x="300" y="372" width="250" height="80" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/></g>
+  <text x="425" y="400" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">smart-home-agent (later)</text>
+  <text x="425" y="420" text-anchor="middle" font-size="12" fill="#475569">finds candidates in Qdrant,</text>
+  <text x="425" y="437" text-anchor="middle" font-size="12" fill="#475569">checks every fact in PostgreSQL</text>
+  <line x1="552" y1="412" x2="676" y2="412" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <text x="614" y="403" text-anchor="middle" font-size="12" fill="#64748b">reads both</text>
+</svg>

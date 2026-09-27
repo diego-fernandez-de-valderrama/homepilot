@@ -119,6 +119,9 @@ embedding + Qdrant upsert        only when doc_hash or embedding model changed
 
 Web and LLM calls run in a bounded thread pool (`INGEST_CONCURRENCY`) with exponential backoff on 408/429/5xx. All database writes happen on the main thread. A failure in one product is logged and counted, and the run continues.
 
+For a high-level, illustrated explanation of `ingest`, see
+[docs/ingest-process.md](docs/ingest-process.md).
+
 ---
 
 ## Enrichment strategy
