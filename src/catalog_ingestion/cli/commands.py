@@ -134,6 +134,7 @@ def ingest(
             enricher=LLMEnricher(gemini, settings.gemini.temperature) if gemini and not skip_llm else None,
             model_name=settings.gemini.model,
             progress=progress,
+            max_deactivate_ratio=settings.ingest.max_deactivate_ratio,
         )
         try:
             stats = pipeline.ingest(options)

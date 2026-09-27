@@ -1,6 +1,7 @@
 """End-to-end pipeline runs with in-memory Qdrant, an in-memory PostgreSQL fake,
 fake Gemini components and real fixtures. No network, no Docker."""
 
+import json
 from datetime import UTC, datetime
 from typing import cast
 
@@ -115,6 +116,94 @@ def test_partial_runs_do_not_deactivate(env):
     assert stats["selected"] == 1
     assert "postgres_deactivated" not in stats
     assert env["qdrant"].count() == 1
+
+
+def test_limit_runs_do_not_deactivate(env):
+    n = len(env["products"])
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"], limit=2)).as_dict()
+    assert "postgres_deactivated" not in stats
+    assert env["qdrant"].count() == n
+
+
+def _active(env) -> int:
+    return sum(row["active"] for row in env["postgres"].products.values())
+
+
+def test_empty_input_never_deactivates_the_catalog(env):
+    n = len(env["products"])
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    empty = build_zip(env["tmp"] / "empty.zip", [])
+    stats = env["pipeline"].ingest(IngestOptions(input_path=empty)).as_dict()
+    assert stats["deactivation_skipped"] == 1
+    assert "postgres_deactivated" not in stats
+    assert _active(env) == n
+    assert env["qdrant"].count() == n
+    assert env["postgres"].runs[-1]["status"] == "partial"
+
+
+def test_unreadable_files_skip_deactivation(env):
+    n = len(env["products"])
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    products = env["products"][:-1]  # one product "missing" because its file is corrupt
+    broken = build_zip(env["tmp"] / "broken.zip", products, extra_members={"info/99999999.json": b"{not json"})
+    stats = env["pipeline"].ingest(IngestOptions(input_path=broken)).as_dict()
+    assert stats["deactivation_skipped"] == 1
+    assert _active(env) == n
+
+
+def test_duplicate_members_do_not_block_deactivation(env):
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    products = env["products"][:-1]
+    duplicate = json.dumps(products[0], ensure_ascii=False).encode()
+    path = build_zip(env["tmp"] / "dup.zip", products, extra_members={"info/zz_duplicate.json": duplicate})
+    stats = env["pipeline"].ingest(IngestOptions(input_path=path)).as_dict()
+    assert stats["postgres_deactivated"] == 1
+
+
+def test_mass_deactivation_needs_force(env):
+    n = len(env["products"])
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    half = build_zip(env["tmp"] / "half.zip", env["products"][: n // 2])
+    refused = env["pipeline"].ingest(IngestOptions(input_path=half)).as_dict()
+    assert refused["deactivation_refused"] == n - n // 2
+    assert _active(env) == n
+
+    forced = env["pipeline"].ingest(IngestOptions(input_path=half, force=True)).as_dict()
+    assert forced["postgres_deactivated"] == n - n // 2
+    assert env["qdrant"].count() == n // 2
+
+
+def test_failed_qdrant_delete_is_retried_on_the_next_run(env, monkeypatch):
+    n = len(env["products"])
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    products = env["products"][:-1]
+    removed = env["products"][-1]["id"]
+    smaller = build_zip(env["tmp"] / "smaller.zip", products)
+
+    def fail(ids):
+        raise ConnectionError("qdrant down")
+
+    monkeypatch.setattr(env["qdrant"], "delete", fail)
+    stats = env["pipeline"].ingest(IngestOptions(input_path=smaller)).as_dict()
+    assert stats["postgres_deactivated"] == 1
+    assert stats["qdrant_delete_failed"] == 1
+    assert env["qdrant"].count() == n  # the point is still there
+    monkeypatch.undo()
+
+    again = env["pipeline"].ingest(IngestOptions(input_path=smaller)).as_dict()
+    assert again["qdrant_deleted_inactive"] == 1
+    assert env["qdrant"].indexed_states([removed]) == {}
+    assert removed in env["postgres"].cleared_indexed
+
+
+def test_reindex_removes_points_of_inactive_products(env):
+    env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
+    removed = env["products"][-1]["id"]
+    env["postgres"].products[removed]["active"] = False  # deactivated, but its point was never deleted
+    stats = env["pipeline"].reindex().as_dict()
+    assert stats["qdrant_deleted_inactive"] == 1
+    assert env["qdrant"].indexed_states([removed]) == {}
 
 
 def test_force_recomputes_everything(env):

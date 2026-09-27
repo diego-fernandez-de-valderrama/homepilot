@@ -12,6 +12,7 @@ from catalog_ingestion.storage.postgres.models import (
     IngestionRunRecord,
     ProductRecord,
     RequirementRecord,
+    RetrievalDocumentRecord,
 )
 from catalog_ingestion.storage.postgres.repository import PostgresRepository, UpsertOutcome
 from catalog_ingestion.validation.validator import Validator
@@ -73,19 +74,29 @@ def test_requirements_alternatives_and_deactivation(repository):
         )
     assert alternatives is not None and "homematic_ccu3" in alternatives
 
+    assert repo.deactivate_missing([]) == []  # never the whole catalog
     assert repo.deactivate_missing([BOSCH_CONTROLLER]) == [HOMEMATIC_OR]
     assert repo.deactivate_missing([BOSCH_CONTROLLER]) == []
     assert [e.id for e in repo.load_enriched()] == [BOSCH_CONTROLLER]
+    assert repo.inactive_ids() == [HOMEMATIC_OR]
 
 
 def test_documents_runs_and_status(repository):
-    repo, _ = repository
+    repo, sessions = repository
     prepared, enriched = _enriched(BOSCH_CONTROLLER)
     repo.upsert_product(enriched, prepared.raw, prepared.raw_hash, None, None)
     document = build_document(enriched)
     repo.save_document(document)
     repo.save_document(document)
     repo.mark_indexed([document], "model@8")
+    with sessions() as session:
+        record = session.get_one(RetrievalDocumentRecord, BOSCH_CONTROLLER)
+        assert (record.indexed_doc_hash, record.embedding_model) == (document.doc_hash, "model@8")
+        assert record.indexed_at is not None
+    repo.clear_indexed([BOSCH_CONTROLLER])
+    with sessions() as session:
+        record = session.get_one(RetrievalDocumentRecord, BOSCH_CONTROLLER)
+        assert (record.indexed_doc_hash, record.embedding_model, record.indexed_at) == (None, None, None)
 
     run_id = repo.start_run({"command": "test"})
     repo.finish_run(run_id, "succeeded", {"loaded": 1})

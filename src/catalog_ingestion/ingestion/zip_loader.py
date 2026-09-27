@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 class LoadError:
     member: str
     error: str
+    duplicate: bool = False  # the product itself was loaded from another member
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +61,7 @@ def load_products(zip_path: Path) -> LoadResult:
             continue
         product = raw_from_schema(schema, original=data)
         if product.id in products:
-            errors.append(LoadError(name, f"duplicate product id {product.id}"))
+            errors.append(LoadError(name, f"duplicate product id {product.id}", duplicate=True))
             logger.warning("Duplicate product id, keeping first", extra=log_fields(member=name, product_id=product.id))
             continue
         products[product.id] = product

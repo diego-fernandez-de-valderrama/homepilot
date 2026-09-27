@@ -94,6 +94,7 @@ class InMemoryPostgres:
     web_pages: dict[str, WebPage] = field(default_factory=dict)
     documents: dict[str, RetrievalDocument] = field(default_factory=dict)
     runs: list[dict[str, Any]] = field(default_factory=list)
+    cleared_indexed: list[str] = field(default_factory=list)
 
     def load_states(self) -> dict[str, ProductState]:
         return {
@@ -138,10 +139,18 @@ class InMemoryPostgres:
 
     def deactivate_missing(self, present_ids) -> list[str]:
         present = set(present_ids)
+        if not present:
+            return []
         gone = [pid for pid, row in self.products.items() if row["active"] and pid not in present]
         for pid in gone:
             self.products[pid]["active"] = False
         return gone
+
+    def inactive_ids(self) -> list[str]:
+        return sorted(pid for pid, row in self.products.items() if not row["active"])
+
+    def clear_indexed(self, product_ids) -> None:
+        self.cleared_indexed.extend(product_ids)
 
     def load_enriched(self, product_ids=None) -> list[EnrichedProduct]:
         return [

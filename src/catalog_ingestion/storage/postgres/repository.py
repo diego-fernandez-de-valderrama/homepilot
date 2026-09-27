@@ -211,13 +211,21 @@ class PostgresRepository:
         return outcome
 
     def deactivate_missing(self, present_ids: Iterable[str]) -> list[str]:
+        present = list(present_ids)
+        if not present:  # `NOT IN ()` would match every row: never deactivate the whole catalog
+            return []
         statement = (
             update(ProductRecord)
-            .where(ProductRecord.active, ProductRecord.id.not_in(list(present_ids)))
+            .where(ProductRecord.active, ProductRecord.id.not_in(present))
             .values(active=False, updated_at=func.now())
             .returning(ProductRecord.id)
         )
         with self._sessions.begin() as session:
+            return list(session.scalars(statement))
+
+    def inactive_ids(self) -> list[str]:
+        with self._sessions() as session:
+            statement = select(ProductRecord.id).where(~ProductRecord.active).order_by(ProductRecord.id)
             return list(session.scalars(statement))
 
     def load_enriched(self, product_ids: list[str] | None = None) -> list[EnrichedProduct]:
@@ -259,6 +267,20 @@ class PostgresRepository:
                     }
                     for doc in documents
                 ],
+            )
+
+    def clear_indexed(self, product_ids: list[str]) -> None:
+        """Forgets the index state of products whose Qdrant points were deleted."""
+        if not product_ids:
+            return
+        with self._sessions.begin() as session:
+            session.execute(
+                update(RetrievalDocumentRecord)
+                .where(
+                    RetrievalDocumentRecord.product_id.in_(product_ids),
+                    RetrievalDocumentRecord.indexed_doc_hash.is_not(None),
+                )
+                .values(indexed_doc_hash=None, embedding_model=None, indexed_at=None)
             )
 
     # --- runs & status -------------------------------------------------------------------

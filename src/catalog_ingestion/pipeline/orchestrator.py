@@ -17,7 +17,7 @@ from typing import Any
 from catalog_ingestion.core.logging import log_fields
 from catalog_ingestion.domain.enrichment import EnrichedProduct, WebPage
 from catalog_ingestion.domain.enums import WebStatus
-from catalog_ingestion.ingestion.zip_loader import load_products
+from catalog_ingestion.ingestion.zip_loader import LoadResult, load_products
 from catalog_ingestion.llm.enricher import Enricher, LLMResult, from_cached_output
 from catalog_ingestion.llm.errors import QuotaExhaustedError
 from catalog_ingestion.llm.prompts import PROMPT_VERSION
@@ -76,6 +76,7 @@ class IngestionPipeline:
         model_name: str,
         validator: Validator | None = None,
         progress: ProgressSink | None = None,
+        max_deactivate_ratio: float = 0.2,
     ) -> None:
         self._pg = postgres
         self._qdrant = qdrant
@@ -85,6 +86,7 @@ class IngestionPipeline:
         self._model = model_name
         self._validator = validator or Validator()
         self._progress = progress or NullProgress()
+        self._max_deactivate_ratio = max_deactivate_ratio
         # Set when Gemini reports a quota that will not reset during this run (e.g. per day).
         self._llm_quota_exhausted = threading.Event()
 
@@ -107,7 +109,8 @@ class IngestionPipeline:
         status = "failed"
         try:
             self._ingest(options, stats)
-            status = "partial" if stats.get("failed") or stats.get("qdrant_failed") else "succeeded"
+            problems = ("failed", "qdrant_failed", "qdrant_delete_failed", "deactivation_skipped")
+            status = "partial" if any(stats.get(key) for key in problems) else "succeeded"
         except KeyboardInterrupt:
             # Every product recorded before the interruption is already committed.
             status = "interrupted"
@@ -176,13 +179,56 @@ class IngestionPipeline:
         self._progress.finish("enrich")
 
         if options.is_full_run:
-            deactivated = self._pg.deactivate_missing([raw.id for raw in loaded.products])
-            stats.set("postgres_deactivated", len(deactivated))
-            if deactivated and self._qdrant is not None:
-                self._qdrant.delete(deactivated)
-                stats.set("qdrant_deleted", len(deactivated))
+            self._deactivate_missing(loaded, states, options, stats)
+            self._delete_inactive_from_index(stats)
 
         self._index(documents, force=options.force, stats=stats)
+
+    def _deactivate_missing(
+        self, loaded: LoadResult, states: dict[str, ProductState], options: IngestOptions, stats: RunStats
+    ) -> None:
+        """Marks products missing from a full, cleanly loaded input as inactive.
+
+        An empty input or unreadable files could otherwise deactivate products that still exist, so the
+        step is skipped then; a large share of removals needs --force.
+        """
+        unreadable = [error for error in loaded.errors if not error.duplicate]
+        if not loaded.products or unreadable:
+            logger.warning(
+                "Deactivation skipped: the input is empty or has unreadable files",
+                extra=log_fields(loaded=len(loaded.products), unreadable=len(unreadable)),
+            )
+            stats.set("deactivation_skipped", 1)
+            return
+        present = {raw.id for raw in loaded.products}
+        active = [pid for pid, state in states.items() if state.active]
+        missing = [pid for pid in active if pid not in present]
+        if not options.force and len(missing) > self._max_deactivate_ratio * len(active):
+            logger.error(
+                "Deactivation refused: too many products are missing from the input (use --force if intended)",
+                extra=log_fields(missing=len(missing), active=len(active), max_ratio=self._max_deactivate_ratio),
+            )
+            stats.set("deactivation_skipped", 1)
+            stats.set("deactivation_refused", len(missing))
+            return
+        stats.set("postgres_deactivated", len(self._pg.deactivate_missing(sorted(present))))
+
+    def _delete_inactive_from_index(self, stats: RunStats) -> None:
+        """Deletes the Qdrant points of every inactive product, not only of this run's removals, so a
+        delete that failed before (after PostgreSQL already committed) is retried."""
+        if self._qdrant is None:
+            return
+        inactive = self._pg.inactive_ids()
+        if not inactive:
+            return
+        try:
+            self._qdrant.delete(inactive)
+        except Exception:
+            logger.exception("Qdrant delete of inactive products failed; it is retried on the next run")
+            stats.set("qdrant_delete_failed", len(inactive))
+            return
+        self._pg.clear_indexed(inactive)
+        stats.set("qdrant_deleted_inactive", len(inactive))
 
     def _enrich_one(
         self,
@@ -372,6 +418,7 @@ class IngestionPipeline:
         run_id = self._pg.start_run({"command": "reindex", "force": force})
         status = "failed"
         try:
+            self._delete_inactive_from_index(stats)
             products = self._pg.load_enriched()
             stats.set("loaded_from_postgres", len(products))
             documents = []
@@ -380,7 +427,7 @@ class IngestionPipeline:
                 self._pg.save_document(document)
                 documents.append((enriched, document))
             self._index(documents, force=force, stats=stats)
-            status = "partial" if stats.get("qdrant_failed") else "succeeded"
+            status = "partial" if stats.get("qdrant_failed") or stats.get("qdrant_delete_failed") else "succeeded"
         finally:
             self._pg.finish_run(run_id, status, stats.as_dict())
         return stats

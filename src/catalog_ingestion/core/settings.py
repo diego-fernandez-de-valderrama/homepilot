@@ -89,6 +89,8 @@ class IngestSettings(BaseSettings):
 
     input_path: Path = Path("../products.zip")
     concurrency: int = Field(default=4, ge=1, le=64)
+    # A full run refuses (unless --force) to deactivate more than this share of the active products.
+    max_deactivate_ratio: float = Field(default=0.2, ge=0.0, le=1.0)
 
 
 class AppSettings(BaseModel):

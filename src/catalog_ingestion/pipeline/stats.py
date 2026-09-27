@@ -11,7 +11,8 @@ ORDER: tuple[str, ...] = (
     "llm_called", "llm_cached", "llm_skipped", "llm_skipped_quota", "llm_failed",
     "validated", "validation_notes", "failed",
     "loaded_from_postgres", "postgres_inserted", "postgres_updated", "postgres_unchanged", "postgres_upserted",
-    "postgres_deactivated", "qdrant_indexed", "qdrant_unchanged", "qdrant_failed", "qdrant_deleted",
+    "postgres_deactivated", "deactivation_skipped", "deactivation_refused",
+    "qdrant_indexed", "qdrant_unchanged", "qdrant_failed", "qdrant_deleted_inactive", "qdrant_delete_failed",
     "qdrant_skipped_no_embedder",
 )  # fmt: skip
 
