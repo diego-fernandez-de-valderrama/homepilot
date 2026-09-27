@@ -9,6 +9,7 @@ dependencies = [
     "catalog-ingestion",
     "google-adk>=2.10.0",
     "google-genai>=2.25.0",
+    "lingua-language-detector>=2.2.0",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",

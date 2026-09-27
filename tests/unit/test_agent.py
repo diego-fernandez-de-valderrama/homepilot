@@ -108,11 +108,23 @@ def test_trace_matches_calls_and_responses():
     ("text", "expected"),
     [
         ("Is the Fenster- und Türkontakt any good?", "en"),
-        ("Hi, I am Jürgen", "en"),
+        ("Is the Homematic IP Heizkörperthermostat compatible with Alexa?", "en"),
+        ("Can I add the Heizkörperthermostat Evo to my cart?", "en"),
+        ("I need a Matter smart plug.", "en"),
+        ("I need a smart plug for Alexa.", "en"),
+        ("I wannt a set of smart blindfolds for the 6 window sin my home", "en"),
+        ("Hi, I'm Anna and at home I use Google Home.", "en"),
         ("nein danke", "de"),
         ("ja bitte", "de"),
         ("Welche Lampe ist gut für die Küche?", "de"),
+        ("Mein Name ist Jürgen. Ich habe eine Philips Hue Bridge.", "de"),
+        ("Ich habe Alexa.", "de"),
     ],
 )
-def test_language_is_not_decided_by_a_single_umlaut(text, expected):
+def test_language_is_not_decided_by_german_names(text, expected):
     assert detect_language(text) == expected
+
+
+def test_greeting_with_a_german_name_is_not_german():
+    # Without the name, "Hi, I am" is too little evidence for a decision.
+    assert detect_language("Hi, I am Jürgen") != "de"
