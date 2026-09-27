@@ -1,11 +1,10 @@
-"""What the guardrail did in one turn. Kept apart from the callbacks, so the agent's reply model can use it
-without importing the callbacks (which depend on the agent's state helpers)."""
+"""What the guardrail did in one turn."""
 
 from pydantic import BaseModel, Field
 
-from smart_home_agent.guardrail.categories import GuardrailDecision
-from smart_home_agent.guardrail.output_check import Violation
-from smart_home_agent.guardrail.responses import ResponseType
+from smart_home_agent.guardrail.input import GuardrailDecision
+from smart_home_agent.guardrail.output import Violation
+from smart_home_agent.guardrail.replies import ResponseType
 
 
 class GuardrailReport(BaseModel):

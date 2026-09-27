@@ -9,7 +9,7 @@ from catalog_ingestion.storage.postgres.engine import create_session_factory
 from catalog_ingestion.storage.qdrant.collection import create_client
 
 from smart_home_agent.config import AgentSettings, Settings
-from smart_home_agent.guardrail.classifier import GuardrailThresholds, SemanticGuardrail, gemini_embed
+from smart_home_agent.guardrail import GuardrailThresholds, SemanticGuardrail, gemini_embed
 from smart_home_agent.memory.database import create_memory_engine
 from smart_home_agent.repositories.postgres import CatalogReader, CatalogRepository, create_readonly_sessions
 from smart_home_agent.repositories.profile import ProfileRepository, ProfileStore

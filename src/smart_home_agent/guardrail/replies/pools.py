@@ -1,19 +1,9 @@
-"""Deterministic replies for blocked messages and failed output checks (no model call).
+"""Reply texts: a small pool of equivalent variants per response type and language, so repeated blocks do not
+sound canned."""
 
-Each response type has a small pool of equivalent variants per language, so repeated blocks do not
-sound canned. The variant used last in the session is never picked twice in a row.
-"""
+from smart_home_agent.guardrail.replies.response_type import ResponseType
 
-import random
-from enum import StrEnum
-
-
-class ResponseType(StrEnum):
-    ELECTRICAL = "ELECTRICAL"
-    OFF_TOPIC = "OFF_TOPIC"
-    PROMPT_INJECTION = "PROMPT_INJECTION"
-    OUTPUT_FALLBACK = "OUTPUT_FALLBACK"
-
+DEFAULT_LANGUAGE = "en"
 
 RESPONSES: dict[ResponseType, dict[str, tuple[str, ...]]] = {
     ResponseType.ELECTRICAL: {
@@ -101,14 +91,3 @@ RESPONSES: dict[ResponseType, dict[str, tuple[str, ...]]] = {
         ),
     },
 }
-
-DEFAULT_LANGUAGE = "en"
-
-
-def pick_response(
-    kind: ResponseType, language: str | None, previous: str | None = None, rng: random.Random | None = None
-) -> str:
-    """A random variant of the pool for `kind` in `language` (default English), never `previous`."""
-    pool = RESPONSES[kind].get(language or DEFAULT_LANGUAGE) or RESPONSES[kind][DEFAULT_LANGUAGE]
-    candidates = [text for text in pool if text != previous] or list(pool)
-    return (rng or random).choice(candidates)

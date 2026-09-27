@@ -20,9 +20,8 @@ from evals.guardrail_cases import OUTPUT_CASES
 from smart_home_agent.agent import AgentService, build_agent
 from smart_home_agent.config import AgentSettings, Settings
 from smart_home_agent.container import guardrail_thresholds
-from smart_home_agent.guardrail.categories import Category
-from smart_home_agent.guardrail.classifier import SemanticGuardrail
-from smart_home_agent.guardrail.responses import RESPONSES, ResponseType
+from smart_home_agent.guardrail import Category, SemanticGuardrail
+from smart_home_agent.guardrail.replies import RESPONSES, ResponseType
 from tests.fakes import fact, product, services_for
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "guardrail_embeddings.json"
@@ -274,7 +273,7 @@ def test_output_check_can_be_disabled():
 
 
 def test_response_choice_is_deterministic_with_a_seeded_rng():
-    from smart_home_agent.guardrail.responses import pick_response
+    from smart_home_agent.guardrail.replies import pick_response
 
     first = pick_response(ResponseType.OFF_TOPIC, "de", None, random.Random(1))
     assert first == pick_response(ResponseType.OFF_TOPIC, "de", None, random.Random(1))

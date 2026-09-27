@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from smart_home_agent.agent import AgentReply, ToolCallTrace
 from smart_home_agent.agent.model import announces_action
-from smart_home_agent.guardrail.categories import Category
+from smart_home_agent.guardrail import Category
 from smart_home_agent.models.profile import FactKind
 from smart_home_agent.session import detect_language
 

@@ -5,9 +5,7 @@ from collections.abc import Sequence
 import pytest
 from catalog_ingestion.domain.enums import FactStatus
 
-from smart_home_agent.guardrail.categories import Category
-from smart_home_agent.guardrail.classifier import GuardrailThresholds, SemanticGuardrail
-from smart_home_agent.guardrail.output_check import OutputValidator
+from smart_home_agent.guardrail import Category, GuardrailThresholds, OutputValidator, SemanticGuardrail
 from tests.fakes import FakeCatalog, fact, product
 
 THERMOSTAT = product(

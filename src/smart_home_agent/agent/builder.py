@@ -11,9 +11,12 @@ from smart_home_agent.agent.model import ResilientGemini, RetryPolicy
 from smart_home_agent.agent.prompts import BASE_INSTRUCTION, MEMORY_INSTRUCTION, build_instruction
 from smart_home_agent.config import Settings
 from smart_home_agent.container import Services
-from smart_home_agent.guardrail.callbacks import make_input_callback, make_output_callback
-from smart_home_agent.guardrail.classifier import SemanticGuardrail
-from smart_home_agent.guardrail.output_check import OutputValidator
+from smart_home_agent.guardrail import (
+    InputGuardrailCallback,
+    OutputGuardrailCallback,
+    OutputValidator,
+    SemanticGuardrail,
+)
 from smart_home_agent.tools import build_tools
 from smart_home_agent.tools.cart import make_cart_result_callback
 
@@ -53,8 +56,8 @@ def build_agent(
                 else None
             ),
         ),
-        before_agent_callback=make_input_callback(input_guardrail) if input_guardrail else None,
-        after_model_callback=make_output_callback(validator),
+        before_agent_callback=InputGuardrailCallback(input_guardrail) if input_guardrail else None,
+        after_model_callback=OutputGuardrailCallback(validator),
         after_tool_callback=make_cart_result_callback(services),
     )
 

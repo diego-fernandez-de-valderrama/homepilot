@@ -6,7 +6,7 @@ generalization. `UNCERTAIN` means "must not be blocked": both SMART_HOME and UNC
 correct for those ambiguous cases.
 """
 
-from smart_home_agent.guardrail.categories import Category
+from smart_home_agent.guardrail import Category
 
 SH, EL, OT, PI, UN = (
     Category.SMART_HOME,

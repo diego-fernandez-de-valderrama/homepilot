@@ -4,8 +4,7 @@ from collections.abc import Sequence
 
 import pytest
 
-from smart_home_agent.guardrail.categories import Category
-from smart_home_agent.guardrail.classifier import GuardrailThresholds, SemanticGuardrail, decide
+from smart_home_agent.guardrail.input import Category, GuardrailThresholds, SemanticGuardrail, decide
 
 THRESHOLDS = GuardrailThresholds(smart_home=0.8, electrical=0.85, off_topic=0.8, prompt_injection=0.8, margin=0.05)
 AXES = {

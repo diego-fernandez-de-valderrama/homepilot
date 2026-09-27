@@ -8,7 +8,7 @@ installation instructions in ELECTRICAL. Keep the evaluation cases (`evals/guard
 these sentences, otherwise the evaluation measures memorization.
 """
 
-from smart_home_agent.guardrail.categories import Category
+from smart_home_agent.guardrail.input.category import Category
 
 PROTOTYPES: dict[Category, tuple[str, ...]] = {
     Category.SMART_HOME: (

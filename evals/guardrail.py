@@ -19,15 +19,16 @@ from pydantic import BaseModel
 from evals.guardrail_cases import ACCEPTANCE_CASES, EVAL_CASES, OUTPUT_CASES, TEST_CASES
 from smart_home_agent.config import Settings
 from smart_home_agent.container import guardrail_thresholds
-from smart_home_agent.guardrail.categories import BLOCKING, Category, GuardrailDecision
-from smart_home_agent.guardrail.classifier import (
+from smart_home_agent.guardrail.input import (
+    BLOCKING,
+    PROTOTYPES,
     TASK_TYPE,
+    Category,
+    GuardrailDecision,
     GuardrailThresholds,
     SemanticGuardrail,
-    blocked_categories,
     gemini_embed,
 )
-from smart_home_agent.guardrail.prototypes import PROTOTYPES
 
 FIXTURE_PATH = Path("tests/fixtures/guardrail_embeddings.json")
 ALLOWED = frozenset({Category.SMART_HOME, Category.UNCERTAIN})
@@ -65,11 +66,6 @@ def evaluate(
     guardrail: SemanticGuardrail, cases: Sequence[tuple[str, Category]]
 ) -> list[tuple[str, Category, GuardrailDecision]]:
     return [(text, expected, guardrail.classify(text)) for text, expected in cases]
-
-
-def blockable(thresholds: GuardrailThresholds) -> frozenset[Category]:
-    """Categories that are blocked at input with these settings (the classifier's own rule)."""
-    return blocked_categories(thresholds)
 
 
 def report(
@@ -148,7 +144,7 @@ def run(settings: Settings, *, do_sweep: bool, record: bool) -> int:
     print(f"Thresholds {thresholds.model_dump()}")
     guardrail = fixture.guardrail(thresholds)
     print("\n=== Evaluation set (used for calibration) ===")
-    blocked_categories = blockable(thresholds)
+    blocked_categories = thresholds.blocked_categories()
     print(f"Blocked at input: {', '.join(sorted(blocked_categories))} (OFF_TOPIC is always classified)")
     results = evaluate(guardrail, EVAL_CASES)
     report(results, blocked_categories)
