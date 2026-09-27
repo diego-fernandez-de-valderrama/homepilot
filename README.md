@@ -345,7 +345,10 @@ uv run catalog-ingestion search "Thermostat, der mit Apple Home funktioniert" --
 | `search` | Semantic search smoke test with optional `--ecosystem`, `--category`, `--max-price` filters. |
 | `status` | Counts per table and completeness level, the Qdrant point count, and the last run. |
 
-Tip for a first try: `uv run catalog-ingestion ingest --limit 20`, then `--only-product 32391327` for the sparse Bosch product that needs web enrichment.
+Tip for a first try: ingest only the products the agent's example requests use (see
+[Run it locally](../README.md#step-3-build-the-catalog) for the id list), then `--only-product 32391327` for the sparse
+Bosch product that needs web enrichment. `--limit 20` works too, but the first 20 products of the zip are Thomson radio
+modules only, so thermostat or hub requests find nothing.
 
 Docker services:
 

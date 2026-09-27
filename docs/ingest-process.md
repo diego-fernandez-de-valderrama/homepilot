@@ -101,8 +101,8 @@ fact in PostgreSQL before answering.
 
 | Option | When to use it |
 |---|---|
-| `--limit 20` | Try the pipeline on the first 20 products. |
-| `--only-product ID` | Re-process one specific product. |
+| `--limit 20` | Try the pipeline on the first 20 products (all Thomson radio modules, so no thermostats or hubs). |
+| `--only-product ID` | Process one specific product (repeatable), e.g. the example set in the [main README](../../README.md#step-3-build-the-catalog). |
 | `--skip-web` | Do not download any product pages. |
 | `--skip-llm` | Do not call the AI (stored AI results are kept). |
 | `--refresh-web` | Download product pages again even if they are cached. |
