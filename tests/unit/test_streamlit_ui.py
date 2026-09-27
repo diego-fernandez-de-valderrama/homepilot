@@ -32,10 +32,13 @@ from tests.fakes import FakeCatalog, fact, product
 from tests.unit.test_rich import BASIC, PRO, UPSELL
 
 APP = Path(streamlit_app.__file__)
+# Streamlit's 3 s default is too short for a cold first run (imports and bytecode compilation).
+TIMEOUT = 15
 
 
 def test_empty_state_renders_without_backend():
-    app = AppTest.from_file(str(APP)).run()  # the agent service is only built when a prompt arrives
+    # The agent service is only built when a prompt arrives.
+    app = AppTest.from_file(str(APP), default_timeout=TIMEOUT).run()
     assert not app.exception
     labels = [button.label for button in app.button]
     assert "New conversation" in labels
@@ -149,7 +152,7 @@ def _render_tagged_answer() -> None:
 
 
 def test_render_answer_turns_tags_into_components():
-    app = AppTest.from_function(_render_tagged_answer).run()
+    app = AppTest.from_function(_render_tagged_answer, default_timeout=TIMEOUT).run()
     assert not app.exception
     markdown = "\n".join(m.value for m in app.markdown)
     assert "<item " not in markdown and "<items" not in markdown
@@ -291,8 +294,8 @@ def _slot_keys(app: AppTest) -> tuple[list[int], list[int]]:
 def test_deciding_a_change_keeps_every_element_in_place():
     """Regression: the lead line and the buttons disappeared on click, the card moved up one slot and the
     previous run's card stayed visible as a faded duplicate while the confirmation turn ran."""
-    open_app = AppTest.from_function(_confirmation_script, args=(False,)).run()
-    decided_app = AppTest.from_function(_confirmation_script, args=(True,)).run()
+    open_app = AppTest.from_function(_confirmation_script, args=(False,), default_timeout=TIMEOUT).run()
+    decided_app = AppTest.from_function(_confirmation_script, args=(True,), default_timeout=TIMEOUT).run()
     assert not open_app.exception and not decided_app.exception
     assert [b.label for b in open_app.button] == ["Add to cart", "Cancel"]
     assert list(decided_app.button) == []
@@ -314,7 +317,7 @@ def memory_off(monkeypatch):
 
 
 def picker_app() -> AppTest:
-    return AppTest.from_file(str(APP), default_timeout=15).run()
+    return AppTest.from_file(str(APP), default_timeout=TIMEOUT).run()
 
 
 def new_customer(app: AppTest, customer_id: str) -> None:
@@ -419,7 +422,7 @@ def test_a_stale_value_from_the_browser_never_becomes_a_customer(monkeypatch):
 
 
 def test_stored_data_button_only_in_developer_mode():
-    app = AppTest.from_file(str(APP)).run()
+    app = AppTest.from_file(str(APP), default_timeout=TIMEOUT).run()
     assert "Stored data about me" not in [b.label for b in app.button]
     app.toggle(key="hp-debug").set_value(True).run()
     assert "Stored data about me" in [b.label for b in app.button]
@@ -443,7 +446,7 @@ def test_customer_memory_dialog_lists_active_and_retracted_facts(monkeypatch):
     # The dialog reads the memory only (no agent, no Gemini); monkeypatch restores the module afterwards.
     monkeypatch.setattr(CustomerDirectory, "service", lambda: service)
 
-    app = AppTest.from_function(_customer_memory_dialog).run()
+    app = AppTest.from_function(_customer_memory_dialog, default_timeout=TIMEOUT).run()
     assert not app.exception
     assert any("`anna` · 1 active, 2 total facts" in m.value for m in app.markdown)
     [table] = app.dataframe
@@ -480,7 +483,7 @@ def _failed_turn_in_history() -> None:
 
 
 def test_failed_turn_shows_the_notice_and_the_detail_only_to_developers():
-    app = AppTest.from_function(_failed_turn_in_history).run()
+    app = AppTest.from_function(_failed_turn_in_history, default_timeout=TIMEOUT).run()
     assert not app.exception
     assert any("Entschuldigung" in str(h.proto) for h in app.get("html"))
     assert not any("no content" in c.value for c in app.caption)
@@ -509,6 +512,6 @@ def test_unknown_applied_state_never_reopens_a_cart_change(monkeypatch):
 def test_developer_tools_can_be_switched_off(monkeypatch):
     monkeypatch.setenv("AGENT_UI_DEV_TOOLS", "false")
     get_settings.cache_clear()
-    app = AppTest.from_file(str(APP)).run()
+    app = AppTest.from_file(str(APP), default_timeout=TIMEOUT).run()
     assert not app.exception
     assert list(app.toggle) == [] and list(app.selectbox) == []  # no picker, no developer panel

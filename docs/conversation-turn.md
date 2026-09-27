@@ -8,7 +8,8 @@ again, and finally turned into a rich answer with product cards built from fresh
 ![The five steps of a turn: message in, safety check, agent works, answer check, display](images/conversation-turn.svg)
 
 **1. Message in.** The agent detects whether the message is English or German, so the reply uses the same language
-even though the catalog text is German. If the customer has been here before, what we know about them (their hub,
+even though the catalog text is German (one known gap: after a switch from German to English, the answer to a cart
+confirmation can come back in German, see [known issues](known-issues.md#1-reply-language-drifts-to-german-after-a-language-switch-and-a-cart-confirmation)). If the customer has been here before, what we know about them (their hub,
 their voice assistant, their name) is loaded from the [customer memory](customer-memory.md).
 
 **2. Safety check.** Before any AI is involved, the message is compared with examples of risky requests. Questions

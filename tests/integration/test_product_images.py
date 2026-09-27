@@ -1,6 +1,7 @@
 """Real catalog + real Bauhaus CDN: most product images load, and the known dead links are detected.
 
-Needs PostgreSQL (the `catalog` fixture skips otherwise) and internet access (skipped when offline).
+Needs PostgreSQL (the `catalog` fixture skips otherwise), both products in the catalog (skipped after a partial
+ingest such as `--limit 20`) and internet access (skipped when offline).
 """
 
 import urllib.error
@@ -31,7 +32,8 @@ def online() -> None:
 
 def test_real_catalog_images_render_or_fall_back(catalog: CatalogRepository, online):
     products = catalog.get_products([WORKING_ID, GONE_ID])
-    assert {p.id for p in products} == {WORKING_ID, GONE_ID}
+    if {p.id for p in products} != {WORKING_ID, GONE_ID}:
+        pytest.skip(f"products {WORKING_ID} and {GONE_ID} not in the catalog (partial ingest)")
     by_id = {p.id: p for p in products}
 
     missing = ImageAvailability.find_missing(ProductCardHtml.image_urls(products))

@@ -56,6 +56,7 @@ and fills the two databases this agent reads. See
 - [Upselling in HomePilot](upselling.md): the upgrade rules and how the business KPI is measured.
 - [How the safety check understands messages](guardrail-embeddings.md): embeddings, example sentences, and how
   the safety net was tuned.
+- [Known issues](known-issues.md): open problems found in testing, with reproduction, cause and proposed fix.
 - The project [README](../README.md): setup, configuration, tools and tests.
 
 ---
