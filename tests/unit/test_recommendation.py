@@ -50,7 +50,8 @@ def test_unknown_compatibility_is_unconfirmed_not_recommended_not_excluded():
 
 def test_hard_constraints_are_applied_before_ranking():
     result = _recommend()
-    assert result.excluded == {"price": 1, "category": 1, "unsupported": 1}
+    # The plug of another category is never a candidate: the semantic index pre-filters by category (like Qdrant).
+    assert result.excluded == {"price": 1, "unsupported": 1}
     ids = {r.product.id for r in (*result.confirmed, *result.unconfirmed)}
     assert not ids & {"expensive", "plug", "negative"}
 

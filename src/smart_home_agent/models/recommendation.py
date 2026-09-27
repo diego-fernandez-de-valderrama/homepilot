@@ -57,6 +57,10 @@ class UpsellSuggestion(BaseModel):
     base_product_id: str
     price_difference: float
     upgrade_reasons: list[str]  # factual, computed from structured data
+    # The same advantages as data, for the KPI eval (never sent to the model): capability ids the best match lacks,
+    # and whether the upsell works without a hub the best match needs.
+    extra_capabilities: list[str] = Field(default_factory=list, exclude=True)
+    replaces_hub: bool = Field(default=False, exclude=True)
 
 
 class Recommendation(BaseModel):

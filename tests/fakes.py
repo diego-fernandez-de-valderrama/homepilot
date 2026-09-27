@@ -115,22 +115,36 @@ class FakeCatalog:
         return versions
 
     def filter_products(self, criteria: ProductFilter) -> tuple[int, list[Product]]:
+        """Same semantics as the SQL in CatalogRepository: product_type_contains (type or title, case-insensitive)
+        and the sort order included, so tests of those parameters actually test something."""
+        needle = (criteria.product_type_contains or "").strip().casefold()
         matches = [
             p
             for p in self.products.values()
             if rejection_reason(p, criteria) is None
             and all(c in p.supported_values(tuple(Dimension)) for c in criteria.supports)
             and (criteria.product_ids is None or p.id in criteria.product_ids)
+            and (not needle or needle in (p.product_type or "").casefold() or needle in p.title.casefold())
         ]
+        match criteria.sort:
+            case "price_asc":
+                matches.sort(key=lambda p: (p.price is None, p.price or 0.0, p.id))
+            case "price_desc":
+                matches.sort(key=lambda p: (p.price is None, -(p.price or 0.0), p.id))
+            case _:
+                matches.sort(key=lambda p: (-p.completeness_score, p.id))
         return len(matches), matches[: criteria.limit]
 
 
 class FakeIndex:
     """Semantic index with fixed scores; `hidden` ids are only reachable through `score()` (not in top-K)."""
 
-    def __init__(self, scores: dict[str, float], hidden: Sequence[str] = ()) -> None:
+    def __init__(
+        self, scores: dict[str, float], hidden: Sequence[str] = (), categories: dict[str, str | None] | None = None
+    ) -> None:
         self.scores = scores
         self.hidden = set(hidden)
+        self.categories = categories or {}  # product id -> category, for the category pre-filter
         self.embedded: list[str] = []
 
     def embed(self, text: str) -> list[float]:
@@ -138,7 +152,17 @@ class FakeIndex:
         return [1.0]
 
     def search(self, vector: list[float], category: str | None, limit: int) -> list[SearchCandidate]:
-        ranked = sorted((pid for pid in self.scores if pid not in self.hidden), key=lambda p: -self.scores[p])
+        """Like the Qdrant pre-filter: with a category, only products of that category (when `categories` knows
+        them) are returned."""
+        ranked = sorted(
+            (
+                pid
+                for pid in self.scores
+                if pid not in self.hidden
+                and (category is None or pid not in self.categories or self.categories[pid] == category)
+            ),
+            key=lambda p: -self.scores[p],
+        )
         return [SearchCandidate(pid, self.scores[pid], "semantic") for pid in ranked[:limit]]
 
     def score(self, vector: list[float], product_ids: Sequence[str]) -> dict[str, float]:
@@ -181,6 +205,13 @@ class FakeProfileStore:
         retract_ids: Sequence[int],
     ) -> tuple[list[CustomerFact], list[CustomerFact]]:
         now = datetime.now(UTC)
+        remaining = [
+            (f.kind, f.value) for f in self.facts if f.user_id == user_id and f.active and f.id not in retract_ids
+        ]
+        for fact in add:  # the partial unique index customer_facts_active_value_key
+            if (fact.kind, fact.value) in remaining:
+                raise ValueError(f"duplicate active fact {fact.kind}={fact.value} (unique index)")
+            remaining.append((fact.kind, fact.value))
         retracted = []
         for index, stored in enumerate(self.facts):
             if stored.user_id == user_id and stored.id in retract_ids and stored.active:
@@ -209,7 +240,9 @@ def services_for(
     profiles: FakeProfileStore | None = None,
     **settings: Any,
 ) -> Services:
-    index = FakeIndex(scores if scores is not None else {p.id: 0.8 for p in products})
+    index = FakeIndex(
+        scores if scores is not None else {p.id: 0.8 for p in products}, categories={p.id: p.category for p in products}
+    )
     return Services.create(FakeCatalog(products), index, AgentSettings(**settings), profiles)
 
 

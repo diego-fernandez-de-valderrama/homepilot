@@ -39,8 +39,33 @@ def test_binding_rule_is_the_furthest_rule_reached():
 def test_guards_catch_an_upsell_without_an_advantage_reason():
     result = _recommend(REQUEST)
     assert result.upsell is not None
-    price_only = result.upsell.model_copy(update={"upgrade_reasons": result.upsell.upgrade_reasons[-1:]})
+    assert result.upsell.extra_capabilities or result.upsell.replaces_hub
+    price_only = result.upsell.model_copy(update={"extra_capabilities": [], "replaces_hub": False})
     assert "upsell_without_advantage_reason" in guard_failures(result.model_copy(update={"upsell": price_only}))
+    # The guard reads the data, not the wording: rewording the reasons does not satisfy it.
+    reworded = price_only.model_copy(update={"upgrade_reasons": ["Premium build quality"]})
+    assert "upsell_without_advantage_reason" in guard_failures(result.model_copy(update={"upsell": reworded}))
+
+
+def test_uplift_does_not_add_up_alternatives():
+    from smart_home_agent.upsell_eval import CaseResult
+
+    def case(upsell: str | None, delta: float, hubs: float) -> CaseResult:
+        return CaseResult(
+            need="n",
+            best_match="b",
+            best_price=100.0,
+            upsell=upsell,
+            upsell_delta=delta,
+            accessories=[],
+            accessories_total=hubs,
+            blockers={},
+            guard_failures=[],
+        )
+
+    # The upsell works without the hub the best match needs: upsell (+30) or best + hub (+50), not +80.
+    assert case("u", 30.0, 50.0).uplift == 0.5
+    assert case(None, 0.0, 20.0).uplift == 0.2
 
 
 def test_report_counts_best_matches_that_need_a_hub_the_customer_lacks():

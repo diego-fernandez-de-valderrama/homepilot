@@ -84,7 +84,8 @@ class CaseResult(BaseModel):
     upsell: str | None
     upsell_delta: float
     accessories: list[str]
-    accessories_total: float
+    accessories_total: float  # hubs offered for the best match
+    upsell_accessories_total: float = 0.0  # hubs offered for the upsell
     blockers: dict[str, int]
     guard_failures: list[str]
     ownership_stated: bool = False
@@ -92,9 +93,13 @@ class CaseResult(BaseModel):
 
     @property
     def uplift(self) -> float | None:
+        """Largest basket increase the offer allows over the best match alone. The customer takes the upsell (with
+        its own hubs) or the best match with its hubs: these are alternatives, never added up (an upsell that
+        works without a hub replaces that hub)."""
         if not self.best_price:
             return None
-        return (self.upsell_delta + self.accessories_total) / self.best_price
+        upsell_path = self.upsell_delta + self.upsell_accessories_total if self.upsell else 0.0
+        return max(upsell_path, self.accessories_total) / self.best_price
 
 
 def guard_failures(result: Recommendation) -> list[str]:
@@ -112,7 +117,7 @@ def guard_failures(result: Recommendation) -> list[str]:
             failures.append("upsell_not_confirmed")
         if best is None or best.product.price is None or upsell.price <= best.product.price:
             failures.append("upsell_not_pricier")
-        if not any(not reason.startswith("Costs ") for reason in upsell.upgrade_reasons):
+        if not upsell.extra_capabilities and not upsell.replaces_hub:  # from data, not from the reason wording
             failures.append("upsell_without_advantage_reason")
     offered = {result.best_match, upsell and upsell.product_id}
     if any(a.for_product_id not in offered for a in result.accessories):
@@ -123,6 +128,8 @@ def guard_failures(result: Recommendation) -> list[str]:
 def case_result(result: Recommendation) -> CaseResult:
     best = next((r for r in result.confirmed if r.product.id == result.best_match), None)
     best_accessories = [a for a in result.accessories if a.for_product_id == result.best_match]
+    upsell_id = result.upsell.product_id if result.upsell else None
+    upsell_accessories = [a for a in result.accessories if upsell_id and a.for_product_id == upsell_id]
     return CaseResult(
         need=result.request.need,
         best_match=result.best_match,
@@ -131,6 +138,7 @@ def case_result(result: Recommendation) -> CaseResult:
         upsell_delta=result.upsell.price_difference if result.upsell else 0.0,
         accessories=[a.product_id for a in result.accessories],
         accessories_total=sum(a.price for a in best_accessories),
+        upsell_accessories_total=sum(a.price for a in upsell_accessories),
         blockers=result.upsell_blockers,
         guard_failures=guard_failures(result),
         ownership_stated=result.request.owned_devices is not None,

@@ -33,9 +33,7 @@ VERSION_CASES: tuple[RecommendationRequest, ...] = (
     _case("smartes LED-Panel mit WLAN", "led_panel", brands=["Ledvance"]),
     _case("Eglo connect.z smart bulb", "smart_bulb", brands=["Eglo"]),
     _case("Ring outdoor camera with spotlight", "security_camera", brands=["Ring"]),
-    _case("window contact sensor", "contact_sensor"),
-    _case("Türschloss mit App", "door_lock", max_price=200),
-)
+)  # "window contact sensor" and "Türschloss mit App" are already in UPSELL_CASES: never counted twice
 CASES: tuple[RecommendationRequest, ...] = (*UPSELL_CASES, *VERSION_CASES)
 
 

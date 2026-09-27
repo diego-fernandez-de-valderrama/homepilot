@@ -41,8 +41,11 @@ def test_fixture_matches_the_runtime_configuration(fixture):
 
 
 def test_eval_cases_are_not_prototypes():
-    prototypes = {t.casefold() for texts in PROTOTYPES.values() for t in texts}
-    assert not [t for t, _ in (*EVAL_CASES, *TEST_CASES) if t.casefold() in prototypes]
+    prototypes = {t.casefold().rstrip(".?!") for texts in PROTOTYPES.values() for t in texts}
+    cases = (*EVAL_CASES, *TEST_CASES, *ACCEPTANCE_CASES)
+    assert not [t for t, _ in cases if t.casefold().rstrip(".?!") in prototypes]
+    evaluation = {t.casefold() for t, _ in EVAL_CASES}
+    assert not [t for t, _ in ACCEPTANCE_CASES if t.casefold() in evaluation]
 
 
 @pytest.mark.parametrize(("text", "expected"), ACCEPTANCE_CASES)

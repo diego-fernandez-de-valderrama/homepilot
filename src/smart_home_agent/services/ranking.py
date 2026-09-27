@@ -173,11 +173,13 @@ def select_upsell(
         if upsell_rejection(candidate, best, max_price, min_relative_relevance):
             continue
         price, base_price = candidate.product.price or 0.0, best.product.price or 0.0
-        extra = sorted(vocabulary.label(c) for c in candidate.upgrade_capabilities - best.upgrade_capabilities)
+        extra_ids = sorted(candidate.upgrade_capabilities - best.upgrade_capabilities)
+        extra = sorted(vocabulary.label(c) for c in extra_ids)
         difference = round(price - base_price, 2)
         currency = candidate.product.currency or ""
         reasons = [f"Also supports {name} (confirmed in the catalog)" for name in extra]
-        if replaces_hub(candidate, best):
+        without_hub = replaces_hub(candidate, best)
+        if without_hub:
             hubs = ", ".join(sorted(vocabulary.requirement_label(h) for h in best.needed_hubs))
             reasons.append(
                 f"Works without a separate hub (confirmed in the catalog); {best.product.title} needs {hubs}"
@@ -191,5 +193,7 @@ def select_upsell(
             base_product_id=best.product.id,
             price_difference=difference,
             upgrade_reasons=reasons,
+            extra_capabilities=extra_ids,
+            replaces_hub=without_hub,
         )
     return None

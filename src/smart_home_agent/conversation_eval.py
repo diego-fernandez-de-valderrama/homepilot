@@ -354,6 +354,20 @@ def does_not_remember(kind: FactKind, value: str) -> Check:
     return Check(f"does_not_remember:{kind}={value}", test)
 
 
+def stores_nothing() -> Check:
+    """Nothing at all was stored in this conversation (each run has a fresh customer id). It fails when the memory
+    is off, so the check can never pass without testing anything, and it also catches the friend's HomeKit being
+    stored under another kind (a preference or a hub)."""
+
+    def test(ctx: TurnContext) -> str | None:
+        if ctx.reply.profile is None:
+            return "customer memory is off, nothing was tested"
+        stored = [f"{f.kind.value}={f.value}" for f in ctx.reply.profile.facts]
+        return f"stored: {_described(stored)}" if stored else None
+
+    return Check("stores_nothing", test)
+
+
 def mentions(*words: str) -> Check:
     def test(ctx: TurnContext) -> str | None:
         text = ctx.reply.text.casefold()
@@ -540,7 +554,7 @@ CONVERSATIONS: tuple[Conversation, ...] = (
         (
             _say(
                 "My friend uses HomeKit. What smart plug would you get her as a gift?",
-                does_not_remember(FactKind.ECOSYSTEM, "apple_home"),
+                stores_nothing(),
             ),
         ),
     ),

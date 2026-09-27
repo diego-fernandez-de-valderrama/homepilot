@@ -129,7 +129,7 @@ def test_allowed_messages_run_the_existing_agent(guardrail, text):
 
 def test_off_topic_is_not_blocked_at_input_by_default(guardrail):
     llm = ScriptedLlm()
-    reply = service(llm, guardrail).chat("s1", "Give me a pasta recipe.")
+    reply = service(llm, guardrail).chat("s1", "Can you give me a recipe for spaghetti carbonara?")
     assert len(llm.requests) == 1  # the agent's prompt redirects it; the output check guards the answer
     assert reply.guardrail is not None and reply.guardrail.input is not None
     assert reply.guardrail.input.category is Category.OFF_TOPIC
@@ -140,7 +140,9 @@ def test_off_topic_input_blocking_can_be_enabled():
     llm = ScriptedLlm()
     enabled = AgentSettings(guardrail_input_off_topic=True)
     guardrail = EmbeddingFixture.load(FIXTURE).guardrail(guardrail_thresholds(enabled))
-    reply = service(llm, guardrail, guardrail_input_off_topic=True).chat("s1", "Give me a pasta recipe.")
+    reply = service(llm, guardrail, guardrail_input_off_topic=True).chat(
+        "s1", "Can you give me a recipe for spaghetti carbonara?"
+    )
     assert len(llm.requests) == 0
     assert reply.text in pool(ResponseType.OFF_TOPIC, "en")
 
@@ -148,7 +150,7 @@ def test_off_topic_input_blocking_can_be_enabled():
 def test_off_topic_answer_is_replaced_by_the_output_check(guardrail):
     off_topic_answer = next(text for text, off_topic in OUTPUT_CASES if off_topic)
     llm = ScriptedLlm(script=[text_response(off_topic_answer)])
-    reply = service(llm, guardrail).chat("s1", "Give me a pasta recipe.")
+    reply = service(llm, guardrail).chat("s1", "Can you give me a recipe for spaghetti carbonara?")
     assert reply.text in pool(ResponseType.OFF_TOPIC, "en")
     assert reply.guardrail is not None
     assert [v.kind for v in reply.guardrail.output_violations] == ["off_topic"]

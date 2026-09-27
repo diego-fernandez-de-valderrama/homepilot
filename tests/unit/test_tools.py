@@ -287,3 +287,15 @@ def test_data_errors_are_not_reported_as_invalid_input():
 
     result = broken()
     assert result["status"] == "error" and "could not be completed" in result["message"]
+
+
+def test_filter_products_by_product_type_text_and_sort_order():
+    plug = product("p1", title="Acme Zwischenstecker", product_type="Smart plug", category="smart_plug", price=19.0)
+    cheap_plug = product("p2", title="Acme Steckdose Mini", product_type="Smart plug", category="smart_plug", price=9.0)
+    tools = by_name(build_tools(services_for([*PRODUCTS, plug, cheap_plug])))
+    result = tools["filter_products"](FakeToolContext(), product_type_contains="smart PLUG", sort="price_asc")
+    assert [p["id"] for p in result["products"]] == ["p2", "p1"]
+    by_title = tools["filter_products"](FakeToolContext(), product_type_contains="zwischenstecker")
+    assert [p["id"] for p in by_title["products"]] == ["p1"]
+    priciest_first = tools["filter_products"](FakeToolContext(), product_type_contains="plug", sort="price_desc")
+    assert [p["id"] for p in priciest_first["products"]] == ["p1", "p2"]
