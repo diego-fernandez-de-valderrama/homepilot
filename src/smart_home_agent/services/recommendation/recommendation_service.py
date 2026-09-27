@@ -9,7 +9,7 @@ from smart_home_agent.models import (
     RecommendationRequest,
     UpsellSuggestion,
 )
-from smart_home_agent.repositories.postgres import CatalogReader
+from smart_home_agent.repositories import CatalogReader
 from smart_home_agent.services.accessories import AccessoryService
 from smart_home_agent.services.compatibility import CompatibilityEvaluator
 from smart_home_agent.services.recommendation._notes import recommendation_notes

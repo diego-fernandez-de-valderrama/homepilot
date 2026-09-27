@@ -5,7 +5,7 @@ from qdrant_client import QdrantClient
 from sqlalchemy.exc import OperationalError
 
 from smart_home_agent.config import Settings
-from smart_home_agent.repositories.postgres import CatalogRepository, create_readonly_sessions
+from smart_home_agent.repositories import CatalogRepository
 
 
 @pytest.fixture(scope="session")
@@ -16,7 +16,7 @@ def settings() -> Settings:
 @pytest.fixture(scope="session")
 def catalog(settings: Settings) -> Iterator[CatalogRepository]:
     """The real catalog, read-only. Skipped when PostgreSQL is down or not ingested yet."""
-    engine, sessions = create_readonly_sessions(settings.postgres.model_copy(update={}))
+    engine, sessions = CatalogRepository.readonly_sessions(settings.postgres.model_copy(update={}))
     repository = CatalogRepository(sessions)
     try:
         if repository.count_active() == 0:

@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from smart_home_agent.models import CompatibilityResult
-from smart_home_agent.repositories.postgres import CatalogReader
+from smart_home_agent.repositories import CatalogReader
 from smart_home_agent.services.accessories import AccessoryService
 from smart_home_agent.services.compatibility.compatibility_evaluator import CompatibilityEvaluator
 from smart_home_agent.services.product_not_found_error import ProductNotFoundError

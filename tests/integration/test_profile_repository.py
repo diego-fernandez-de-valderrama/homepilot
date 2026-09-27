@@ -11,10 +11,8 @@ from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from smart_home_agent.config import Settings
-from smart_home_agent.memory.database import alembic_config, create_memory_engine, ensure_database, upgrade_to_head
-from smart_home_agent.memory.models import Base
 from smart_home_agent.models import FactKind, NewFact
-from smart_home_agent.repositories.profile import ProfileRepository
+from smart_home_agent.repositories import MemoryDatabase, ProfileRepository
 from smart_home_agent.services import ProfileService
 
 pytestmark = pytest.mark.integration
@@ -31,20 +29,21 @@ def memory_engine(settings: Settings) -> Iterator[Engine]:
         pytest.skip("PostgreSQL not reachable (docker compose up -d in catalog-ingestion)")
     finally:
         admin.dispose()
-    assert ensure_database(settings.postgres, name) is True
-    assert ensure_database(settings.postgres, name) is False  # idempotent
-    engine = create_memory_engine(settings.postgres, name)
-    upgrade_to_head(engine)
+    database = MemoryDatabase(settings.postgres, name)
+    assert database.ensure_exists() is True
+    assert database.ensure_exists() is False  # idempotent
+    engine = database.create_engine()
+    MemoryDatabase.upgrade_to_head(engine)
     yield engine
     engine.dispose()
 
 
 def test_migrations_match_the_models(memory_engine: Engine):
     with memory_engine.connect() as connection:
-        assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
-    upgrade_to_head(memory_engine)  # running again is a no-op
+        assert compare_metadata(MigrationContext.configure(connection), MemoryDatabase.METADATA) == []
+    MemoryDatabase.upgrade_to_head(memory_engine)  # running again is a no-op
     with memory_engine.begin() as connection:
-        config = alembic_config()
+        config = MemoryDatabase.alembic_config()
         config.attributes["connection"] = connection
         command.downgrade(config, "base")
         command.upgrade(config, "head")

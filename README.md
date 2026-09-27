@@ -58,7 +58,7 @@ src/smart_home_agent/
 │                        evidence.py, preferences.py, _common.py (error handling, input resolution)
 ├── services/            vocabulary.py, retrieval.py, filtering.py, compatibility.py, ranking.py,
 │                        recommendation.py, comparison.py, evidence.py
-├── repositories/        postgres.py, qdrant.py
+├── repositories/        catalog/ (PostgreSQL), semantic/ (Qdrant), profile/ (customer memory DB + migrations)
 ├── models/              product.py, evidence.py, search.py, compatibility.py, comparison.py, recommendation.py
 └── ui/streamlit_app.py
 
@@ -255,11 +255,11 @@ Retrieved text is never used for comparison.
 
 | Kind | Where | Purpose |
 |---|---|---|
-| SQLAlchemy ORM | `catalog_ingestion.storage.postgres.models` (reused) | Persistence only, used exclusively inside `repositories/postgres.py` |
+| SQLAlchemy ORM | `catalog_ingestion.storage.postgres.models` (reused) | Persistence only, used exclusively inside `repositories/catalog/` |
 | Pydantic `BaseModel` | `models/*`, `session/session_state.py`, `agent/reply/` | Business models and contracts: `Product`, `ProductSummary`, `CompatibilityFact`, `Evidence`, `ProductFilter`, `SearchResult`, `CompatibilityResult`, `ComparisonResult`, `RecommendationRequest`, `Recommendation`, `UpsellSuggestion`, `SessionState`, `AgentReply` |
 | `dataclass` | `SearchCandidate`, `RankingCandidate`, `ResolvedTerm`, `Services`, `Settings` | Internal processing and wiring, never exposed to the model |
 
-The repository maps ORM → Pydantic (`to_product`). ORM objects never reach services, tools or the agent.
+The repository maps ORM → Pydantic (`ProductMapper.to_product`). ORM objects never reach services, tools or the agent.
 
 ---
 
@@ -297,7 +297,7 @@ Customers are identified by a `user_id` (the **Customer** picker in the Streamli
 - Ecosystems go through the shared vocabulary (ambiguous "Apple"/"Google" returns `needs_clarification`; a protocol such as Zigbee is not an ecosystem).
 - A refused update returns `invalid_input` and stores nothing.
 
-**Storage:** a separate database (`AGENT_MEMORY_DB`, default `homepilot_memory`) on the catalog's PostgreSQL server, same `POSTGRES_*` credentials. The catalog engine stays read-only; only the memory engine writes. The schema belongs to this project: SQLAlchemy models in `memory/models.py`, Alembic migrations in `memory/migrations/` (`alembic.ini` in this directory). `python -m smart_home_agent init-memory` creates the database if needed and migrates it (idempotent). After editing the models, run `uv run alembic revision --autogenerate -m "..."` and review the file.
+**Storage:** a separate database (`AGENT_MEMORY_DB`, default `homepilot_memory`) on the catalog's PostgreSQL server, same `POSTGRES_*` credentials. The catalog engine stays read-only; only the memory engine writes. The schema belongs to this project: SQLAlchemy records in `repositories/profile/_records/`, Alembic migrations in `repositories/profile/migrations/` (`alembic.ini` in this directory). `python -m smart_home_agent init-memory` creates the database if needed and migrates it (idempotent). After editing the models, run `uv run alembic revision --autogenerate -m "..."` and review the file.
 
 **Failure handling:** if the memory database cannot be read, the turn runs without the profile (a warning is logged). `AGENT_MEMORY_ENABLED=false` removes the tool and the memory instructions.
 

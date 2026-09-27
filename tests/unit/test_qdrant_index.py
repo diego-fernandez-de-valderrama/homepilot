@@ -3,7 +3,7 @@ from typing import cast
 from catalog_ingestion.retrieval.embeddings import Embedder
 from qdrant_client import QdrantClient, models
 
-from smart_home_agent.repositories.qdrant import QdrantIndex
+from smart_home_agent.repositories import QdrantIndex
 
 
 class _Embedder:

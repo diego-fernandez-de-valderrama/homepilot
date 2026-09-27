@@ -12,7 +12,7 @@ from smart_home_agent.models import (
     CartView,
     ProductSummary,
 )
-from smart_home_agent.repositories.postgres import CatalogReader
+from smart_home_agent.repositories import CatalogReader
 from smart_home_agent.services.cart._change_parser import parse_changes
 from smart_home_agent.services.cart._quantity import parse_quantity
 from smart_home_agent.services.cart.cart_change_error import CartChangeError

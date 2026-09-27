@@ -43,13 +43,13 @@ def check() -> int:
 def _memory_status(settings: "Settings") -> str:
     from sqlalchemy.exc import OperationalError
 
-    from smart_home_agent.memory.database import create_memory_engine, current_revision
+    from smart_home_agent.repositories import MemoryDatabase
 
     if not settings.agent.memory_enabled:
         return "off"
-    engine = create_memory_engine(settings.postgres, settings.agent.memory_db)
+    engine = MemoryDatabase(settings.postgres, settings.agent.memory_db).create_engine()
     try:
-        revision = current_revision(engine)
+        revision = MemoryDatabase.current_revision(engine)
     except OperationalError:
         return f"database {settings.agent.memory_db!r} not reachable (run init-memory)"
     finally:
@@ -59,14 +59,15 @@ def _memory_status(settings: "Settings") -> str:
 
 def init_memory() -> int:
     """Creates the customer memory database on the POSTGRES_* server and migrates it (idempotent)."""
-    from smart_home_agent.memory.database import create_memory_engine, ensure_database, upgrade_to_head
+    from smart_home_agent.repositories import MemoryDatabase
 
     settings = get_settings()
     name = settings.agent.memory_db
-    created = ensure_database(settings.postgres, name)
-    engine = create_memory_engine(settings.postgres, name)
+    database = MemoryDatabase(settings.postgres, name)
+    created = database.ensure_exists()
+    engine = database.create_engine()
     try:
-        upgrade_to_head(engine)
+        MemoryDatabase.upgrade_to_head(engine)
     finally:
         engine.dispose()
     print(f"Customer memory database {name!r} {'created and ' if created else ''}migrated to head.")

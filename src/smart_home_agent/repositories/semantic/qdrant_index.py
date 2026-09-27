@@ -1,12 +1,4 @@
-"""Semantic retrieval over the Qdrant collection built by `catalog-ingestion`.
-
-Queries are embedded with the same `GeminiEmbedder` (model, dimension, RETRIEVAL_QUERY task type,
-L2 normalization) that produced the indexed document vectors. Only product ids and scores leave
-this module: the payload is never used as a source of truth.
-"""
-
 from collections.abc import Sequence
-from typing import Protocol
 
 from catalog_ingestion.retrieval.embeddings import Embedder
 from catalog_ingestion.storage.qdrant.repository import point_id
@@ -15,15 +7,9 @@ from qdrant_client import QdrantClient, models
 from smart_home_agent.models import SearchCandidate
 
 
-class SemanticIndex(Protocol):
-    def embed(self, text: str) -> list[float]: ...
-
-    def search(self, vector: list[float], category: str | None, limit: int) -> list[SearchCandidate]: ...
-
-    def score(self, vector: list[float], product_ids: Sequence[str]) -> dict[str, float]: ...
-
-
 class QdrantIndex:
+    """`SemanticIndex` over the Qdrant collection, plus the consistency checks used at startup and by `check`."""
+
     def __init__(self, client: QdrantClient, collection: str, embedder: Embedder) -> None:
         self._client = client
         self._collection = collection

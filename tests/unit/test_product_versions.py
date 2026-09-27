@@ -1,6 +1,6 @@
 from smart_home_agent.answer_tags import PlainTextRenderer
 from smart_home_agent.models import RichContent
-from smart_home_agent.repositories.postgres import own_variant
+from smart_home_agent.repositories.catalog._product_mapper import ProductMapper
 from smart_home_agent.tools import ToolRegistry
 from tests.fakes import FakeToolContext, fact, product, services_for
 from tests.unit.test_tools import by_name
@@ -10,6 +10,7 @@ ANTHRACITE = product("33081825", title="Access Point", price=64.95, subtitle="An
 
 
 def test_own_variant_is_the_option_named_in_the_subtitle():
+    own_variant = ProductMapper.own_variant
     assert own_variant("GU10, Dimmbar, RGBW, 350 lm, 4,8 W, Weiß", ["Chrom", "Schwarz", "Weiß"]) == "Weiß"
     assert own_variant("E27, RGBW, 1.055 lm, 11 W", ["470 lm", "806 lm", "1.055 lm", "55 lm"]) == "1.055 lm"
     assert own_variant("Länge: 5 m, RGBW", ["2 m", "5 m"]) == "5 m"

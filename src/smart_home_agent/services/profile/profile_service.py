@@ -7,7 +7,7 @@ from smart_home_agent.models import (
     ProfileUpdate,
     RejectedFact,
 )
-from smart_home_agent.repositories.profile import ProfileStore
+from smart_home_agent.repositories import ProfileStore
 from smart_home_agent.services.profile._evidence_check import backed_by, check_quote
 from smart_home_agent.services.profile._fact_builder import (
     OWNED_KINDS,

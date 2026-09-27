@@ -2,7 +2,7 @@ from collections.abc import Sequence
 
 from smart_home_agent.answer_tags import CompareBlock, CompatibilityBlock, TagParser, UpgradeBlock
 from smart_home_agent.models import Product, ProductCompatibility, RichContent, UpsellSuggestion
-from smart_home_agent.repositories.postgres import CatalogReader
+from smart_home_agent.repositories import CatalogReader
 from smart_home_agent.services.comparison import ProductComparer
 from smart_home_agent.services.compatibility import CompatibilityEvaluator
 from smart_home_agent.services.rich_content._setup_terms import known_terms, own_terms

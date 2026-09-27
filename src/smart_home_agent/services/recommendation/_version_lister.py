@@ -3,7 +3,7 @@
 from catalog_ingestion.domain.enums import FactStatus
 
 from smart_home_agent.models import CompatibilityResult, Product, ProductFilter, VersionOption, VersionStatus
-from smart_home_agent.repositories.postgres import CatalogReader
+from smart_home_agent.repositories import CatalogReader
 from smart_home_agent.services.compatibility import CompatibilityEvaluator
 from smart_home_agent.services.recommendation.hard_filter import HardFilter
 from smart_home_agent.services.recommendation.ranking_candidate import RankingCandidate

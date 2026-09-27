@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from smart_home_agent.models import ComparisonResult
-from smart_home_agent.repositories.postgres import CatalogReader
+from smart_home_agent.repositories import CatalogReader
 from smart_home_agent.services.comparison.product_comparer import ProductComparer
 from smart_home_agent.services.product_not_found_error import ProductNotFoundError
 

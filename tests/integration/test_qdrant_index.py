@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 import pytest
 
-from smart_home_agent.repositories.qdrant import QdrantIndex
+from smart_home_agent.repositories import QdrantIndex
 
 pytestmark = pytest.mark.integration
 

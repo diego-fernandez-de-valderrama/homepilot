@@ -1,7 +1,7 @@
 from typing import Any
 
 from smart_home_agent.models import CartAction, CartView
-from smart_home_agent.repositories.postgres import CatalogReader
+from smart_home_agent.repositories import CatalogReader
 from smart_home_agent.tools._base import ToolResult
 
 

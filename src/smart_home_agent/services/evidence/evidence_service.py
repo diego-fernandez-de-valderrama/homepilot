@@ -1,5 +1,5 @@
 from smart_home_agent.models import EvidenceResult
-from smart_home_agent.repositories.postgres import CatalogReader
+from smart_home_agent.repositories import CatalogReader
 from smart_home_agent.services.evidence.evidence_lookup import EvidenceLookup
 from smart_home_agent.services.product_not_found_error import ProductNotFoundError
 

@@ -10,10 +10,15 @@ from catalog_ingestion.storage.qdrant.collection import create_client
 
 from smart_home_agent.config import AgentSettings, Settings
 from smart_home_agent.guardrail import GuardrailThresholds, SemanticGuardrail, gemini_embed
-from smart_home_agent.memory.database import create_memory_engine
-from smart_home_agent.repositories.postgres import CatalogReader, CatalogRepository, create_readonly_sessions
-from smart_home_agent.repositories.profile import ProfileRepository, ProfileStore
-from smart_home_agent.repositories.qdrant import QdrantIndex, SemanticIndex
+from smart_home_agent.repositories import (
+    CatalogReader,
+    CatalogRepository,
+    MemoryDatabase,
+    ProfileRepository,
+    ProfileStore,
+    QdrantIndex,
+    SemanticIndex,
+)
 from smart_home_agent.services import (
     AccessoryService,
     CartService,
@@ -92,12 +97,12 @@ def build_profile_store(settings: Settings, connect_timeout: int = 10) -> Profil
     Writable, in its own database: the catalog engine stays read-only."""
     if not settings.agent.memory_enabled:
         return None
-    engine = create_memory_engine(settings.postgres, settings.agent.memory_db, connect_timeout)
+    engine = MemoryDatabase(settings.postgres, settings.agent.memory_db).create_engine(connect_timeout)
     return ProfileRepository(create_session_factory(engine))
 
 
 def build_container(settings: Settings) -> Container:
-    _, sessions = create_readonly_sessions(settings.postgres)
+    _, sessions = CatalogRepository.readonly_sessions(settings.postgres)
     catalog = CatalogRepository(sessions)
     gemini = GeminiClient(settings.gemini)
     embedder = GeminiEmbedder(gemini, settings.gemini)

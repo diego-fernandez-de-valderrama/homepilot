@@ -8,7 +8,7 @@ import urllib.request
 
 import pytest
 
-from smart_home_agent.repositories.postgres import CatalogRepository
+from smart_home_agent.repositories import CatalogRepository
 from smart_home_agent.ui import images
 from smart_home_agent.ui.components import card_image_urls, product_cards_html
 

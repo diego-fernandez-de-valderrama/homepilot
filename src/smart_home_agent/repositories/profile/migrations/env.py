@@ -12,14 +12,13 @@ from catalog_ingestion.core.settings import PostgresSettings
 from sqlalchemy import Connection
 
 from smart_home_agent.config import AgentSettings
-from smart_home_agent.memory.database import create_memory_engine, memory_url
-from smart_home_agent.memory.models import Base
+from smart_home_agent.repositories.profile.memory_database import MemoryDatabase
 
 config = context.config
 if config.config_file_name is not None and config.attributes.get("connection") is None:
     fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata
+target_metadata = MemoryDatabase.METADATA
 
 
 def _run(connection: Connection) -> None:
@@ -30,7 +29,7 @@ def _run(connection: Connection) -> None:
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=memory_url(PostgresSettings(), AgentSettings().memory_db).render_as_string(hide_password=False),
+        url=MemoryDatabase(PostgresSettings(), AgentSettings().memory_db).url.render_as_string(hide_password=False),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -44,7 +43,7 @@ def run_migrations_online() -> None:
     if connection is not None:
         _run(connection)
         return
-    engine = create_memory_engine(PostgresSettings(), AgentSettings().memory_db)
+    engine = MemoryDatabase(PostgresSettings(), AgentSettings().memory_db).create_engine()
     try:
         with engine.begin() as connection:
             _run(connection)

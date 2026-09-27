@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from smart_home_agent.models import AccessorySuggestion, Product, ProductFilter, RequirementCheck
-from smart_home_agent.repositories.postgres import CatalogReader
+from smart_home_agent.repositories import CatalogReader
 from smart_home_agent.services.accessories._hub_titles import HUB_CATEGORY, HUB_TITLE_KEYWORDS, is_bare_hub
 
 

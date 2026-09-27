@@ -43,6 +43,10 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes ar
 "smart_home_agent.models.recommendation".msg = "import from `smart_home_agent.models` instead"
 "smart_home_agent.models.rich_content".msg = "import from `smart_home_agent.models` instead"
 "smart_home_agent.models.search".msg = "import from `smart_home_agent.models` instead"
+# Repositories are imported from `smart_home_agent.repositories`; its subpackages are an internal layout.
+"smart_home_agent.repositories.catalog".msg = "import from `smart_home_agent.repositories` instead"
+"smart_home_agent.repositories.profile".msg = "import from `smart_home_agent.repositories` instead"
+"smart_home_agent.repositories.semantic".msg = "import from `smart_home_agent.repositories` instead"
 # Services are imported from `smart_home_agent.services`; its subpackages are an internal layout.
 "smart_home_agent.services.accessories".msg = "import from `smart_home_agent.services` instead"
 "smart_home_agent.services.cart".msg = "import from `smart_home_agent.services` instead"
@@ -72,6 +76,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes ar
 "evals/**" = ["TID251"]
 "tests/**" = ["TID251"]
 "src/smart_home_agent/models/**" = ["TID251"]
+"src/smart_home_agent/repositories/**" = ["TID251"]
 "src/smart_home_agent/services/**" = ["TID251"]
 "src/smart_home_agent/tools/**" = ["TID251"]
 

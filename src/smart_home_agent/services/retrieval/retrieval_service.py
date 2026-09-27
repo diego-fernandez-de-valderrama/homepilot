@@ -1,6 +1,5 @@
 from smart_home_agent.models import Product, ProductFilter, SearchCandidate, SearchHit, SearchResult
-from smart_home_agent.repositories.postgres import CatalogReader
-from smart_home_agent.repositories.qdrant import SemanticIndex
+from smart_home_agent.repositories import CatalogReader, SemanticIndex
 from smart_home_agent.services.retrieval._merge import merge
 
 
