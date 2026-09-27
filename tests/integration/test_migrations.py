@@ -7,12 +7,10 @@ from alembic.migration import MigrationContext
 from sqlalchemy import CheckConstraint, inspect, text
 from sqlalchemy.exc import IntegrityError
 
-from catalog_ingestion.domain.enums import WebStatus
-from catalog_ingestion.pipeline.stages import prepare
-from catalog_ingestion.storage.postgres.engine import alembic_config, create_session_factory, upgrade_to_head
-from catalog_ingestion.storage.postgres.models import Base
-from catalog_ingestion.storage.postgres.repository import PostgresRepository
-from catalog_ingestion.validation.validator import Validator
+from catalog_ingestion.database import Base, CatalogDatabase, PostgresRepository
+from catalog_ingestion.enrichment import Validator
+from catalog_ingestion.preparation import ProductPreparer
+from catalog_ingestion.vocabulary import WebStatus
 from tests.conftest import BOSCH_CONTROLLER, load_raw
 
 pytestmark = pytest.mark.integration
@@ -28,7 +26,7 @@ TABLES = {
 
 
 def test_models_and_migrations_are_in_sync(empty_database):
-    upgrade_to_head(empty_database)
+    CatalogDatabase.upgrade_to_head(empty_database)
     with empty_database.connect() as connection:
         context = MigrationContext.configure(connection, opts={"compare_type": True})
         differences = compare_metadata(context, Base.metadata)
@@ -36,22 +34,22 @@ def test_models_and_migrations_are_in_sync(empty_database):
 
 
 def test_upgrade_is_idempotent_and_downgrade_works(empty_database):
-    upgrade_to_head(empty_database)
-    upgrade_to_head(empty_database)
+    CatalogDatabase.upgrade_to_head(empty_database)
+    CatalogDatabase.upgrade_to_head(empty_database)
     assert set(inspect(empty_database).get_table_names()) >= TABLES
 
-    config = alembic_config()
+    config = CatalogDatabase.alembic_config()
     with empty_database.begin() as connection:
         config.attributes["connection"] = connection
         command.downgrade(config, "base")
     assert set(inspect(empty_database).get_table_names()) == {"alembic_version"}
 
-    upgrade_to_head(empty_database)
+    CatalogDatabase.upgrade_to_head(empty_database)
     assert set(inspect(empty_database).get_table_names()) >= TABLES
 
 
 def test_check_constraints_match_the_models(empty_database):
-    upgrade_to_head(empty_database)
+    CatalogDatabase.upgrade_to_head(empty_database)
     inspector = inspect(empty_database)
     for table in Base.metadata.sorted_tables:
         expected = {
@@ -72,13 +70,13 @@ def test_check_constraints_match_the_models(empty_database):
     ],
 )
 def test_enum_columns_reject_unknown_values(empty_database, table, column, value, constraint):
-    upgrade_to_head(empty_database)
-    prepared = prepare(load_raw(BOSCH_CONTROLLER))
+    CatalogDatabase.upgrade_to_head(empty_database)
+    prepared = ProductPreparer.prepare(load_raw(BOSCH_CONTROLLER))
     enriched = Validator().validate(
         prepared.product, prepared.completeness, prepared.facts, prepared.requirements,
         WebStatus.NOT_NEEDED, None, None, None, None,
     )  # fmt: skip
-    PostgresRepository(create_session_factory(empty_database)).upsert_product(
+    PostgresRepository(CatalogDatabase.session_factory(empty_database)).upsert_product(
         enriched, prepared.raw, prepared.raw_hash, None, None
     )
     with pytest.raises(IntegrityError, match=constraint), empty_database.begin() as connection:

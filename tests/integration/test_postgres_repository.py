@@ -3,19 +3,20 @@
 import pytest
 from sqlalchemy import func, select
 
-from catalog_ingestion.domain.enums import WebStatus
-from catalog_ingestion.pipeline.stages import prepare
-from catalog_ingestion.retrieval.documents import build_document
-from catalog_ingestion.storage.postgres.engine import create_session_factory, upgrade_to_head
-from catalog_ingestion.storage.postgres.models import (
+from catalog_ingestion.database import (
+    CatalogDatabase,
     CompatibilityRecord,
     IngestionRunRecord,
+    PostgresRepository,
     ProductRecord,
     RequirementRecord,
     RetrievalDocumentRecord,
+    UpsertOutcome,
 )
-from catalog_ingestion.storage.postgres.repository import PostgresRepository, UpsertOutcome
-from catalog_ingestion.validation.validator import Validator
+from catalog_ingestion.enrichment import Validator
+from catalog_ingestion.indexing import RetrievalDocumentBuilder
+from catalog_ingestion.preparation import ProductPreparer
+from catalog_ingestion.vocabulary import WebStatus
 from tests.conftest import BOSCH_CONTROLLER, HOMEMATIC_OR, load_raw
 
 pytestmark = pytest.mark.integration
@@ -23,13 +24,13 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture
 def repository(empty_database):
-    upgrade_to_head(empty_database)
-    sessions = create_session_factory(empty_database)
+    CatalogDatabase.upgrade_to_head(empty_database)
+    sessions = CatalogDatabase.session_factory(empty_database)
     return PostgresRepository(sessions), sessions
 
 
 def _enriched(product_id: str):
-    prepared = prepare(load_raw(product_id))
+    prepared = ProductPreparer.prepare(load_raw(product_id))
     enriched = Validator().validate(
         prepared.product, prepared.completeness, prepared.facts, prepared.requirements,
         WebStatus.NOT_NEEDED, None, None, None, None,
@@ -85,7 +86,7 @@ def test_documents_runs_and_status(repository):
     repo, sessions = repository
     prepared, enriched = _enriched(BOSCH_CONTROLLER)
     repo.upsert_product(enriched, prepared.raw, prepared.raw_hash, None, None)
-    document = build_document(enriched)
+    document = RetrievalDocumentBuilder.build(enriched)
     repo.save_document(document)
     repo.save_document(document)
     repo.mark_indexed([document], "model@8")

@@ -1,8 +1,8 @@
 import pytest
 
-from catalog_ingestion.domain.enums import Dimension
-from catalog_ingestion.vocabulary.categories import BRAND_PAGE_SLUGS, CATEGORIES, category_for_slug
-from catalog_ingestion.vocabulary.compatibility import CompatibilityTerm, lookup
+from catalog_ingestion.enrichment.validation._mention_matcher import MentionMatcher
+from catalog_ingestion.vocabulary import CategoryVocabulary, CompatibilityTerm, CompatibilityVocabulary, Dimension
+from catalog_ingestion.vocabulary.compatibility_vocabulary import _BY_ALIAS
 
 
 @pytest.mark.parametrize(
@@ -23,13 +23,13 @@ from catalog_ingestion.vocabulary.compatibility import CompatibilityTerm, lookup
     ],
 )
 def test_canonical_lookup(raw, canonical, dimension):
-    term = lookup(raw)
+    term = CompatibilityVocabulary.lookup(raw)
     assert term is not None
     assert (term.canonical, term.dimension) == (canonical, dimension)
 
 
 def _term(raw: str) -> CompatibilityTerm:
-    term = lookup(raw)
+    term = CompatibilityVocabulary.lookup(raw)
     assert term is not None, raw
     return term
 
@@ -41,50 +41,45 @@ def test_non_equivalent_concepts_stay_separate():
 
 
 def test_unknown_values_have_no_canonical_mapping():
-    assert lookup("Philips Hue ZigBee Dimmschalter") is None
-    assert lookup("App") is None
+    assert CompatibilityVocabulary.lookup("Philips Hue ZigBee Dimmschalter") is None
+    assert CompatibilityVocabulary.lookup("App") is None
 
 
 def test_slugs_are_unique_and_brand_pages_unmapped():
-    slugs = [slug for category in CATEGORIES for slug in category.slugs]
+    slugs = [slug for category in CategoryVocabulary.CATEGORIES for slug in category.slugs]
     assert len(slugs) == len(set(slugs))
-    assert all(category_for_slug(slug) is None for slug in BRAND_PAGE_SLUGS)
+    assert all(CategoryVocabulary.for_slug(slug) is None for slug in CategoryVocabulary.BRAND_PAGE_SLUGS)
 
 
 def test_aliases_with_trademark_signs_are_reachable():
-    from catalog_ingestion.vocabulary.compatibility import _BY_ALIAS, TERMS, normalize_alias
 
-    for term in TERMS:
+    for term in CompatibilityVocabulary.TERMS:
         for alias in term.aliases:
-            assert normalize_alias(alias) in _BY_ALIAS, alias
+            assert CompatibilityVocabulary.normalize_alias(alias) in _BY_ALIAS, alias
 
 
 def test_no_surface_form_matches_another_concept_as_a_word():
-    from catalog_ingestion.validation.evidence import mentions_any
-    from catalog_ingestion.vocabulary.compatibility import TERMS, surface_forms
 
-    for term in TERMS:
-        for other in TERMS:
+    for term in CompatibilityVocabulary.TERMS:
+        for other in CompatibilityVocabulary.TERMS:
             if other.canonical == term.canonical:
                 continue
             for alias in (*other.aliases, other.label):
                 # Allowed only when the form is made of whole words of the other alias; this guards
                 # against in-word matches such as "lan" inside "wlan".
-                if mentions_any(alias, surface_forms(term.canonical)):
+                if MentionMatcher.mentions_any(alias, CompatibilityVocabulary.surface_forms(term.canonical)):
                     words = set(alias.casefold().replace("-", " ").split())
-                    forms = {form.casefold() for form in surface_forms(term.canonical)}
+                    forms = {form.casefold() for form in CompatibilityVocabulary.surface_forms(term.canonical)}
                     assert any(set(form.split()) <= words for form in forms), (
                         f"{term.canonical} matches inside {other.canonical} alias {alias!r}"
                     )
 
 
 def test_mentions_any_uses_whole_words():
-    from catalog_ingestion.validation.evidence import mentions_any
-    from catalog_ingestion.vocabulary.compatibility import surface_forms
 
-    assert not mentions_any("Steuerung per WLAN", surface_forms("ethernet"))
-    assert mentions_any("Anschluss per LAN-Kabel", surface_forms("ethernet"))
-    assert not mentions_any("Radios", surface_forms("ios"))
-    assert not mentions_any("mit matter Oberfläche", surface_forms("matter"))
-    assert mentions_any("Über Matter kompatibel", surface_forms("matter"))
-    assert not mentions_any("geringer Verbrauch", surface_forms("ring"))
+    assert not MentionMatcher.mentions_any("Steuerung per WLAN", CompatibilityVocabulary.surface_forms("ethernet"))
+    assert MentionMatcher.mentions_any("Anschluss per LAN-Kabel", CompatibilityVocabulary.surface_forms("ethernet"))
+    assert not MentionMatcher.mentions_any("Radios", CompatibilityVocabulary.surface_forms("ios"))
+    assert not MentionMatcher.mentions_any("mit matter Oberfläche", CompatibilityVocabulary.surface_forms("matter"))
+    assert MentionMatcher.mentions_any("Über Matter kompatibel", CompatibilityVocabulary.surface_forms("matter"))
+    assert not MentionMatcher.mentions_any("geringer Verbrauch", CompatibilityVocabulary.surface_forms("ring"))

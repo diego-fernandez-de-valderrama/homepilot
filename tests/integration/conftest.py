@@ -4,8 +4,8 @@ import pytest
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import OperationalError
 
-from catalog_ingestion.core.settings import PostgresSettings
-from catalog_ingestion.storage.postgres.engine import create_db_engine
+from catalog_ingestion.core import PostgresSettings
+from catalog_ingestion.database import CatalogDatabase
 
 
 @pytest.fixture
@@ -26,6 +26,6 @@ def empty_database() -> Iterator[Engine]:
     finally:
         admin.dispose()
 
-    engine = create_db_engine(test_settings)
+    engine = CatalogDatabase.create_engine(test_settings)
     yield engine
     engine.dispose()

@@ -4,23 +4,18 @@ test_pipeline_postgres.py repeats the key cases against the real PostgresReposit
 
 import json
 from datetime import UTC, datetime
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from qdrant_client import QdrantClient
 
-from catalog_ingestion.domain.enrichment import WebPage
-from catalog_ingestion.llm.errors import QuotaExhaustedError
-from catalog_ingestion.llm.prompts import PROMPT_VERSION
-from catalog_ingestion.pipeline.orchestrator import EmbeddingModelMismatchError, IngestionPipeline, IngestOptions
-from catalog_ingestion.pipeline.stages import legacy_enrichment_hash, prepare, previous_enrichment_hash
-from catalog_ingestion.schemas.mappers import raw_from_schema
-from catalog_ingestion.schemas.raw_product import RawProductSchema
-from catalog_ingestion.storage.postgres.repository import PostgresRepository
-from catalog_ingestion.storage.qdrant.collection import ensure_collection
-from catalog_ingestion.storage.qdrant.repository import QdrantRepository
-from catalog_ingestion.web.fetchers import FetchResult
-from catalog_ingestion.web.retriever import WebRetriever
+from catalog_ingestion.core import QuotaExhaustedError
+from catalog_ingestion.database import PostgresRepository
+from catalog_ingestion.enrichment import EnrichmentKey, FetchResult, PromptBuilder, WebRetriever
+from catalog_ingestion.indexing import QdrantCollection, QdrantRepository
+from catalog_ingestion.models import RawProductMapper, RawProductSchema, WebPage
+from catalog_ingestion.pipeline import EmbeddingModelMismatchError, IngestionPipeline, IngestOptions
+from catalog_ingestion.preparation import ProductPreparer
 from tests.conftest import SPARSE_MATTER, build_zip, load_fixture_json
 from tests.fakes import FakeEmbedder, FakeEnricher, InMemoryPostgres
 
@@ -41,7 +36,7 @@ class CountingFetcher:
 @pytest.fixture
 def env(tmp_path, all_fixture_ids):
     client = QdrantClient(":memory:")
-    ensure_collection(client, "products", DIMENSION)
+    QdrantCollection.ensure(client, "products", DIMENSION)
     products = [load_fixture_json(pid) for pid in all_fixture_ids]
     zip_path = build_zip(tmp_path / "products.zip", products)
     postgres = InMemoryPostgres()
@@ -49,17 +44,9 @@ def env(tmp_path, all_fixture_ids):
     enricher = FakeEnricher()
     fetcher = CountingFetcher()
     qdrant = QdrantRepository(client, "products")
-    pipeline = IngestionPipeline(
-        # The in-memory fake implements the subset of PostgresRepository the pipeline uses.
-        postgres=cast(PostgresRepository, postgres),
-        qdrant=qdrant,
-        embedder=embedder,
-        web=WebRetriever([fetcher]),
-        enricher=enricher,
-        model_name=FakeEnricher.model,
-    )
-    return {
-        "pipeline": pipeline,
+    components = {"embedder": embedder, "web": WebRetriever([fetcher]), "enricher": enricher}
+    env = {
+        "components": components,
         "postgres": postgres,
         "qdrant": qdrant,
         "embedder": embedder,
@@ -69,6 +56,22 @@ def env(tmp_path, all_fixture_ids):
         "products": products,
         "tmp": tmp_path,
     }
+    rebuild(env)
+    return env
+
+
+def rebuild(env: dict, **replaced: Any) -> IngestionPipeline:
+    """A new `env["pipeline"]` over the same stores, with some components replaced for the following runs
+    (`embedder`, `web`, `enricher`, `model_name`)."""
+    env["components"] = {**env["components"], **replaced}
+    env["pipeline"] = IngestionPipeline(
+        # The in-memory fake implements the subset of PostgresRepository the pipeline uses.
+        postgres=cast(PostgresRepository, env["postgres"]),
+        qdrant=env["qdrant"],
+        model_name=env["components"].get("model_name", FakeEnricher.model),
+        **{name: value for name, value in env["components"].items() if name != "model_name"},
+    )
+    return env["pipeline"]
 
 
 def test_second_run_is_a_no_op(env):
@@ -228,7 +231,7 @@ def test_reindex_uses_postgres_only(env):
 def test_new_embedding_model_triggers_reembedding(env):
     n = len(env["products"])
     env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
-    env["pipeline"]._embedder = FakeEmbedder(DIMENSION, model="other-model")
+    rebuild(env, embedder=FakeEmbedder(DIMENSION, model="other-model"))
     assert env["pipeline"].reindex().as_dict()["qdrant_indexed"] == n
 
 
@@ -257,7 +260,7 @@ class QuotaEnricher(FakeEnricher):
 def test_daily_quota_stops_llm_calls_but_not_the_run(env):
     n = len(env["products"])
     enricher = QuotaEnricher()
-    env["pipeline"]._enricher = enricher
+    rebuild(env, enricher=enricher)
     stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"], concurrency=1)).as_dict()
 
     assert enricher.calls == 1  # circuit breaker: no call after the first quota error
@@ -267,7 +270,7 @@ def test_daily_quota_stops_llm_calls_but_not_the_run(env):
     # Nothing is marked as LLM-enriched, so the next run retries every product.
     assert all(row["enrichment_hash"] is None for row in env["postgres"].products.values())
 
-    env["pipeline"]._enricher = FakeEnricher()
+    rebuild(env, enricher=FakeEnricher())
     assert env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()["llm_called"] == n
 
 
@@ -279,7 +282,7 @@ class TransientFetcher(CountingFetcher):
 
 def test_transient_web_failures_are_not_cached(env):
     fetcher = TransientFetcher()
-    env["pipeline"]._web = WebRetriever([fetcher])
+    rebuild(env, web=WebRetriever([fetcher]))
     first = env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()
     assert first["web_transient_failures_not_cached"] == first["needs_web_enrichment"]
     assert env["postgres"].web_pages == {}
@@ -290,11 +293,11 @@ def test_transient_web_failures_are_not_cached(env):
 def test_changing_the_model_does_not_redo_enriched_products(env):
     n = len(env["products"])
     env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
-    env["pipeline"]._model = "another-model"
-    env["pipeline"]._enricher = FakeEnricher()
+    enricher = FakeEnricher()
+    rebuild(env, model_name="another-model", enricher=enricher)
     stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()
     assert stats["llm_cached"] == n
-    assert env["pipeline"]._enricher.calls == 0
+    assert enricher.calls == 0
     # Provenance keeps the model that produced each output.
     document = env["postgres"].products[SPARSE_MATTER]["document"]
     assert document["enrichment_model"] == FakeEnricher.model
@@ -305,16 +308,19 @@ def test_results_stored_with_the_legacy_cache_key_are_reused_and_upgraded(env):
     env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
     web_cache = env["postgres"].web_pages
     for raw_json in env["products"]:
-        item = prepare(raw_from_schema(RawProductSchema.model_validate(raw_json), original=raw_json))
+        item = ProductPreparer.prepare(
+            RawProductMapper.from_schema(RawProductSchema.model_validate(raw_json), original=raw_json)
+        )
         url = item.product.source_url
         page = web_cache.get(url) if item.completeness.needs_web and url else None
         row = env["postgres"].products[item.product.id]
-        row["enrichment_hash"] = legacy_enrichment_hash(item, page, FakeEnricher.model, PROMPT_VERSION)
+        row["enrichment_hash"] = EnrichmentKey.legacy(item, page, FakeEnricher.model, PromptBuilder.VERSION)
         row["enrichment_model"] = FakeEnricher.model
 
-    env["pipeline"]._enricher = FakeEnricher()
+    enricher = FakeEnricher()
+    rebuild(env, enricher=enricher)
     stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()
-    assert stats["llm_cached"] == n and env["pipeline"]._enricher.calls == 0
+    assert stats["llm_cached"] == n and enricher.calls == 0
     assert stats["postgres_updated"] == n  # stored again under the new key
     third = env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()
     assert third["postgres_unchanged"] == n
@@ -329,14 +335,14 @@ class InterruptingEnricher(FakeEnricher):
 
 def test_interrupted_run_keeps_finished_products_and_resumes(env):
     n = len(env["products"])
-    env["pipeline"]._enricher = InterruptingEnricher()
+    rebuild(env, enricher=InterruptingEnricher())
     with pytest.raises(KeyboardInterrupt):
         env["pipeline"].ingest(IngestOptions(input_path=env["zip"], concurrency=1))
     assert env["postgres"].runs[-1]["status"] == "interrupted"
     saved = [row for row in env["postgres"].products.values() if row["enrichment_hash"] is not None]
     assert len(saved) == 3
 
-    env["pipeline"]._enricher = FakeEnricher()
+    rebuild(env, enricher=FakeEnricher())
     stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()
     assert stats["llm_cached"] == 3
     assert stats["llm_called"] == n - 3  # only the remaining products
@@ -358,21 +364,21 @@ def test_failed_re_enrichment_keeps_stored_output_and_stays_stale(env):
     next(p for p in products if p["id"] == SPARSE_MATTER)["description"] = "Neue Beschreibung mit Matter."
     changed = build_zip(env["tmp"] / "changed.zip", products)
 
-    env["pipeline"]._enricher = QuotaEnricher()
+    rebuild(env, enricher=QuotaEnricher())
     stats = env["pipeline"].ingest(IngestOptions(input_path=changed)).as_dict()
     assert stats["llm_failed"] == 1 and stats["llm_kept_previous"] == 1
     row = env["postgres"].products[SPARSE_MATTER]
     assert row["llm_output"] is not None
     assert row["enrichment_hash"] == old_hash  # still stale: re-enriched on the next run
 
-    env["pipeline"]._enricher = FakeEnricher()
+    rebuild(env, enricher=FakeEnricher())
     assert env["pipeline"].ingest(IngestOptions(input_path=changed)).as_dict()["llm_called"] == 1
 
 
 def test_unreadable_stored_output_is_re_enriched(env):
     env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
     env["postgres"].products[SPARSE_MATTER]["llm_output"] = {"key_features": 42}
-    env["pipeline"]._enricher = FakeEnricher()
+    rebuild(env, enricher=FakeEnricher())
     stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()
     assert stats["llm_called"] == 1
     assert "failed" not in stats
@@ -408,7 +414,9 @@ def test_a_storage_error_fails_only_that_product(env, monkeypatch):
 def _prepared_with_pages(env):
     web_cache = env["postgres"].web_pages
     for raw_json in env["products"]:
-        item = prepare(raw_from_schema(RawProductSchema.model_validate(raw_json), original=raw_json))
+        item = ProductPreparer.prepare(
+            RawProductMapper.from_schema(RawProductSchema.model_validate(raw_json), original=raw_json)
+        )
         url = item.product.source_url
         yield item, (web_cache.get(url) if item.completeness.needs_web and url else None)
 
@@ -417,12 +425,13 @@ def test_results_stored_with_the_previous_cache_key_are_reused_and_upgraded(env)
     n = len(env["products"])
     env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
     for item, page in _prepared_with_pages(env):
-        env["postgres"].products[item.product.id]["enrichment_hash"] = previous_enrichment_hash(
-            item, page, PROMPT_VERSION
+        env["postgres"].products[item.product.id]["enrichment_hash"] = EnrichmentKey.previous(
+            item, page, PromptBuilder.VERSION
         )
-    env["pipeline"]._enricher = FakeEnricher()
+    enricher = FakeEnricher()
+    rebuild(env, enricher=enricher)
     stats = env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()
-    assert stats["llm_cached"] == n and env["pipeline"]._enricher.calls == 0
+    assert stats["llm_cached"] == n and enricher.calls == 0
     assert stats["postgres_updated"] == n
 
 
@@ -430,8 +439,8 @@ def test_a_changed_prompt_input_invalidates_the_cache(env, monkeypatch):
     n = len(env["products"])
     env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
     # A new allowed category changes what the model is shown, although no product changed.
-    monkeypatch.setattr("catalog_ingestion.llm.prompts._category_list", lambda: "- new_category: New")
-    env["pipeline"]._enricher = FakeEnricher()
+    monkeypatch.setattr(PromptBuilder, "_category_list", staticmethod(lambda: "- new_category: New"))
+    rebuild(env, enricher=FakeEnricher())
     assert env["pipeline"].ingest(IngestOptions(input_path=env["zip"])).as_dict()["llm_called"] == n
 
 
@@ -452,7 +461,7 @@ def test_payload_only_changes_are_written_without_re_embedding(env):
 
 def test_partial_runs_are_refused_after_an_embedding_model_change(env):
     env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
-    env["pipeline"]._embedder = FakeEmbedder(DIMENSION, model="other-model")
+    rebuild(env, embedder=FakeEmbedder(DIMENSION, model="other-model"))
     with pytest.raises(EmbeddingModelMismatchError):
         env["pipeline"].ingest(IngestOptions(input_path=env["zip"], only_products=(SPARSE_MATTER,)))
     env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))  # a full run re-embeds everything
@@ -469,16 +478,16 @@ def test_reindex_recreate_keeps_the_collection_when_embedding_fails(env):
     env["pipeline"].ingest(IngestOptions(input_path=env["zip"]))
     recreated: list[bool] = []
 
-    env["pipeline"]._embedder = FailingEmbedder(DIMENSION)
+    rebuild(env, embedder=FailingEmbedder(DIMENSION))
     with pytest.raises(ConnectionError):
         env["pipeline"].reindex(recreate=lambda: recreated.append(True))
     assert recreated == [] and env["qdrant"].count() == n
 
-    env["pipeline"]._embedder = FakeEmbedder(DIMENSION)
+    rebuild(env, embedder=FakeEmbedder(DIMENSION))
 
     def recreate():
         recreated.append(True)
-        ensure_collection(env["qdrant"]._client, "products", DIMENSION, recreate=True)
+        QdrantCollection.ensure(env["qdrant"]._client, "products", DIMENSION, recreate=True)
 
     stats = env["pipeline"].reindex(recreate=recreate).as_dict()
     assert recreated == [True]

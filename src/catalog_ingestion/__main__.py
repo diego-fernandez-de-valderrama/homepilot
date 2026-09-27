@@ -1,4 +1,4 @@
-from catalog_ingestion.cli.app import app
+from catalog_ingestion.cli import CatalogCli
 
 if __name__ == "__main__":
-    app()
+    CatalogCli.main()

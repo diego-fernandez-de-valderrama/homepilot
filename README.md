@@ -55,38 +55,39 @@ Completeness on the real dataset: 641 rich, 269 partial, 33 sparse. **267 produc
 
 ## Architecture
 
+One package per step of the flow, listed so that dependencies only point downward. Each package's `__init__.py`
+is its entry point: a docstring describing its flow and `__all__`. Import from the package, never from its modules
+(ruff `TID251` enforces this). One class per file; helpers are static methods; internals live in `_private` modules.
+
 ```
 src/catalog_ingestion/
-├── cli/              typer commands, progress bars, summary tables
-├── core/             settings (pydantic-settings), logging, hashing
-├── schemas/          pydantic BaseModels: JSON crossing a boundary (in and out)
-│                     raw product, LLM response schema, catalog product, Qdrant payload, mappers
-├── domain/           frozen dataclasses: internal processing models (no I/O)
-├── vocabulary/       canonical categories, compatibility terms, requirement terms, brands
-├── ingestion/        zip loader
-├── normalization/    price, attributes, subtitle/description, brand, normalizer
-├── extraction/       deterministic compatibility facts and requirements
-├── quality/          completeness analysis, dataset profile
-├── web/              fetchers (httpx, Gemini url_context), HTML to text, retriever
-├── llm/              Gemini client (retries), versioned prompt, enricher
-├── validation/       evidence verification, merge/precedence, validator
-├── retrieval/        retrieval document builder, embedder
-├── storage/          postgres/ (SQLAlchemy models, engine, Alembic migrations, repository)
-│                     qdrant/ (collection, repository)
-└── pipeline/         stage functions, orchestrator, run stats
+├── core/             shared infrastructure: settings (pydantic-settings), logging, hashing, GeminiClient
+├── vocabulary/       enums and canonical ids: compatibility terms, requirement terms, categories, brands
+├── models/           domain/   frozen dataclasses: internal processing models (no I/O)
+│                     schemas/  pydantic BaseModels: JSON crossing a boundary (in and out)
+│                     mappers/  the only code that converts between the two
+├── preparation/      1. ZipLoader -> ProductNormalizer -> Compatibility/RequirementExtractor -> CompletenessAssessor
+│                        (ProductPreparer), DatasetProfiler
+├── enrichment/       2. ProductEnricher: web/ (fetchers, WebRetriever) -> llm/ (PromptBuilder, LLMEnricher)
+│                        -> validation/ (Validator), EnrichmentKey (LLM cache keys)
+├── database/         PostgreSQL: records/ (SQLAlchemy ORM), CatalogDatabase (engine, Alembic), migrations/,
+│                     PostgresRepository
+├── indexing/         3. RetrievalDocumentBuilder, GeminiEmbedder, QdrantCollection, QdrantRepository
+├── pipeline/         IngestionPipeline (ingest, reindex), IngestOptions, RunStats
+└── cli/              CatalogCli: one class per command
 ```
 
 Design rules:
 
 - **Two model types.**
-  - Pydantic `BaseModel`s (`schemas/`) exist only at the business boundaries: the product JSON read from the zip, Gemini's structured output, the enriched product JSON written to PostgreSQL, and the Qdrant payload.
-  - Everything in between works on **frozen dataclasses** (`domain/`, `slots=True`, tuples instead of lists). Stages return new objects and never mutate.
-  - `schemas/mappers.py` is the only module that converts between the two.
+  - Pydantic `BaseModel`s (`models/schemas/`) exist only at the business boundaries: the product JSON read from the zip, Gemini's structured output, the enriched product JSON written to PostgreSQL, and the Qdrant payload.
+  - Everything in between works on **frozen dataclasses** (`models/domain/`, `slots=True`, tuples instead of lists). Stages return new objects and never mutate.
+  - `models/mappers/` is the only code that converts between the two.
 - **Settings** come only from environment variables or `.env`, via `pydantic-settings`. There is one settings class per concern (`GeminiSettings`, `PostgresSettings`, `QdrantSettings`, `WebSettings`, `IngestSettings`), each with its own env prefix. Settings are injected by constructor and never read globally.
-- **Dependencies point inward.**
-  - `pipeline` wires everything.
-  - Stage packages depend on `domain` and `vocabulary`.
-  - `domain` and `vocabulary` depend on nothing, so the phase-2 agent can import them.
+- **Dependencies point downward.**
+  - `pipeline` wires the stages; `cli` builds the components and injects them.
+  - Stage packages depend on `models`, `vocabulary` and `core`.
+  - `core`, `vocabulary` and `models` depend on no stage, so the phase-2 agent can import them.
 - **Deterministic first, LLM second, validation always.** The LLM adds information, but it can never override catalog facts, and nothing it produces is stored without passing validation.
 
 ---
@@ -95,7 +96,7 @@ Design rules:
 
 ```text
 products.zip
-  │  ingestion/zip_loader        RawProductSchema (pydantic) -> RawProduct (dataclass)
+  │  preparation.ZipLoader       RawProductSchema (pydantic) -> RawProduct (dataclass)
   ▼
 normalize                        price, attributes blob, subtitle, description, brand, category slug
   ▼
@@ -122,7 +123,7 @@ Web and LLM calls run in a bounded thread pool (`INGEST_CONCURRENCY`) with expon
 
 ## Enrichment strategy
 
-1. **Deterministic extraction (always).** Attribute keys map to compatibility dimensions through `vocabulary/compatibility.py`. Requirements come from `Anforderungen`, `Hinweise` and `Installationshinweis`. The title provides only unambiguous technology names (Matter, WLAN, Zigbee, Bluetooth, Z-Wave).
+1. **Deterministic extraction (always).** Attribute keys map to compatibility dimensions through `CompatibilityVocabulary` (`vocabulary/`). Requirements come from `Anforderungen`, `Hinweise` and `Installationshinweis`. The title provides only unambiguous technology names (Matter, WLAN, Zigbee, Bluetooth, Z-Wave).
 2. **Completeness check.** A product needs web enrichment when its description or attributes are missing, or when it looks like a smart product but has no compatibility facts.
 3. **Web (only when needed, only the dataset URL).**
    - Fetchers run in order:
@@ -246,17 +247,17 @@ Heterogeneous data (302 attribute keys, specs) and audit copies go into JSONB. F
 
 ### Schema management: SQLAlchemy + Alembic
 
-- **SQLAlchemy 2.0 ORM models** (`storage/postgres/models.py`) define the schema. They are persistence models only: the pipeline works on frozen dataclasses, and `storage/postgres/repository.py` converts between the two. The driver is psycopg 3 (`postgresql+psycopg`).
-- **Alembic migrations** live in `storage/postgres/migrations/versions/`. `0001` creates the whole schema above.
+- **SQLAlchemy 2.0 ORM records** (`database/records/`) define the schema. They are persistence models only: the pipeline works on frozen dataclasses, and `PostgresRepository` (`database/`) converts between the two. The driver is psycopg 3 (`postgresql+psycopg`).
+- **Alembic migrations** live in `database/migrations/versions/`. `0001` creates the whole schema above.
 - `catalog-ingestion init` and `catalog-ingestion ingest` apply pending migrations automatically (`alembic upgrade head`, run from code, so no `alembic.ini` is needed at runtime).
 - A test (`tests/integration/test_migrations.py`) fails if the models and the migrations drift apart.
 
 Changing the schema:
 
 ```bash
-# 1. edit storage/postgres/models.py
+# 1. edit database/records/
 uv run alembic revision --autogenerate -m "add warranty column"   # 2. generate a migration
-# 3. review the file in storage/postgres/migrations/versions/
+# 3. review the file in database/migrations/versions/
 uv run alembic upgrade head                                       # 4. apply (or just run `init`)
 ```
 
@@ -361,7 +362,7 @@ Running `ingest` twice on the same zip creates no duplicates and makes **zero** 
 
 - **Stable keys**: the dataset `id` is the PostgreSQL primary key and the Qdrant point id. Every write is an upsert.
 - **`raw_hash` / `document_hash`**: if neither the input nor the enriched document changed, the product row is not rewritten (`postgres_unchanged`).
-- **`enrichment_hash`** = sha256(normalized product + web text + prompt version). If it is unchanged, the cached `llm_output` is re-validated and reused (`llm_cached`). The **API key and the model are not part of it**: switching either continues where the last run stopped, and each output keeps the model that produced it (`enrichment_model`). Changing the product data, the web text or `PROMPT_VERSION` re-enriches; `--force` redoes everything.
+- **`enrichment_hash`** = sha256(normalized product + web text + prompt version). If it is unchanged, the cached `llm_output` is re-validated and reused (`llm_cached`). The **API key and the model are not part of it**: switching either continues where the last run stopped, and each output keeps the model that produced it (`enrichment_model`). Changing the product data, the web text or `PromptBuilder.VERSION` re-enriches; `--force` redoes everything.
 - **Resuming**: every product is committed as soon as it finishes. An interrupted run (Ctrl-C, crash, quota) loses nothing. The next run logs how many products are already enriched vs pending, processes the already-enriched ones first (instantly), and calls Gemini only for the rest. Ctrl-C marks the run `interrupted`; runs killed without cleanup are marked `abandoned` on the next start.
 - **`doc_hash` + embedding model id** (checked against the Qdrant payload): the product is re-embedded only when its retrieval text or the embedding model/dimension changed (`qdrant_unchanged`). `reindex` regenerates embeddings from PostgreSQL without touching the web or the LLM.
 - **Modified products** in a new zip are updated. **Removed products** (on a full run, i.e. without `--only-product` or `--limit`) are marked `active = false` in PostgreSQL and deleted from Qdrant.
@@ -461,7 +462,7 @@ All configuration comes from environment variables or `.env` (see `.env.example`
 
 ## Notes for the agent
 
-- `catalog_ingestion.domain` (dataclasses), `catalog_ingestion.vocabulary` (canonical ids and labels) and `catalog_ingestion.schemas.catalog_product` (the JSON contract) are importable without any ingestion dependencies.
+- `catalog_ingestion.models` (dataclasses and the `CatalogProductSchema` JSON contract) and `catalog_ingestion.vocabulary` (enums, canonical ids and labels) depend on no pipeline stage.
 - A deterministic compatibility check is a query over `product_compatibility` (`status = 'supported'`) and `product_requirements` (`alternatives`). Treat a missing row as **unknown**, never as incompatible or compatible.
 - `requirements` with `kind = 'professional_installation'` identify products whose installation involves electrical work. The agent's wiring guardrail can use this.
 - `products.document` holds the complete enriched product in one JSON document, which is convenient for comparison prompts.

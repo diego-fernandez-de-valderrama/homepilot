@@ -4,10 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from catalog_ingestion.domain.product import NormalizedProduct, RawProduct
-from catalog_ingestion.normalization.normalizer import normalize
-from catalog_ingestion.schemas.mappers import raw_from_schema
-from catalog_ingestion.schemas.raw_product import RawProductSchema
+from catalog_ingestion.models import NormalizedProduct, RawProduct, RawProductMapper, RawProductSchema
+from catalog_ingestion.preparation import ProductNormalizer
 
 FIXTURES = Path(__file__).parent / "fixtures" / "products"
 
@@ -35,11 +33,11 @@ def load_fixture_json(product_id: str) -> dict:
 
 def load_raw(product_id: str) -> RawProduct:
     data = load_fixture_json(product_id)
-    return raw_from_schema(RawProductSchema.model_validate(data), original=data)
+    return RawProductMapper.from_schema(RawProductSchema.model_validate(data), original=data)
 
 
 def load_normalized(product_id: str) -> NormalizedProduct:
-    return normalize(load_raw(product_id))
+    return ProductNormalizer.normalize(load_raw(product_id))
 
 
 def build_zip(path: Path, products: list[dict], extra_members: dict[str, bytes] | None = None) -> Path:

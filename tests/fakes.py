@@ -4,16 +4,21 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
-from catalog_ingestion.core.hashing import sha256_json
-from catalog_ingestion.domain.enrichment import EnrichedProduct, LLMEnrichment, WebPage
-from catalog_ingestion.domain.product import RawProduct
-from catalog_ingestion.llm.enricher import LLMResult
-from catalog_ingestion.llm.prompts import PROMPT_VERSION
-from catalog_ingestion.retrieval.documents import RetrievalDocument
-from catalog_ingestion.schemas.catalog_product import CatalogProductSchema
-from catalog_ingestion.schemas.llm_enrichment import LLMEnrichmentSchema
-from catalog_ingestion.schemas.mappers import enriched_from_catalog, enriched_to_catalog, llm_from_schema
-from catalog_ingestion.storage.postgres.repository import ProductState, UpsertOutcome
+from catalog_ingestion.core import Hashing
+from catalog_ingestion.database import UpsertOutcome
+from catalog_ingestion.enrichment import LLMResult, PromptBuilder
+from catalog_ingestion.models import (
+    CatalogProductMapper,
+    CatalogProductSchema,
+    EnrichedProduct,
+    LLMEnrichment,
+    LLMEnrichmentMapper,
+    LLMEnrichmentSchema,
+    ProductState,
+    RawProduct,
+    RetrievalDocument,
+    WebPage,
+)
 
 
 def empty_llm(**overrides: Any) -> LLMEnrichment:
@@ -83,7 +88,9 @@ class FakeEnricher:
                 "requirements": [],
             }
         )
-        return LLMResult(llm_from_schema(schema), schema.model_dump(mode="json"), self.model, PROMPT_VERSION)
+        return LLMResult(
+            LLMEnrichmentMapper.from_schema(schema), schema.model_dump(mode="json"), self.model, PromptBuilder.VERSION
+        )
 
 
 @dataclass
@@ -117,8 +124,8 @@ class InMemoryPostgres:
         self.web_pages[page.url] = page
 
     def upsert_product(self, enriched: EnrichedProduct, raw: RawProduct, raw_hash, enrichment_hash, llm_output):
-        document = enriched_to_catalog(enriched).model_dump(mode="json")
-        document_hash = sha256_json(document)
+        document = CatalogProductMapper.to_schema(enriched).model_dump(mode="json")
+        document_hash = Hashing.sha256_json(document)
         existing = self.products.get(enriched.id)
         row = {
             "raw_hash": raw_hash,
@@ -154,7 +161,7 @@ class InMemoryPostgres:
 
     def load_enriched(self, product_ids=None) -> list[EnrichedProduct]:
         return [
-            enriched_from_catalog(CatalogProductSchema.model_validate(row["document"]))
+            CatalogProductMapper.from_schema(CatalogProductSchema.model_validate(row["document"]))
             for pid, row in sorted(self.products.items())
             if row["active"] and (product_ids is None or pid in product_ids)
         ]

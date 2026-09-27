@@ -6,12 +6,9 @@ import pytest
 from qdrant_client import QdrantClient
 from sqlalchemy import func, select
 
-from catalog_ingestion.pipeline.orchestrator import IngestionPipeline, IngestOptions
-from catalog_ingestion.storage.postgres.engine import create_session_factory, upgrade_to_head
-from catalog_ingestion.storage.postgres.models import ProductRecord, RetrievalDocumentRecord
-from catalog_ingestion.storage.postgres.repository import PostgresRepository
-from catalog_ingestion.storage.qdrant.collection import ensure_collection
-from catalog_ingestion.storage.qdrant.repository import QdrantRepository
+from catalog_ingestion.database import CatalogDatabase, PostgresRepository, ProductRecord, RetrievalDocumentRecord
+from catalog_ingestion.indexing import QdrantCollection, QdrantRepository
+from catalog_ingestion.pipeline import IngestionPipeline, IngestOptions
 from tests.conftest import build_zip, load_fixture_json
 from tests.fakes import FakeEmbedder, FakeEnricher
 
@@ -22,10 +19,10 @@ DIMENSION = 8
 
 @pytest.fixture
 def real(tmp_path, empty_database, all_fixture_ids):
-    upgrade_to_head(empty_database)
-    sessions = create_session_factory(empty_database)
+    CatalogDatabase.upgrade_to_head(empty_database)
+    sessions = CatalogDatabase.session_factory(empty_database)
     client = QdrantClient(":memory:")
-    ensure_collection(client, "products", DIMENSION)
+    QdrantCollection.ensure(client, "products", DIMENSION)
     products = [load_fixture_json(pid) for pid in all_fixture_ids]
     qdrant = QdrantRepository(client, "products")
     pipeline = IngestionPipeline(
