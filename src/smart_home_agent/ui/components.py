@@ -30,7 +30,7 @@ from smart_home_agent.models import (
     ProductSummary,
     UpsellSuggestion,
 )
-from smart_home_agent.services import vocabulary
+from smart_home_agent.services import Vocabulary
 from smart_home_agent.session import SessionState
 
 _UI_DIR = Path(__file__).parent
@@ -165,9 +165,9 @@ def setup_panel_html(state: SessionState | None) -> str:
     rows: list[tuple[str, list[str]]] = []
     if state is not None:
         if state.must_support:
-            rows.append(("Works with", [vocabulary.label(term) for term in state.must_support]))
+            rows.append(("Works with", [Vocabulary.label(term) for term in state.must_support]))
         if state.owned_devices is not None:
-            owned = [vocabulary.requirement_label(d) for d in state.owned_devices]
+            owned = [Vocabulary.requirement_label(d) for d in state.owned_devices]
             rows.append(("Hubs owned", owned or ["None"]))
         if state.budget_max is not None:
             rows.append(("Budget", [_format_budget(state.budget_max)]))

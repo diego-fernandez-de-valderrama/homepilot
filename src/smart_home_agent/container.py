@@ -14,15 +14,17 @@ from smart_home_agent.memory.database import create_memory_engine
 from smart_home_agent.repositories.postgres import CatalogReader, CatalogRepository, create_readonly_sessions
 from smart_home_agent.repositories.profile import ProfileRepository, ProfileStore
 from smart_home_agent.repositories.qdrant import QdrantIndex, SemanticIndex
-from smart_home_agent.services.accessories import AccessoryService
-from smart_home_agent.services.cart import CartService
-from smart_home_agent.services.comparison import ComparisonService
-from smart_home_agent.services.compatibility import CompatibilityService
-from smart_home_agent.services.evidence import EvidenceService
-from smart_home_agent.services.profile import ProfileService
-from smart_home_agent.services.recommendation import RecommendationService
-from smart_home_agent.services.retrieval import RetrievalService
-from smart_home_agent.services.rich_content import RichContentService
+from smart_home_agent.services import (
+    AccessoryService,
+    CartService,
+    ComparisonService,
+    CompatibilityService,
+    EvidenceService,
+    ProfileService,
+    RecommendationService,
+    RetrievalService,
+    RichContentService,
+)
 
 logger = logging.getLogger(__name__)
 

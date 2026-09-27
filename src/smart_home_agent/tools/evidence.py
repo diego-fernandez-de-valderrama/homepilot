@@ -1,5 +1,5 @@
 from smart_home_agent.container import Services
-from smart_home_agent.services.evidence import TOPICS_HELP
+from smart_home_agent.services import EvidenceLookup
 from smart_home_agent.tools._common import ToolResult, ok, tool_errors
 
 
@@ -17,7 +17,7 @@ def make_get_evidence(services: Services):
         """
         result = services.evidence.get(product_id.strip(), topic)
         if not result.items and not result.provenance and result.note is None:
-            result.note = f"No stored evidence for this topic. Valid topics: {TOPICS_HELP}."
+            result.note = f"No stored evidence for this topic. Valid topics: {EvidenceLookup.TOPICS_HELP}."
         return ok(**result.model_dump(mode="json"))
 
     return get_evidence

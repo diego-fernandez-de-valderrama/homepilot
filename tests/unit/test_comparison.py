@@ -2,8 +2,7 @@ import pytest
 from catalog_ingestion.domain.enums import FactStatus
 
 from smart_home_agent.models import NOT_LISTED, Spec
-from smart_home_agent.services.comparison import ComparisonService, compare
-from smart_home_agent.services.compatibility import ProductNotFoundError
+from smart_home_agent.services import ComparisonService, ProductComparer, ProductNotFoundError
 from tests.fakes import FakeCatalog, fact, product, requirement
 
 
@@ -31,7 +30,7 @@ B = product(
 
 
 def test_general_rows_use_structured_values():
-    result = compare([A, B])
+    result = ProductComparer.compare([A, B])
     assert _row(result, "price").values == ["55.00 EUR", "69.95 EUR"]
     assert _row(result, "price").differs
     assert _row(result, "brand").values == ["Bosch", "Bosch"]
@@ -40,21 +39,21 @@ def test_general_rows_use_structured_values():
 
 
 def test_compatibility_rows_distinguish_supported_unsupported_and_unknown():
-    result = compare([A, B])
+    result = ProductComparer.compare([A, B])
     assert _row(result, "Apple Home (HomeKit)").values == ["supported", "supported"]
     assert _row(result, "Zigbee").values == ["supported", "unknown (not listed)"]
     assert _row(result, "Matter").values == ["unknown (not listed)", "unsupported"]
 
 
 def test_missing_attributes_are_marked_not_listed():
-    result = compare([A, B])
+    result = ProductComparer.compare([A, B])
     assert _row(result, "Humidity").values == [NOT_LISTED, "80 %"]
     assert _row(result, "requirements").values[1] == NOT_LISTED
     assert "Bosch Smart Home Controller" in _row(result, "requirements").values[0]
 
 
 def test_capability_differences():
-    result = compare([A, B])
+    result = ProductComparer.compare([A, B])
     assert result.only_supported_by == {"a": ["Zigbee"], "b": []}
     assert any("Lowest price: Thermo A" in note for note in result.notes)
 

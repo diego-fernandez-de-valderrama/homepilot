@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import InternalError
 
 from smart_home_agent.models import Product, ProductFilter
-from smart_home_agent.services import compatibility, vocabulary
+from smart_home_agent.services import CompatibilityEvaluator, Vocabulary
 
 pytestmark = pytest.mark.integration
 
@@ -42,16 +42,16 @@ def test_supports_filter_agrees_with_the_compatibility_service(catalog):
         ProductFilter(category="heating_control", supports=["google_home"], limit=100)
     )
     assert products
-    google_home = vocabulary.term("google_home")
-    assert all(compatibility.evaluate(p, [google_home]).overall is FactStatus.SUPPORTED for p in products)
+    google_home = Vocabulary.term("google_home")
+    assert all(CompatibilityEvaluator.evaluate(p, [google_home]).overall is FactStatus.SUPPORTED for p in products)
 
 
 def test_google_assistant_products_are_not_google_home_products(catalog):
     _, assistant = catalog.filter_products(
         ProductFilter(category="heating_control", supports=["google_assistant"], limit=200)
     )
-    google_home = vocabulary.term("google_home")
-    statuses = {compatibility.evaluate(p, [google_home]).overall for p in assistant}
+    google_home = Vocabulary.term("google_home")
+    statuses = {CompatibilityEvaluator.evaluate(p, [google_home]).overall for p in assistant}
     assert FactStatus.UNKNOWN in statuses  # many support the assistant without confirming Google Home
     assert FactStatus.UNSUPPORTED not in statuses  # absence of evidence never becomes "unsupported"
 

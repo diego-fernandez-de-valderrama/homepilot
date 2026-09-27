@@ -7,9 +7,7 @@ from streamlit.testing.v1 import AppTest
 
 from smart_home_agent.config import get_settings
 from smart_home_agent.models import CartChangeLine, CartConfirmation, CartItem
-from smart_home_agent.services.cart import CartService
-from smart_home_agent.services.comparison import compare
-from smart_home_agent.services.rich_content import product_compatibility
+from smart_home_agent.services import CartService, ProductComparer, RichContentService
 from smart_home_agent.session import SessionState
 from smart_home_agent.ui import streamlit_app
 from smart_home_agent.ui.components import (
@@ -113,7 +111,7 @@ def test_answer_markdown_escapes_model_html_and_drops_echoed_titles():
 
 
 def test_compatibility_component_shows_unknown_as_not_confirmed():
-    html = compatibility_html(PRO, product_compatibility(PRO, ["google_home", "apple_home"], None))
+    html = compatibility_html(PRO, RichContentService.product_compatibility(PRO, ["google_home", "apple_home"], None))
     assert "Not confirmed for your setup" in html
     assert "hp-compat-chip--unknown" in html and "Not confirmed" in html
     assert "Works with your setup" not in html
@@ -121,12 +119,12 @@ def test_compatibility_component_shows_unknown_as_not_confirmed():
 
 def test_compatibility_component_with_explicit_negative_evidence():
     plug = product("30000009", facts=[fact("apple_home", FactStatus.UNSUPPORTED)])
-    html = compatibility_html(plug, product_compatibility(plug, ["apple_home"], None))
+    html = compatibility_html(plug, RichContentService.product_compatibility(plug, ["apple_home"], None))
     assert "Not compatible with your setup" in html and "Not supported" in html
 
 
 def test_comparison_never_shows_unknown_as_supported():
-    html = comparison_html(compare([BASIC, PRO]))
+    html = comparison_html(ProductComparer.compare([BASIC, PRO]))
     assert "Acme Basic Thermostat" in html and "Acme Pro Thermostat" in html
     assert "hp-compare__status--unknown" in html  # Apple Home: listed for PRO only, unknown for BASIC
     assert "data completeness" not in html
@@ -139,7 +137,7 @@ def test_upgrade_component_uses_the_upsell_data():
 
 
 def _render_tagged_answer() -> None:
-    from smart_home_agent.services.rich_content import RichContentService
+    from smart_home_agent.services import RichContentService
     from smart_home_agent.ui.streamlit_app import render_answer
     from tests.fakes import FakeCatalog
     from tests.unit.test_rich import ANSWER, BASIC, PRO, UPSELL
@@ -422,7 +420,7 @@ def _customer_memory_dialog() -> None:
 
 
 def test_customer_memory_dialog_lists_active_and_retracted_facts(monkeypatch):
-    from smart_home_agent.services.profile import ProfileService
+    from smart_home_agent.services import ProfileService
     from smart_home_agent.ui import streamlit_app
     from tests.fakes import FakeProfileStore
 

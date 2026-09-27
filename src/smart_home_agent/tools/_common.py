@@ -7,9 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from smart_home_agent.services import vocabulary
-from smart_home_agent.services.compatibility import ProductNotFoundError
-from smart_home_agent.services.vocabulary import TermResolutionError
+from smart_home_agent.services import ProductNotFoundError, TermResolutionError, Vocabulary
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +65,10 @@ def tool_errors[**P](func: Callable[P, ToolResult]) -> Callable[P, ToolResult]:
 
 
 def resolve_category(value: str | None) -> str | None:
-    return vocabulary.resolve_category(value) if value and value.strip() else None
+    return Vocabulary.resolve_category(value) if value and value.strip() else None
 
 
 def resolve_devices(values: list[str] | None) -> list[str] | None:
     if values is None:
         return None
-    return list(dict.fromkeys(vocabulary.resolve_owned_device(v) for v in values if v.strip()))
+    return list(dict.fromkeys(Vocabulary.resolve_owned_device(v) for v in values if v.strip()))

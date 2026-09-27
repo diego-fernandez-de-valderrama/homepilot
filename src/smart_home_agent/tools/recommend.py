@@ -5,7 +5,7 @@ from google.adk.tools import ToolContext
 
 from smart_home_agent.container import Services
 from smart_home_agent.models import RecommendationRequest
-from smart_home_agent.services import vocabulary
+from smart_home_agent.services import Vocabulary
 from smart_home_agent.session import load_state, save_state
 from smart_home_agent.tools._common import ToolResult, ok, resolve_category, resolve_devices, tool_errors, tool_input
 
@@ -64,7 +64,7 @@ def make_recommend_products(services: Services):
             max_price=max_price,
             min_price=min_price,
             brands=brands or [],
-            must_support=[t.canonical for t in vocabulary.resolve_terms(must_support)],
+            must_support=[t.canonical for t in Vocabulary.resolve_terms(must_support)],
             owned_devices=resolve_devices(owned_devices),
             limit=limit,
         )

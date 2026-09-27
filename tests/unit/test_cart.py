@@ -1,8 +1,7 @@
 import pytest
 
 from smart_home_agent.models import MAX_QUANTITY, CartChange, CartItem
-from smart_home_agent.services.cart import CartChangeError, CartService, NotInCartError, is_central_unit
-from smart_home_agent.services.compatibility import ProductNotFoundError
+from smart_home_agent.services import CartChangeError, CartService, CentralUnit, NotInCartError, ProductNotFoundError
 from tests.fakes import FakeCatalog, product
 
 CATALOG = FakeCatalog([product("a", price=10.0), product("b", price=2.5), product("free", price=None)])
@@ -38,12 +37,12 @@ def pairs(cart_items: list[CartItem]) -> list[tuple[str, int]]:
     ],
 )
 def test_central_units_are_recognized_by_their_product_type(product_type, central):
-    assert is_central_unit(product("x", product_type=product_type)) is central
+    assert CentralUnit.matches(product("x", product_type=product_type)) is central
 
 
 def test_central_unit_by_title_when_the_type_is_missing():
-    assert is_central_unit(product("x", title="Philips Hue Bridge", product_type=None))
-    assert not is_central_unit(product("x", title="Hue White E27", product_type=None))
+    assert CentralUnit.matches(product("x", title="Philips Hue Bridge", product_type=None))
+    assert not CentralUnit.matches(product("x", title="Hue White E27", product_type=None))
 
 
 def test_central_units_over_one_counts_the_cart_too():

@@ -5,7 +5,7 @@ from google.adk.events import Event, EventActions
 from smart_home_agent.agent._session_store import SessionStore
 from smart_home_agent.agent._turn_collector import ConfirmationRequest
 from smart_home_agent.models import CartConfirmation, CartView
-from smart_home_agent.services.cart import CartService
+from smart_home_agent.services import CartService
 from smart_home_agent.session import STATE_KEY, SessionState, read_state
 from smart_home_agent.tools import CONFIRMED_TOOLS
 

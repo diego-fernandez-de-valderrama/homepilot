@@ -21,7 +21,7 @@ from catalog_ingestion.domain.enums import FactStatus
 from pydantic import BaseModel
 
 from smart_home_agent.models import Recommendation, RecommendationRequest
-from smart_home_agent.services.ranking import UPSELL_RULES
+from smart_home_agent.services import UPSELL_RULES
 
 # The hub filter runs after every ranking rule; versions of the best match are set aside before any rule.
 _FUNNEL = ("other_version_of_best", *UPSELL_RULES, "needs_extra_hub")

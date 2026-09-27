@@ -15,7 +15,7 @@ from smart_home_agent.answer_tags import (
     UpgradeBlock,
 )
 from smart_home_agent.models import RichContent, UpsellSuggestion
-from smart_home_agent.services.rich_content import RichContentService
+from smart_home_agent.services import RichContentService
 from tests.fakes import FakeCatalog, fact, product, services_for
 from tests.unit.test_guardrail_agent import ScriptedLlm, settings, text_response
 

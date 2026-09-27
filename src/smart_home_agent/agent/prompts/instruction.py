@@ -3,7 +3,7 @@
 from smart_home_agent.agent.prompts.base_instruction import BASE_INSTRUCTION
 from smart_home_agent.agent.prompts.memory_instruction import MEMORY_INSTRUCTION
 from smart_home_agent.models import CustomerProfile
-from smart_home_agent.services.vocabulary import vocabulary_overview
+from smart_home_agent.services import Vocabulary
 from smart_home_agent.session import (
     CART_FIELDS,
     PROFILE_KEY,
@@ -24,7 +24,7 @@ def build_instruction(context: StateHolder) -> str:
     sections = [
         BASE_INSTRUCTION,
         MEMORY_INSTRUCTION if memory else None,
-        "# Catalog vocabulary\n" + vocabulary_overview(),
+        "# Catalog vocabulary\n" + Vocabulary.overview(),
         _reply_language(context.state.get(TURN_LANGUAGE_KEY)),
         _profile(context.state.get(PROFILE_KEY)) if memory else None,
         _session_facts(session),

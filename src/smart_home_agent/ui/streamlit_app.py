@@ -29,7 +29,7 @@ from smart_home_agent.answer_tags import (
 from smart_home_agent.config import get_settings
 from smart_home_agent.container import build_container, build_profile_store
 from smart_home_agent.models import MAX_QUANTITY, CartConfirmation, CartView, CustomerSummary, RichContent
-from smart_home_agent.services.profile import ProfileService
+from smart_home_agent.services import ProfileService
 from smart_home_agent.session import SessionState, detect_language
 from smart_home_agent.ui.components import (
     ADVISOR_AVATAR,

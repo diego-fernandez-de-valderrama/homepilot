@@ -25,7 +25,7 @@ from smart_home_agent.models import (
     SearchCandidate,
     Spec,
 )
-from smart_home_agent.services.filtering import rejection_reason
+from smart_home_agent.services import HardFilter
 
 
 def evidence(text: str = "catalog text", source: FactSource = FactSource.CATALOG) -> Evidence:
@@ -131,7 +131,7 @@ class FakeCatalog:
         matches = [
             p
             for p in self.products.values()
-            if rejection_reason(p, criteria) is None
+            if HardFilter.rejection_reason(p, criteria) is None
             and all(c in p.supported_values(tuple(Dimension)) for c in criteria.supports)
             and (criteria.product_ids is None or p.id in criteria.product_ids)
             and (not needle or needle in (p.product_type or "").casefold() or needle in p.title.casefold())

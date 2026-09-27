@@ -1,6 +1,6 @@
 from google.adk.tools import ToolContext
 
-from smart_home_agent.services.profile import ProfileService
+from smart_home_agent.services import ProfileService
 from smart_home_agent.session import PROFILE_KEY
 from smart_home_agent.tools._common import ToolResult, ok, tool_errors
 

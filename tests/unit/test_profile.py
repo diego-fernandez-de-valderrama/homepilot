@@ -3,8 +3,7 @@
 import pytest
 
 from smart_home_agent.models import FactKind
-from smart_home_agent.services.profile import MemoryRuleError, ProfileService
-from smart_home_agent.services.vocabulary import TermResolutionError
+from smart_home_agent.services import MemoryRuleError, ProfileService, TermResolutionError
 from tests.fakes import FakeProfileStore
 
 

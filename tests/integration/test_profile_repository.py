@@ -15,7 +15,7 @@ from smart_home_agent.memory.database import alembic_config, create_memory_engin
 from smart_home_agent.memory.models import Base
 from smart_home_agent.models import FactKind, NewFact
 from smart_home_agent.repositories.profile import ProfileRepository
-from smart_home_agent.services.profile import ProfileService
+from smart_home_agent.services import ProfileService
 
 pytestmark = pytest.mark.integration
 

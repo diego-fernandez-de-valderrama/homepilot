@@ -3,7 +3,7 @@ from google.adk.tools import ToolContext
 
 from smart_home_agent.container import Services
 from smart_home_agent.models import CompatibilityResult
-from smart_home_agent.services import vocabulary
+from smart_home_agent.services import Vocabulary
 from smart_home_agent.session import load_state
 from smart_home_agent.tools._common import ToolResult, ok, resolve_devices, tool_errors
 
@@ -52,7 +52,7 @@ def make_check_compatibility(services: Services):
         session = load_state(tool_context)
         if owned_devices is None:
             owned_devices = session.owned_devices
-        terms = vocabulary.resolve_terms(requirements)
+        terms = Vocabulary.resolve_terms(requirements)
         results = services.compatibility.check(
             [pid.strip() for pid in product_ids], terms, resolve_devices(owned_devices)
         )

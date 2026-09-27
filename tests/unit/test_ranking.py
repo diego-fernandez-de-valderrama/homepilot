@@ -1,4 +1,4 @@
-from smart_home_agent.services import compatibility, ranking
+from smart_home_agent.services import CompatibilityEvaluator, ProductType, Ranker, UpsellSelector
 from tests.fakes import fact, product, requirement
 
 BASIC = product("basic", price=50.0, facts=[fact("google_home"), fact("wifi")])
@@ -14,8 +14,8 @@ OTHER_TYPE = product(
 def _ranked(products, scores: dict[str, float | None] | None = None, owned_devices: list[str] | None = None):
     if not scores:
         scores = {p.id: 0.8 for p in products}
-    results = {p.id: compatibility.evaluate(p, [], owned_devices) for p in products}
-    return ranking.rank(ranking.build_candidates(products, scores, "radiator thermostat", results))
+    results = {p.id: CompatibilityEvaluator.evaluate(p, [], owned_devices) for p in products}
+    return Ranker.rank(Ranker.build_candidates(products, scores, "radiator thermostat", results))
 
 
 def _best(ranked, product_id: str = "basic"):
@@ -37,7 +37,7 @@ def test_type_match_helps_the_right_product_type():
 def test_upsell_needs_more_capabilities_within_budget():
     ranked = _ranked([BASIC, PREMIUM, PRICEY, SIDEGRADE])
     best = next(c for c in ranked if c.product.id == "basic")
-    upsell = ranking.select_upsell(ranked, best, max_price=150, min_relative_relevance=0.75)
+    upsell = UpsellSelector.select(ranked, best, max_price=150, min_relative_relevance=0.75)
     assert upsell is not None
     assert upsell.product_id == "premium"
     assert upsell.price <= 150
@@ -49,35 +49,35 @@ def test_upsell_needs_more_capabilities_within_budget():
 def test_upsell_never_exceeds_budget():
     ranked = _ranked([BASIC, PRICEY])
     best = next(c for c in ranked if c.product.id == "basic")
-    assert ranking.select_upsell(ranked, best, max_price=150, min_relative_relevance=0.75) is None
+    assert UpsellSelector.select(ranked, best, max_price=150, min_relative_relevance=0.75) is None
 
 
 def test_no_upsell_without_strictly_more_capabilities_or_for_another_product_type():
     ranked = _ranked([BASIC, SIDEGRADE, OTHER_TYPE])
     best = next(c for c in ranked if c.product.id == "basic")
-    assert ranking.select_upsell(ranked, best, max_price=None, min_relative_relevance=0.75) is None
+    assert UpsellSelector.select(ranked, best, max_price=None, min_relative_relevance=0.75) is None
 
 
 def test_no_upsell_when_far_less_relevant():
     ranked = _ranked([BASIC, PREMIUM], {"basic": 0.9, "premium": 0.3})
     best = next(c for c in ranked if c.product.id == "basic")
-    assert ranking.select_upsell(ranked, best, max_price=None, min_relative_relevance=0.75) is None
+    assert UpsellSelector.select(ranked, best, max_price=None, min_relative_relevance=0.75) is None
 
 
 def test_same_product_type_rule():
-    assert ranking.same_product_type(
+    assert ProductType.same(
         product("1", product_type="Radiator thermostat"), product("2", product_type="Smart radiator thermostat")
     )
-    assert not ranking.same_product_type(
+    assert not ProductType.same(
         product("1", product_type="Radiator thermostat"), product("2", product_type="Room thermostat")
     )
-    assert not ranking.same_product_type(product("1", product_type=None), product("2"))
+    assert not ProductType.same(product("1", product_type=None), product("2"))
 
 
 def test_upsell_rejection_names_the_failing_rule():
     ranked = _ranked([BASIC, PREMIUM, PRICEY, SIDEGRADE, SAME, OTHER_TYPE, product("cheaper", price=10.0)])
     best = next(c for c in ranked if c.product.id == "basic")
-    reasons = {c.product.id: ranking.upsell_rejection(c, best, 150, 0.75) for c in ranked}
+    reasons = {c.product.id: UpsellSelector.rejection(c, best, 150, 0.75) for c in ranked}
     assert reasons == {
         "basic": "best_match",
         "premium": None,
@@ -87,7 +87,7 @@ def test_upsell_rejection_names_the_failing_rule():
         "floor": "other_product_type",
         "cheaper": "not_pricier",
     }
-    assert ranking.upsell_blockers(ranked, best, 150, 0.75) == {
+    assert UpsellSelector.blockers(ranked, best, 150, 0.75) == {
         "over_budget": 1,
         "loses_capability": 1,
         "no_advantage": 1,
@@ -99,7 +99,7 @@ def test_upsell_rejection_names_the_failing_rule():
 def test_a_confirmed_phone_platform_is_an_upgrade_reason():
     app = product("app", price=70.0, facts=[fact("google_home"), fact("wifi"), fact("ios")])
     ranked = _ranked([BASIC, app])
-    upsell = ranking.select_upsell(ranked, _best(ranked), max_price=None, min_relative_relevance=0.75)
+    upsell = UpsellSelector.select(ranked, _best(ranked), max_price=None, min_relative_relevance=0.75)
     assert upsell is not None
     assert upsell.upgrade_reasons[0] == "Also supports iOS (confirmed in the catalog)"
 
@@ -108,7 +108,7 @@ def test_losing_a_phone_platform_blocks_the_upsell():
     with_ios = product("with_ios", price=50.0, facts=[fact("google_home"), fact("ios")])
     matter = product("matter", price=70.0, facts=[fact("google_home"), fact("matter")])
     ranked = _ranked([with_ios, matter])
-    assert ranking.upsell_rejection(_best(ranked, "matter"), _best(ranked, "with_ios"), None, 0.75) == (
+    assert UpsellSelector.rejection(_best(ranked, "matter"), _best(ranked, "with_ios"), None, 0.75) == (
         "loses_capability"
     )
 
@@ -124,7 +124,7 @@ def test_explicit_stand_alone_operation_is_an_upgrade_when_the_best_match_needs_
         requirements=[requirement("philips_hue_bridge", alternatives=["philips_hue_bridge", "standalone"])],
     )
     ranked = _ranked([needs_hub, standalone])
-    upsell = ranking.select_upsell(ranked, _best(ranked, "hub"), max_price=None, min_relative_relevance=0.75)
+    upsell = UpsellSelector.select(ranked, _best(ranked, "hub"), max_price=None, min_relative_relevance=0.75)
     assert upsell is not None
     assert upsell.product_id == "standalone"
     assert upsell.upgrade_reasons[0].startswith("Works without a separate hub (confirmed in the catalog)")
@@ -137,7 +137,7 @@ def test_a_product_without_a_hub_row_is_not_claimed_to_run_without_a_hub():
     )
     silent = product("silent", price=60.0, facts=[fact("google_home")])  # the catalog says nothing: unknown
     ranked = _ranked([needs_hub, silent])
-    assert ranking.upsell_rejection(_best(ranked, "silent"), _best(ranked, "hub"), None, 0.75) == "no_advantage"
+    assert UpsellSelector.rejection(_best(ranked, "silent"), _best(ranked, "hub"), None, 0.75) == "no_advantage"
 
 
 def test_a_product_that_uses_an_owned_hub_ranks_higher():

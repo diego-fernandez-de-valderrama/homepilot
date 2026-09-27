@@ -1,6 +1,5 @@
 from smart_home_agent.models import RequirementCheck
-from smart_home_agent.services.accessories import AccessoryService
-from smart_home_agent.services.compatibility import check_requirement
+from smart_home_agent.services import AccessoryService, CompatibilityEvaluator
 from tests.fakes import FakeCatalog, product, requirement
 
 ACCESS_POINT = product(
@@ -18,7 +17,7 @@ SERVICE = AccessoryService(FakeCatalog([ACCESS_POINT, ACCESS_POINT_2, STARTER_SE
 
 
 def _checks(owned: list[str] | None) -> list[RequirementCheck]:
-    return [check_requirement(r, owned) for r in THERMOSTAT.requirements]
+    return [CompatibilityEvaluator.check_requirement(r, owned) for r in THERMOSTAT.requirements]
 
 
 def test_cheapest_bare_hub_of_the_right_category_is_chosen():

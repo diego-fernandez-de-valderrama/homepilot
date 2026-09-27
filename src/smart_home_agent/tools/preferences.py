@@ -1,7 +1,7 @@
 from catalog_ingestion.domain.enums import Dimension
 from google.adk.tools import ToolContext
 
-from smart_home_agent.services import vocabulary
+from smart_home_agent.services import Vocabulary
 from smart_home_agent.session import load_state, save_state
 from smart_home_agent.tools._common import ToolResult, ok, resolve_category, resolve_devices, tool_errors
 
@@ -38,7 +38,7 @@ def make_remember_preferences():
         if language is not None:
             session.language = language.strip().lower()[:2] or None
         if ecosystems is not None or protocols is not None:
-            resolved = vocabulary.resolve_terms([*(ecosystems or []), *(protocols or [])])
+            resolved = Vocabulary.resolve_terms([*(ecosystems or []), *(protocols or [])])
             platforms = [t.canonical for t in resolved if t.dimension is not Dimension.PROTOCOL]
             transports = [t.canonical for t in resolved if t.dimension is Dimension.PROTOCOL]
             # A list is replaced when it was passed, or when the other list contained items of its kind.

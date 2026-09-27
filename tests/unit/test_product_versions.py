@@ -53,14 +53,13 @@ def test_ui_shows_which_version_a_product_is():
 
 def test_blocks_name_the_version():
     from smart_home_agent.models import UpsellSuggestion
-    from smart_home_agent.services.comparison import compare
-    from smart_home_agent.services.rich_content import product_compatibility
+    from smart_home_agent.services import ProductComparer, RichContentService
     from smart_home_agent.ui import components
 
-    head = components.comparison_html(compare([WHITE, ANTHRACITE]))
+    head = components.comparison_html(ProductComparer.compare([WHITE, ANTHRACITE]))
     assert '<span class="hp-compare__version">Weiß, 10 x 10 cm</span>' in head
     assert '<span class="hp-compare__version">Anthrazit, 10 x 10 cm</span>' in head
-    compat = components.compatibility_html(WHITE, product_compatibility(WHITE, [], None))
+    compat = components.compatibility_html(WHITE, RichContentService.product_compatibility(WHITE, [], None))
     assert '<span class="hp-compat__version">Weiß, 10 x 10 cm</span>' in compat
     upsell = UpsellSuggestion(
         product_id=ANTHRACITE.id,
