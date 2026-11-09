@@ -1,0 +1,201 @@
+[project]
+name = "smart-home-agent"
+version = "0.1.0"
+description = "Conversational smart home shopping agent (Google ADK + Gemini) on top of the HomePilot catalog"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.0",
+    "catalog-ingestion",
+    "google-adk>=2.10.0",
+    "google-genai>=2.25.0",
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
+    "lingua-language-detector>=2.2.0",
+    "markupsafe>=3.0.3",
+    "numpy>=2.5.3",
+    "psycopg[binary]>=3.3.6",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "qdrant-client>=1.19.1",
+    "sqlalchemy>=2.1.1",
+    "streamlit>=1.64.0",
+    "tenacity>=9.1.4",
+    "typer>=0.27.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "TID251"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes are intentional
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# catalog-ingestion packages are imported through their entry points (e.g. `catalog_ingestion.vocabulary`).
+"catalog_ingestion.core._key_value_formatter".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.core.gemini".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.core.hashing".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.core.log_setup".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.core.settings".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.core.text_normalizer".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.vocabulary._brands".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary._categories".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary._compatibility_terms".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary._requirement_terms".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.brand_vocabulary".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.category".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.category_vocabulary".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.compatibility_term".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.compatibility_vocabulary".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.enums".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.requirement_term".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.requirement_vocabulary".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.models.domain".msg = "import from `catalog_ingestion.models` instead"
+"catalog_ingestion.models.mappers".msg = "import from `catalog_ingestion.models` instead"
+"catalog_ingestion.models.schemas".msg = "import from `catalog_ingestion.models` instead"
+"catalog_ingestion.preparation._attribute_parser".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation._price_parser".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation._text_parser".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.compatibility_extractor".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.completeness_assessor".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.dataset_profile".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.dataset_profiler".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.load_error".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.load_result".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.prepared_product".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.product_normalizer".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.product_preparer".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.requirement_extractor".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.zip_loader".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.enrichment.enrichment_key".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.enrichment_policy".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.enrichment_result".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.llm".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.product_enricher".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.validation".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.web".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.database._record_builder".msg = "import from `catalog_ingestion.database` instead"
+"catalog_ingestion.database.catalog_database".msg = "import from `catalog_ingestion.database` instead"
+"catalog_ingestion.database.postgres_repository".msg = "import from `catalog_ingestion.database` instead"
+"catalog_ingestion.database.records".msg = "import from `catalog_ingestion.database` instead"
+"catalog_ingestion.database.upsert_outcome".msg = "import from `catalog_ingestion.database` instead"
+"catalog_ingestion.indexing.collection_dimension_mismatch_error".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.embedder".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.gemini_embedder".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.indexed_state".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.qdrant_collection".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.qdrant_repository".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.retrieval_document_builder".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.search_hit".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.pipeline._deactivator".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline._index_writer".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline._product_recorder".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.embedding_model_mismatch_error".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.ingest_options".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.ingestion_pipeline".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.null_progress".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.progress_sink".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.run_stats".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.cli._console".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli._counts_printer".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli._resources".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.analyze_command".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.catalog_cli".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.ingest_command".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.init_command".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.reindex_command".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.rich_progress".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.search_command".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.status_command".msg = "import from `catalog_ingestion.cli` instead"
+# Evaluation code depends on the application, never the other way around.
+"evals".msg = "`smart_home_agent` must not import the evaluation harnesses (only `evals/` and `tests/` may)"
+# Models are imported from `smart_home_agent.models`; its subpackages are an internal layout.
+"smart_home_agent.models.cart".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.comparison".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.compatibility".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.evidence".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.product".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.profile".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.recommendation".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.rich_content".msg = "import from `smart_home_agent.models` instead"
+"smart_home_agent.models.search".msg = "import from `smart_home_agent.models` instead"
+# Repositories are imported from `smart_home_agent.repositories`; its subpackages are an internal layout.
+"smart_home_agent.repositories.catalog".msg = "import from `smart_home_agent.repositories` instead"
+"smart_home_agent.repositories.profile".msg = "import from `smart_home_agent.repositories` instead"
+"smart_home_agent.repositories.semantic".msg = "import from `smart_home_agent.repositories` instead"
+# Services are imported from `smart_home_agent.services`; its subpackages are an internal layout.
+"smart_home_agent.services.accessories".msg = "import from `smart_home_agent.services` instead"
+"smart_home_agent.services.cart".msg = "import from `smart_home_agent.services` instead"
+"smart_home_agent.services.comparison".msg = "import from `smart_home_agent.services` instead"
+"smart_home_agent.services.compatibility".msg = "import from `smart_home_agent.services` instead"
+"smart_home_agent.services.evidence".msg = "import from `smart_home_agent.services` instead"
+"smart_home_agent.services.profile".msg = "import from `smart_home_agent.services` instead"
+"smart_home_agent.services.recommendation".msg = "import from `smart_home_agent.services` instead"
+"smart_home_agent.services.retrieval".msg = "import from `smart_home_agent.services` instead"
+"smart_home_agent.services.rich_content".msg = "import from `smart_home_agent.services` instead"
+"smart_home_agent.services.vocabulary".msg = "import from `smart_home_agent.services` instead"
+"smart_home_agent.services.product_not_found_error".msg = "import from `smart_home_agent.services` instead"
+# Tools are imported from `smart_home_agent.tools`; its subpackages are an internal layout.
+"smart_home_agent.tools._base".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.cart".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.catalog".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.comparison".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.compatibility".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.evidence".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.preferences".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.profile".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.recommendation".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.threaded_function_tool".msg = "import from `smart_home_agent.tools` instead"
+"smart_home_agent.tools.tool_registry".msg = "import from `smart_home_agent.tools` instead"
+# The UI is the top layer: nothing below it imports it.
+"smart_home_agent.ui".msg = "the UI is presentation only: no other package imports `smart_home_agent.ui`"
+# Session state is imported from `smart_home_agent.session`; its subpackages are an internal layout.
+"smart_home_agent.session.language".msg = "import from `smart_home_agent.session` instead"
+"smart_home_agent.session.state".msg = "import from `smart_home_agent.session` instead"
+"smart_home_agent.session.state_key".msg = "import from `smart_home_agent.session` instead"
+
+[tool.ruff.lint.per-file-ignores]
+"evals/**" = ["TID251"]
+"tests/**" = ["TID251"]
+"src/smart_home_agent/models/**" = ["TID251"]
+"src/smart_home_agent/repositories/**" = ["TID251"]
+"src/smart_home_agent/services/**" = ["TID251"]
+"src/smart_home_agent/session/**" = ["TID251"]
+"src/smart_home_agent/tools/**" = ["TID251"]
+"src/smart_home_agent/ui/**" = ["TID251"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["smart_home_agent", "evals"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]  # the `evals` package lives next to `src/`, outside the installed package
+markers = ["integration: needs running PostgreSQL/Qdrant (auto-skipped when unreachable)"]
+filterwarnings = [
+    "ignore:.*EXPERIMENTAL.*JSON_SCHEMA_FOR_FUNC_DECL:UserWarning",
+    "ignore:.*EXPERIMENTAL.*TOOL_CONFIRMATION:UserWarning",
+]
+
+[tool.uv.sources]
+catalog-ingestion = { path = "../catalog-ingestion", editable = true }
+
+[dependency-groups]
+dev = [
+    "deptry>=0.25.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+    "ty>=0.0.84",
+]
+
+[tool.deptry]
+known_first_party = ["smart_home_agent", "evals", "tests"]
+
+[tool.deptry.per_rule_ignores]
+# psycopg is never imported: SQLAlchemy loads it at runtime for the `postgresql+psycopg` URL.
+DEP002 = ["psycopg"]

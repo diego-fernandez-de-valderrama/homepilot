@@ -1,0 +1,10 @@
+{% macro failure(title, hint) %}
+  <div class="hp-failure" role="alert">
+    <p class="hp-failure__title">{{ title }}</p>
+    <p class="hp-failure__hint">{{ hint }}</p>
+  </div>
+{% endmacro %}
+
+{% macro decision(text) %}
+  <p class="hp-decision">{{ text }}</p>
+{% endmacro %}

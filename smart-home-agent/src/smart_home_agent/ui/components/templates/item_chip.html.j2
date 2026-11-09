@@ -1,0 +1,24 @@
+{#- One line of inline HTML inside markdown: only <span>, <img> and <a>, and every text through markdown_literal. -#}
+{% from "_macros.html.j2" import image, version %}
+
+{% macro render(product, product_id, shown_in_block, missing_images) %}
+  {% if product is none %}
+    {{ product_id | markdown_literal }}
+  {% else %}
+    {% set price = product.price | price %}
+    {% set img = image(product, missing_images, "hp-item__image") %}
+    {% set url = product.source_url | safe_url %}
+    <span class="hp-item" tabindex="0">
+      <span class="hp-item__name">{{ product.title | markdown_literal }}</span>
+      {% if not shown_in_block %}<span class="hp-item__price">{{ price | markdown_literal }}</span>{% endif %}
+      <span class="hp-item__card{% if not img %} hp-item__card--no-image{% endif %}" role="tooltip">
+        {{ img }}
+        {% if product.brand %}<span class="hp-item__brand">{{ product.brand | markdown_literal }}</span>{% endif %}
+        <span class="hp-item__title">{{ product.title | markdown_literal }}</span>
+        {{ version(product, "hp-item", markdown=true) }}
+        <span class="hp-item__card-price">{{ price | markdown_literal }}</span>
+        {% if url %}<a class="hp-item__link" href="{{ url }}" target="_blank" rel="noopener">View in shop</a>{% endif %}
+      </span>
+    </span>
+  {% endif %}
+{% endmacro %}

@@ -1,0 +1,33 @@
+{#- Pieces shared by the components. -#}
+
+{#- The line that tells versions of one product apart (the catalog subtitle, e.g. "GU10, RGBW, Weiß").
+    markdown=true inside markdown (the item chip). -#}
+{% macro version(product, block, markdown=false) %}
+  {% if product.subtitle %}
+    <span class="{{ block }}__version">{{ product.subtitle | markdown_literal if markdown else product.subtitle }}</span>
+  {% endif %}
+{% endmacro %}
+
+{#- The product image, or nothing when there is none (or it is known to be gone): the component then uses its
+    text-only layout instead of showing a placeholder. -#}
+{% macro image(product, missing_images, css_class) %}
+  {% set url = product.image_url | safe_url %}
+  {% if url and url not in missing_images %}
+    <img class="{{ css_class }}" src="{{ url }}" alt="" loading="lazy">
+  {% endif %}
+{% endmacro %}
+
+{#- Cart and confirmation thumbnails: the product image, or a quiet package glyph when there is none (a missing
+    image is not information for the customer, so no "No image" text). -#}
+{% macro thumb(product, missing_images, css_class) %}
+  {% set url = product.image_url | safe_url if product else none %}
+  {% if url and url not in missing_images %}
+    <img class="{{ css_class }}" src="{{ url }}" alt="" loading="lazy">
+  {% else %}
+    <span class="{{ css_class }} {{ css_class }}--empty" aria-hidden="true"><span class="hp-thumb-glyph">inventory_2</span></span>
+  {% endif %}
+{% endmacro %}
+
+{% macro chips(values) %}
+  {% for value in values %}<span class="hp-chip">{{ value }}</span>{% endfor %}
+{% endmacro %}

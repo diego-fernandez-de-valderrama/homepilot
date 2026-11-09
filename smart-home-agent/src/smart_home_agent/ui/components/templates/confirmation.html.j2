@@ -1,0 +1,34 @@
+{% from "_macros.html.j2" import thumb, version %}
+
+{#- `lines`: product, title, detail and in_cart per changed product (the texts are built in ConfirmationHtml). -#}
+{% macro card(action, done, eyebrow, lines, total, state, state_text, missing_images) %}
+  <section class="hp-confirm hp-confirm--{{ action }}{% if done %} hp-confirm--done{% endif %}">
+    <p class="hp-eyebrow">{{ eyebrow }}</p>
+    <ul class="hp-confirm__lines">
+      {% for line in lines %}
+        <li class="hp-confirm__body">
+          {{ thumb(line.product, missing_images, "hp-confirm__image") }}
+          <div class="hp-confirm__info">
+            <span class="hp-confirm__title">{{ line.title }}</span>
+            {% if line.product %}{{ version(line.product, "hp-confirm") }}{% endif %}
+            <span class="hp-confirm__detail">{{ line.detail }}</span>
+            <span class="hp-confirm__cart">{{ line.in_cart }}</span>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+    {% if total %}
+      <p class="hp-confirm__total">
+        <span>Change total</span>
+        <span class="hp-confirm__total-value">{{ total }}</span>
+      </p>
+    {% endif %}
+    {% if state %}<span class="hp-confirm__state hp-confirm__state--{{ state }}">{{ state_text }}</span>{% endif %}
+  </section>
+{% endmacro %}
+
+{% macro lead(count) %}
+  <p class="hp-confirm-lead">
+    {% if count == 1 %}Please confirm this change to your cart.{% else %}Please confirm these changes to your cart.{% endif %}
+  </p>
+{% endmacro %}

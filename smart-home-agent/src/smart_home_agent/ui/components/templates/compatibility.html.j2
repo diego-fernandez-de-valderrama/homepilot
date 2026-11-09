@@ -1,0 +1,26 @@
+{% from "_macros.html.j2" import version %}
+
+{% macro render(product, compatibility, notes) %}
+  {% set result = compatibility.result %}
+  <section class="hp-compat">
+    <p class="hp-compat__title">{{ product.title }}</p>
+    {{ version(product, "hp-compat") }}
+    {% if compatibility.against_setup and result.checks %}
+      <p class="hp-compat__overall hp-compat__overall--{{ result.overall.value }}">{{ result.overall | overall_text }}</p>
+    {% else %}
+      <p class="hp-compat__overall">Compatibility listed in the catalog</p>
+    {% endif %}
+    <div class="hp-compat__chips">
+      {% for check in result.checks %}
+        <span class="hp-compat-chip hp-compat-chip--{{ check.status.value }}">{{ check.label }}<span class="hp-compat-chip__status">{{ check.status | status_text }}</span></span>
+      {% else %}
+        <span class="hp-compat__empty">The catalog lists no compatibility information.</span>
+      {% endfor %}
+    </div>
+    {% if notes %}
+      <ul class="hp-compat__notes">
+        {% for note in notes %}<li>{{ note }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+  </section>
+{% endmacro %}

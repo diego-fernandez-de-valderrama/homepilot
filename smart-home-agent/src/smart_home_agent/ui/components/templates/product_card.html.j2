@@ -1,0 +1,25 @@
+{% from "_macros.html.j2" import image, version %}
+
+{% macro card(product, missing_images) %}
+  {% set img = image(product, missing_images, "hp-card__image") %}
+  {% set url = product.source_url | safe_url %}
+  <article class="hp-card{% if not img %} hp-card--no-image{% endif %}">
+    {{ img }}
+    {% if product.brand %}<span class="hp-card__brand">{{ product.brand }}</span>{% endif %}
+    <span class="hp-card__title">{{ product.title }}</span>
+    {{ version(product, "hp-card") }}
+    <span class="hp-card__price">
+      {{ product.price | price }}
+      {% if product.original_price and product.price is not none and product.original_price > product.price %}
+        <s class="hp-card__was">{{ product.original_price | price }}</s>
+      {% endif %}
+    </span>
+    {% if url %}<a class="hp-card__link" href="{{ url }}" target="_blank" rel="noopener">View in shop</a>{% endif %}
+  </article>
+{% endmacro %}
+
+{% macro cards(products, missing_images) %}
+  <div class="hp-cards">
+    {% for product in products %}{{ card(product, missing_images) }}{% endfor %}
+  </div>
+{% endmacro %}

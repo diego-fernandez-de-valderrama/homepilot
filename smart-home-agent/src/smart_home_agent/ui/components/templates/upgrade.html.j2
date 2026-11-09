@@ -1,0 +1,27 @@
+{% from "_macros.html.j2" import version %}
+
+{% macro side(label, product) %}
+  <div class="hp-upgrade__product">
+    <span class="hp-upgrade__label">{{ label }}</span>
+    <span>{{ product.title }}</span>
+    {{ version(product, "hp-upgrade") }}
+    <span>{{ product.price | price }}</span>
+  </div>
+{% endmacro %}
+
+{% macro render(base, target, upsell) %}
+  <section class="hp-upgrade">
+    <p class="hp-eyebrow">Upgrade option</p>
+    <div class="hp-upgrade__pair">
+      {{ side("Your match", base) }}
+      <span class="hp-upgrade__arrow" aria-hidden="true">→</span>
+      {{ side("Upgrade", target) }}
+    </div>
+    <p class="hp-upgrade__delta">+{{ upsell.price_difference | price }}</p>
+    {% if upsell.upgrade_reasons %}
+      <ul class="hp-upgrade__reasons">
+        {% for reason in upsell.upgrade_reasons %}<li>{{ reason }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+  </section>
+{% endmacro %}

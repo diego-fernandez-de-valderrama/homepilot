@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 430" width="1000" height="430" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="430" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+
+  <!-- step 1 -->
+  <g filter="url(#shadow)"><rect x="30" y="60" width="165" height="180" rx="12" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/></g>
+  <rect x="30" y="60" width="165" height="6" rx="3" fill="#0d9488"/>
+  <circle cx="58" cy="94" r="14" fill="#0d9488"/><text x="58" y="99" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">1</text>
+  <text x="80" y="99" font-size="16" font-weight="700" fill="#0f172a">Message in</text>
+  <text x="46" y="138" font-size="12.5" fill="#475569">Detects English or</text>
+  <text x="46" y="157" font-size="12.5" fill="#475569">German and loads</text>
+  <text x="46" y="176" font-size="12.5" fill="#475569">what we know about</text>
+  <text x="46" y="195" font-size="12.5" fill="#475569">this customer.</text>
+  <line x1="197" y1="150" x2="217" y2="150" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- step 2 -->
+  <g filter="url(#shadow)"><rect x="221" y="60" width="165" height="180" rx="12" fill="#ffffff" stroke="#e11d48" stroke-width="1.5"/></g>
+  <rect x="221" y="60" width="165" height="6" rx="3" fill="#e11d48"/>
+  <circle cx="249" cy="94" r="14" fill="#e11d48"/><text x="249" y="99" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">2</text>
+  <text x="271" y="99" font-size="16" font-weight="700" fill="#0f172a">Safety check</text>
+  <text x="237" y="138" font-size="12.5" fill="#475569">Compares the message</text>
+  <text x="237" y="157" font-size="12.5" fill="#475569">with known risky</text>
+  <text x="237" y="176" font-size="12.5" fill="#475569">requests, before any</text>
+  <text x="237" y="195" font-size="12.5" fill="#475569">AI answers.</text>
+  <line x1="388" y1="150" x2="408" y2="150" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- step 3 -->
+  <g filter="url(#shadow)"><rect x="412" y="60" width="165" height="180" rx="12" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/></g>
+  <rect x="412" y="60" width="165" height="6" rx="3" fill="#d97706"/>
+  <circle cx="440" cy="94" r="14" fill="#d97706"/><text x="440" y="99" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">3</text>
+  <text x="462" y="99" font-size="16" font-weight="700" fill="#0f172a">Agent works</text>
+  <text x="428" y="138" font-size="12.5" fill="#475569">Gemini follows the</text>
+  <text x="428" y="157" font-size="12.5" fill="#475569">rules and calls tools</text>
+  <text x="428" y="176" font-size="12.5" fill="#475569">to get real product</text>
+  <text x="428" y="195" font-size="12.5" fill="#475569">data, as often as</text>
+  <text x="428" y="214" font-size="12.5" fill="#475569">it needs.</text>
+  <line x1="579" y1="150" x2="599" y2="150" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- step 4 -->
+  <g filter="url(#shadow)"><rect x="603" y="60" width="165" height="180" rx="12" fill="#ffffff" stroke="#e11d48" stroke-width="1.5"/></g>
+  <rect x="603" y="60" width="165" height="6" rx="3" fill="#e11d48"/>
+  <circle cx="631" cy="94" r="14" fill="#e11d48"/><text x="631" y="99" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">4</text>
+  <text x="653" y="99" font-size="16" font-weight="700" fill="#0f172a">Answer check</text>
+  <text x="619" y="138" font-size="12.5" fill="#475569">Scans the reply for</text>
+  <text x="619" y="157" font-size="12.5" fill="#475569">made-up products or</text>
+  <text x="619" y="176" font-size="12.5" fill="#475569">claims the catalog</text>
+  <text x="619" y="195" font-size="12.5" fill="#475569">does not back.</text>
+  <line x1="770" y1="150" x2="790" y2="150" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- step 5 -->
+  <g filter="url(#shadow)"><rect x="794" y="60" width="176" height="180" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/></g>
+  <rect x="794" y="60" width="176" height="6" rx="3" fill="#2563eb"/>
+  <circle cx="822" cy="94" r="14" fill="#2563eb"/><text x="822" y="99" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">5</text>
+  <text x="844" y="99" font-size="16" font-weight="700" fill="#0f172a">Display</text>
+  <text x="810" y="138" font-size="12.5" fill="#475569">Product ids in the</text>
+  <text x="810" y="157" font-size="12.5" fill="#475569">reply become cards,</text>
+  <text x="810" y="176" font-size="12.5" fill="#475569">comparison tables</text>
+  <text x="810" y="195" font-size="12.5" fill="#475569">and upgrade boxes.</text>
+
+  <!-- below: memory -->
+  <line x1="112" y1="242" x2="112" y2="282" stroke="#0891b2" stroke-width="2" marker-start="url(#arrow)"/>
+  <g filter="url(#shadow)">
+    <path d="M52,298 V350 A60,11 0 0 0 172,350 V298" fill="#ecfeff" stroke="#0891b2" stroke-width="1.5"/>
+    <ellipse cx="112" cy="298" rx="60" ry="11" fill="#cffafe" stroke="#0891b2" stroke-width="1.5"/>
+  </g>
+  <text x="112" y="330" text-anchor="middle" font-size="13" font-weight="700" fill="#164e63">Memory</text>
+  <text x="112" y="347" text-anchor="middle" font-size="11" fill="#155e75">customer profile</text>
+
+  <!-- below: blocked -->
+  <line x1="303" y1="242" x2="303" y2="282" stroke="#e11d48" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="228" y="286" width="150" height="66" rx="33" fill="#fff1f2" stroke="#e11d48" stroke-width="1.5"/></g>
+  <text x="303" y="314" text-anchor="middle" font-size="13" font-weight="700" fill="#9f1239">Blocked</text>
+  <text x="303" y="333" text-anchor="middle" font-size="11" fill="#9f1239">fixed safe reply</text>
+
+  <!-- below: tools -->
+  <line x1="494" y1="242" x2="494" y2="282" stroke="#d97706" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="419" y="286" width="150" height="66" rx="33" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/></g>
+  <text x="494" y="314" text-anchor="middle" font-size="13" font-weight="700" fill="#92400e">Tools</text>
+  <text x="494" y="333" text-anchor="middle" font-size="11" fill="#92400e">catalog, cart, memory</text>
+
+  <!-- below: fallback -->
+  <line x1="685" y1="242" x2="685" y2="282" stroke="#e11d48" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="610" y="286" width="150" height="66" rx="33" fill="#fff1f2" stroke="#e11d48" stroke-width="1.5"/></g>
+  <text x="685" y="314" text-anchor="middle" font-size="13" font-weight="700" fill="#9f1239">Replaced</text>
+  <text x="685" y="333" text-anchor="middle" font-size="11" fill="#9f1239">safe fallback answer</text>
+
+  <!-- below: catalog -->
+  <line x1="882" y1="242" x2="882" y2="282" stroke="#2563eb" stroke-width="2" marker-start="url(#arrow)"/>
+  <g filter="url(#shadow)">
+    <path d="M822,298 V350 A60,11 0 0 0 942,350 V298" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <ellipse cx="882" cy="298" rx="60" ry="11" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  </g>
+  <text x="882" y="330" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">Catalog</text>
+  <text x="882" y="347" text-anchor="middle" font-size="11" fill="#1e40af">fresh prices, facts</text>
+
+  <line x1="30" y1="378" x2="970" y2="378" stroke="#e2e8f0"/>
+  <text x="500" y="406" text-anchor="middle" font-size="13" fill="#0f172a"><tspan font-weight="700">The reply only points at products;</tspan> prices and facts on screen are always read fresh from the catalog.</text>
+</svg>

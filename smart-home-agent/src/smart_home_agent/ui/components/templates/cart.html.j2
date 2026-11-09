@@ -1,0 +1,45 @@
+{% from "_macros.html.j2" import thumb, version %}
+
+{% macro header(view) %}
+  <div class="hp-cart">
+    <p class="hp-panel-label hp-cart__label">
+      Your cart
+      {% if view.item_count %}<span class="hp-cart__count">{{ view.item_count }}</span>{% endif %}
+    </p>
+    {% if not view.lines %}<p class="hp-cart__empty">Your cart is empty. Ask HomePilot to add a product.</p>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro line(line, missing_images) %}
+  {% set product = line.product %}
+  {% if product is none %}
+    <div class="hp-cart__line hp-cart__line--gone">
+      {{ thumb(none, missing_images, "hp-cart__thumb") }}
+      <div class="hp-cart__info">
+        <span class="hp-cart__title">Product {{ line.product_id }}</span>
+        <span class="hp-cart__note">No longer available</span>
+      </div>
+    </div>
+  {% else %}
+    <div class="hp-cart__line">
+      {{ thumb(product, missing_images, "hp-cart__thumb") }}
+      <div class="hp-cart__info">
+        {% if product.brand %}<span class="hp-cart__brand">{{ product.brand }}</span>{% endif %}
+        <span class="hp-cart__title">{{ product.title }}</span>
+        {{ version(product, "hp-cart") }}
+        <span class="hp-cart__price">{{ line.line_total | price }}</span>
+        {% if line.quantity > 1 and line.unit_price is not none %}
+          <span class="hp-cart__subtotal">{{ line.quantity }} × {{ line.unit_price | price }}</span>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro total(view) %}
+  <div class="hp-cart__total">
+    <span>Total</span>
+    <span class="hp-cart__total-value">{{ view.total | price }}</span>
+  </div>
+  {% if view.has_unpriced %}<p class="hp-cart__note">Some prices are not listed and not included.</p>{% endif %}
+{% endmacro %}

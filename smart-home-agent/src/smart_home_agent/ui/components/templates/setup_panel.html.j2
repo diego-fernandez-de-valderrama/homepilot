@@ -1,0 +1,15 @@
+{% from "_macros.html.j2" import chips %}
+
+{% macro render(rows) %}
+  <section class="hp-setup">
+    <p class="hp-panel-label">Your setup</p>
+    {% for key, values in rows %}
+      <div class="hp-setup__row">
+        <span class="hp-setup__key">{{ key }}</span>
+        <div class="hp-setup__values">{{ chips(values) }}</div>
+      </div>
+    {% else %}
+      <p class="hp-setup__empty">Tell me about your setup: ecosystem, voice assistant, budget, hubs.</p>
+    {% endfor %}
+  </section>
+{% endmacro %}

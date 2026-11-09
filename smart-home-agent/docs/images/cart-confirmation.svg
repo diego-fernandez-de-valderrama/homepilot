@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 450" width="1000" height="450" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="450" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+
+  <!-- lanes -->
+  <rect x="30" y="30" width="940" height="115" rx="12" fill="#f0fdfa" stroke="#ccfbf1"/>
+  <rect x="30" y="155" width="940" height="115" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+  <rect x="30" y="280" width="940" height="115" rx="12" fill="#eff6ff" stroke="#dbeafe"/>
+  <text x="48" y="92" font-size="11" font-weight="700" letter-spacing="1.2" fill="#0f766e">CUSTOMER</text>
+  <text x="48" y="217" font-size="11" font-weight="700" letter-spacing="1.2" fill="#334155">AGENT</text>
+  <text x="48" y="342" font-size="11" font-weight="700" letter-spacing="1.2" fill="#1d4ed8">CART</text>
+
+  <!-- 1 customer asks -->
+  <g filter="url(#shadow)">
+    <path d="M160,50 H316 a12,12 0 0 1 12,12 V108 a12,12 0 0 1 -12,12 H200 L182,134 L186,120 H160 a12,12 0 0 1 -12,-12 V62 a12,12 0 0 1 12,-12 z" fill="#ffffff" stroke="#0d9488" stroke-width="1.5"/>
+  </g>
+  <circle cx="148" cy="50" r="12" fill="#0d9488"/><text x="148" y="55" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">1</text>
+  <text x="238" y="82" text-anchor="middle" font-size="13.5" font-weight="600" fill="#134e4a">"Put the thermostat</text>
+  <text x="238" y="100" text-anchor="middle" font-size="13.5" font-weight="600" fill="#134e4a">in my cart"</text>
+  <path d="M238,122 C238,150 300,160 318,178" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 2 agent proposes -->
+  <g filter="url(#shadow)"><rect x="260" y="180" width="180" height="70" rx="12" fill="#0f172a"/></g>
+  <circle cx="260" cy="180" r="12" fill="#475569"/><text x="260" y="185" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">2</text>
+  <text x="350" y="208" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Proposes the change</text>
+  <text x="350" y="228" text-anchor="middle" font-size="12" fill="#cbd5e1">add 1 x thermostat</text>
+  <line x1="442" y1="215" x2="476" y2="215" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 3 checks -->
+  <g filter="url(#shadow)"><rect x="480" y="172" width="200" height="86" rx="12" fill="#ffffff" stroke="#e11d48" stroke-width="1.5"/></g>
+  <circle cx="480" cy="172" r="12" fill="#e11d48"/><text x="480" y="177" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">3</text>
+  <text x="496" y="198" font-size="14" font-weight="700" fill="#0f172a">Checked first</text>
+  <text x="496" y="219" font-size="12" fill="#475569">second hub? ask the customer</text>
+  <text x="496" y="237" font-size="12" fill="#475569">wrong product? fix it quietly</text>
+  <path d="M600,170 C610,120 640,95 682,95" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 4 confirmation card -->
+  <g filter="url(#shadow)"><rect x="686" y="44" width="220" height="92" rx="12" fill="#ffffff" stroke="#0d9488" stroke-width="2"/></g>
+  <circle cx="686" cy="44" r="12" fill="#0d9488"/><text x="686" y="49" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">4</text>
+  <text x="702" y="70" font-size="13.5" font-weight="700" fill="#0f172a">Add to cart?</text>
+  <text x="702" y="88" font-size="12" fill="#475569">1 x thermostat, price shown</text>
+  <rect x="702" y="100" width="88" height="26" rx="8" fill="#16a34a"/>
+  <text x="746" y="118" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Confirm</text>
+  <rect x="800" y="100" width="88" height="26" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="844" y="118" text-anchor="middle" font-size="12" font-weight="600" fill="#475569">Cancel</text>
+
+  <line x1="746" y1="128" x2="746" y2="298" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="756" y="214" font-size="12" font-weight="600" fill="#15803d">confirmed</text>
+
+  <!-- 5 applied -->
+  <g filter="url(#shadow)"><rect x="686" y="302" width="220" height="74" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/></g>
+  <circle cx="686" cy="302" r="12" fill="#2563eb"/><text x="686" y="307" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">5</text>
+  <text x="702" y="330" font-size="14" font-weight="700" fill="#1e3a8a">Cart updated</text>
+  <text x="702" y="350" font-size="12" fill="#1e40af">all items or none, then the</text>
+  <text x="702" y="366" font-size="12" fill="#1e40af">cart panel opens</text>
+
+  <!-- panel edits -->
+  <g filter="url(#shadow)"><rect x="150" y="304" width="250" height="70" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="6 4"/></g>
+  <text x="166" y="332" font-size="14" font-weight="700" fill="#1e3a8a">Edits in the cart panel</text>
+  <text x="166" y="352" font-size="12" fill="#1e40af">change quantity or remove a line</text>
+  <path d="M300,302 C300,280 330,272 340,254" fill="none" stroke="#64748b" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <text x="350" y="288" font-size="11.5" fill="#475569">the agent re-reads the cart</text>
+
+  <line x1="30" y1="412" x2="970" y2="412" stroke="#e2e8f0"/>
+  <text x="500" y="436" text-anchor="middle" font-size="13" fill="#0f172a"><tspan font-weight="700">Nothing changes until the customer confirms,</tspan> and a retry never applies the same change twice.</text>
+</svg>
