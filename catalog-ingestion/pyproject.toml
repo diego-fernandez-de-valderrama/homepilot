@@ -1,0 +1,139 @@
+[project]
+name = "catalog-ingestion"
+version = "0.1.0"
+description = "Catalog ingestion, enrichment and indexing for the HomePilot smart home agent"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.0",
+    "anyascii>=0.3.3",
+    "beautifulsoup4>=4.15.0",
+    "google-genai>=2.25.0",
+    "httpx>=0.28.1",
+    "numpy>=2.5.3",
+    "psycopg[binary]>=3.3.6",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "qdrant-client>=1.19.1",
+    "rich>=15.0.0",
+    "sqlalchemy>=2.1.1",
+    "tenacity>=9.1.4",
+    "typer>=0.27.2",
+]
+
+[project.scripts]
+catalog-ingestion = "catalog_ingestion.cli:CatalogCli.main"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+    "ty>=0.0.84",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "TID"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # German text and typographic quotes are intentional
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# Each package is imported through its `__init__` entry point; its modules and subpackages are an internal layout.
+"catalog_ingestion.core._key_value_formatter".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.core.gemini".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.core.hashing".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.core.log_setup".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.core.settings".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.core.text_normalizer".msg = "import from `catalog_ingestion.core` instead"
+"catalog_ingestion.vocabulary._brands".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary._categories".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary._compatibility_terms".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary._requirement_terms".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.brand_vocabulary".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.category".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.category_vocabulary".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.compatibility_term".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.compatibility_vocabulary".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.enums".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.requirement_term".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.vocabulary.requirement_vocabulary".msg = "import from `catalog_ingestion.vocabulary` instead"
+"catalog_ingestion.models.domain".msg = "import from `catalog_ingestion.models` instead"
+"catalog_ingestion.models.mappers".msg = "import from `catalog_ingestion.models` instead"
+"catalog_ingestion.models.schemas".msg = "import from `catalog_ingestion.models` instead"
+"catalog_ingestion.preparation._attribute_parser".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation._price_parser".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation._text_parser".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.compatibility_extractor".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.completeness_assessor".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.dataset_profile".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.dataset_profiler".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.load_error".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.load_result".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.prepared_product".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.product_normalizer".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.product_preparer".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.requirement_extractor".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.preparation.zip_loader".msg = "import from `catalog_ingestion.preparation` instead"
+"catalog_ingestion.enrichment.enrichment_key".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.enrichment_policy".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.enrichment_result".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.llm".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.product_enricher".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.validation".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.enrichment.web".msg = "import from `catalog_ingestion.enrichment` instead"
+"catalog_ingestion.database._record_builder".msg = "import from `catalog_ingestion.database` instead"
+"catalog_ingestion.database.catalog_database".msg = "import from `catalog_ingestion.database` instead"
+"catalog_ingestion.database.postgres_repository".msg = "import from `catalog_ingestion.database` instead"
+"catalog_ingestion.database.records".msg = "import from `catalog_ingestion.database` instead"
+"catalog_ingestion.database.upsert_outcome".msg = "import from `catalog_ingestion.database` instead"
+"catalog_ingestion.indexing.collection_dimension_mismatch_error".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.embedder".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.gemini_embedder".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.indexed_state".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.qdrant_collection".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.qdrant_repository".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.retrieval_document_builder".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.indexing.search_hit".msg = "import from `catalog_ingestion.indexing` instead"
+"catalog_ingestion.pipeline._deactivator".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline._index_writer".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline._product_recorder".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.embedding_model_mismatch_error".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.ingest_options".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.ingestion_pipeline".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.null_progress".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.progress_sink".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.pipeline.run_stats".msg = "import from `catalog_ingestion.pipeline` instead"
+"catalog_ingestion.cli._console".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli._counts_printer".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli._resources".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.analyze_command".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.catalog_cli".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.ingest_command".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.init_command".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.reindex_command".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.rich_progress".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.search_command".msg = "import from `catalog_ingestion.cli` instead"
+"catalog_ingestion.cli.status_command".msg = "import from `catalog_ingestion.cli` instead"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["TID251"]
+"src/catalog_ingestion/core/**" = ["TID251"]
+"src/catalog_ingestion/vocabulary/**" = ["TID251"]
+"src/catalog_ingestion/models/**" = ["TID251"]
+"src/catalog_ingestion/preparation/**" = ["TID251"]
+"src/catalog_ingestion/enrichment/**" = ["TID251"]
+"src/catalog_ingestion/database/**" = ["TID251"]
+"src/catalog_ingestion/indexing/**" = ["TID251"]
+"src/catalog_ingestion/pipeline/**" = ["TID251"]
+"src/catalog_ingestion/cli/**" = ["TID251"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs running PostgreSQL (auto-skipped when unreachable)"]
+filterwarnings = ["ignore:Payload indexes have no effect in the local Qdrant:UserWarning"]
